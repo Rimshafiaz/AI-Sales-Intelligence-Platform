@@ -15,6 +15,7 @@ def verify_supabase_token(token: str) -> dict:
         algorithms=["ES256"],
         issuer=settings.supabase_jwt_issuer,
         audience=settings.supabase_jwt_audience,
+        leeway=10,
     )
 
     return {
