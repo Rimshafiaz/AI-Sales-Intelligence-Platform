@@ -19,6 +19,7 @@ class Company(Base):
         UUID(as_uuid=True),
         primary_key=True,
         nullable=False,
+        default=uuid.uuid4,
     )
     user_id: Mapped[uuid.UUID] = mapped_column(
         UUID(as_uuid=True),
