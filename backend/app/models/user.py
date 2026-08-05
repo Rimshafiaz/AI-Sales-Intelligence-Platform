@@ -1,9 +1,15 @@
 import uuid
 from datetime import datetime
+from typing import TYPE_CHECKING
+
 from app.db.base import Base
-from sqlalchemy.orm import Mapped, mapped_column
+from sqlalchemy.orm import Mapped, mapped_column, relationship
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy import String, DateTime, func
+
+
+if TYPE_CHECKING:
+    from app.models.company import Company
 
 class User(Base):
     __tablename__ = "users"
@@ -31,4 +37,8 @@ class User(Base):
         server_default = func.now(),
         onupdate = func.now(),
         nullable = False
+    )
+    companies: Mapped[list["Company"]] = relationship(
+        "Company",
+        back_populates="user",
     )
