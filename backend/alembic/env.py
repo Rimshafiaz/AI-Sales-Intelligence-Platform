@@ -7,7 +7,7 @@ from app.core.config import settings
 from app.db.base import Base
 from app.models.user import User
 from app.models.company import Company
-
+from app.models.research_request import ResearchRequest
 # Alembic Config object
 config = context.config
 

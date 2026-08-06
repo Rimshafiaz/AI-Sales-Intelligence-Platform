@@ -10,7 +10,7 @@ from sqlalchemy import String, DateTime, func
 
 if TYPE_CHECKING:
     from app.models.company import Company
-
+    from app.models.research_request import ResearchRequest
 class User(Base):
     __tablename__ = "users"
     id: Mapped[uuid.UUID] = mapped_column(
@@ -40,5 +40,9 @@ class User(Base):
     )
     companies: Mapped[list["Company"]] = relationship(
         "Company",
+        back_populates="user",
+    )
+    research_requests: Mapped[list["ResearchRequest"]] = relationship(
+        "ResearchRequest",
         back_populates="user",
     )
