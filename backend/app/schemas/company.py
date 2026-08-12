@@ -6,7 +6,7 @@ from pydantic import ConfigDict
 
 class CompanyCreate(BaseModel):
     name: str = Field(...,max_length=255)
-    website: HttpUrl
+    website: HttpUrl | None = None
 
     @field_validator("name",mode="after")
     @classmethod
@@ -18,16 +18,18 @@ class CompanyCreate(BaseModel):
 
         return value
 
-    @field_validator("website")
+    @field_validator("website",mode="after")
     @classmethod
-    def normalize_website(cls, value: HttpUrl) -> str:
+    def normalize_website(cls, value: HttpUrl | None) -> str | None:
+        if value is None:
+            return None
         website = str(value).rstrip("/")
         return website
 
 class CompanyResponse(BaseModel):
     id: UUID
     name: str
-    website: str
+    website: str | None
     created_at: datetime
     updated_at: datetime
     

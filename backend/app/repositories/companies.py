@@ -5,7 +5,7 @@ import uuid
 from sqlalchemy import select
 
 
-def create_company(db: Session,user_id:uuid.UUID,name:str,website:str) -> Company:
+def create_company(db: Session,user_id:uuid.UUID,name:str,website:str | None = None) -> Company:
     company = Company(user_id=user_id,name=name,website=website)
     db.add(company)
     db.commit()

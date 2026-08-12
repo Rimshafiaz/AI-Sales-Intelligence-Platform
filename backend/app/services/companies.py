@@ -17,7 +17,7 @@ def create_company(
         db=db,
         user_id=current_user.id,
         name=company_data.name,
-        website=str(company_data.website),
+        website=str(company_data.website) if company_data.website else None,
     )
 
 def get_company_by_id(db:Session,company_id:uuid.UUID,user_id:uuid.UUID)->Company | None:
