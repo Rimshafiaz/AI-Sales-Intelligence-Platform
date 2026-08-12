@@ -1,8 +1,11 @@
 from app.models.company import Company
-from app.models.user import User
 from app.models.research_request import ResearchRequest
+from app.models.research_source import ResearchSource
+from app.models.user import User
+
 __all__ = [
     "Company",
-    "User",
     "ResearchRequest",
+    "ResearchSource",
+    "User",
 ]

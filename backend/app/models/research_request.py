@@ -11,6 +11,7 @@ from app.db.base import Base
 
 if TYPE_CHECKING:
     from app.models.company import Company
+    from app.models.research_source import ResearchSource
     from app.models.user import User
 
 
@@ -84,4 +85,8 @@ class ResearchRequest(Base):
     user:Mapped["User"] = relationship(
         "User",
         back_populates="research_requests",
+    )
+    sources: Mapped[list["ResearchSource"]] = relationship(
+        "ResearchSource",
+        back_populates="research_request",
     )
