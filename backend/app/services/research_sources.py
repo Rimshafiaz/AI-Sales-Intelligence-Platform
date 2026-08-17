@@ -1,7 +1,15 @@
 from urllib.parse import urlsplit, urlunsplit
+from uuid import UUID
+
+from sqlalchemy.orm import Session
 
 from app.integrations.search_provider import CollectedSource, TavilySearchProvider
 from app.integrations.website_metadata import WebsiteMetadata
+from app.models.research_source import ResearchSource
+from app.models.user import User
+from app.repositories.research_sources import (
+    list_research_sources_for_user as list_research_sources_for_user_repository,
+)
 
 
 def collect_company_search_sources(
@@ -72,3 +80,17 @@ def _normalize_url(url: str) -> str:
 
 def _normalize_text(value: str | None) -> str:
     return " ".join((value or "").split()).casefold()
+
+
+def list_research_sources_for_user(
+    db: Session,
+    request_id: UUID,
+    current_user: User,
+    limit: int,
+) -> list[ResearchSource]:
+    return list_research_sources_for_user_repository(
+        db=db,
+        research_request_id=request_id,
+        user_id=current_user.id,
+        limit=limit,
+    )
