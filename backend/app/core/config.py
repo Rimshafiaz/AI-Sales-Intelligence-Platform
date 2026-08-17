@@ -20,5 +20,7 @@ class Settings(BaseSettings):
     supabase_jwt_audience: str
     supabase_jwks_url: str
 
+    tavily_api_key: str | None = None
+
 
 settings = Settings()

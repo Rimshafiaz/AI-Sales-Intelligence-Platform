@@ -7,11 +7,13 @@ requires-python = ">=3.12"
 dependencies = [
     "alembic>=1.18.5",
     "fastapi>=0.141.1",
+    "httpx>=0.28.1",
     "psycopg2-binary>=2.9.12",
     "psycopg[binary]>=3.3.4",
     "pydantic>=2.13.4",
     "pydantic-settings>=2.14.2",
     "pyjwt[crypto]>=2.13.0",
     "sqlalchemy>=2.0.51",
+    "tavily-python>=0.7.27",
     "uvicorn>=0.52.1",
 ]
