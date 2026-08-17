@@ -7,7 +7,7 @@ from app.api.dependencies.current_user import get_current_user
 from app.db.session import get_db
 from app.models.user import User
 from app.schemas.research_request import ResearchRequestResponse
-from app.services.research_runner import run_development_research
+from app.services.research_runner import run_research
 from app.services.research_requests import (
     create_research_request_for_company,
     get_research_request_for_user,
@@ -39,7 +39,7 @@ async def create_research_request_endpoint(
             detail="Company not found",
     )
     background_tasks.add_task(
-        run_development_research,
+        run_research,
         research_request.id,
     )
 

@@ -2,8 +2,9 @@ from dataclasses import dataclass
 from urllib.parse import urlparse
 
 from app.integrations.search_provider import (
-    NormalizedSearchSource,
+    CollectedSource,
     TavilySearchProvider,
+
 )
 
 
@@ -70,7 +71,7 @@ class CompanyWebsiteResolver:
     @staticmethod
     def _official_website_candidate(
         company_name: str,
-        source: NormalizedSearchSource,
+        source: CollectedSource,
     ) -> str | None:
         parsed_url = urlparse(source.url)
         hostname = parsed_url.hostname

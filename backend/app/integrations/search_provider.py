@@ -19,7 +19,7 @@ class SearchProviderError(Exception):
 
 
 @dataclass(frozen=True)
-class NormalizedSearchSource:
+class CollectedSource:
     url: str
     title: str | None
     excerpt: str | None
@@ -49,22 +49,20 @@ class TavilySearchProvider:
         self.timeout_seconds = timeout_seconds
         self.retry_attempts = retry_attempts
 
-    def search(self, query: str) -> list[NormalizedSearchSource]:
+    def search(self, query: str) -> list[CollectedSource]:
         clean_query = query.strip()
         if not clean_query:
             raise ValueError("Search query cannot be blank.")
 
         results = self._search(clean_query)
-        sources: list[NormalizedSearchSource] = []
-        seen_urls: set[str] = set()
+        sources: list[CollectedSource] = []
 
         for result in results:
             source = self._normalize_source(result)
-            if source is None or source.url in seen_urls:
+            if source is None:
                 continue
 
             sources.append(source)
-            seen_urls.add(source.url)
 
             if len(sources) == self.max_results:
                 break
@@ -100,14 +98,14 @@ class TavilySearchProvider:
         raise SearchProviderError("Tavily request failed. Please try again.")
 
     @staticmethod
-    def _normalize_source(result: dict[str, object]) -> NormalizedSearchSource | None:
+    def _normalize_source(result: dict[str, object]) -> CollectedSource | None:
         raw_url = result.get("url")
         if not isinstance(raw_url, str) or not TavilySearchProvider._is_http_url(raw_url):
             return None
 
         title = result.get("title")
         content = result.get("content")
-        return NormalizedSearchSource(
+        return CollectedSource(
             url=raw_url,
             title=title.strip() if isinstance(title, str) and title.strip() else None,
             excerpt=(

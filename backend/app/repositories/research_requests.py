@@ -87,3 +87,7 @@ def mark_research_request_failed(
     db.commit()
     db.refresh(request)
     return request
+
+def get_research_request_by_id(db: Session, request_id: UUID) -> ResearchRequest | None:
+    statement = select(ResearchRequest).where(ResearchRequest.id == request_id)
+    return db.scalar(statement)
