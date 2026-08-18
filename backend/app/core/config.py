@@ -1,3 +1,5 @@
+from typing import Literal
+
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -21,6 +23,11 @@ class Settings(BaseSettings):
     supabase_jwks_url: str
 
     tavily_api_key: str | None = None
+    groq_api_key: str | None = None
+    gemini_api_key: str | None = None
+    llm_provider: Literal["groq", "gemini"] = "groq"
+    groq_model: str = "openai/gpt-oss-20b"
+    gemini_model: str = "gemini-3.5-flash"
 
 
 settings = Settings()

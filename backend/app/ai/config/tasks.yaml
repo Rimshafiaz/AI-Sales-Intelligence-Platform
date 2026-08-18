@@ -1,0 +1,14 @@
+research_task:
+  description: >
+    Analyze the supplied evidence for {company_name}. Use only that evidence to
+    identify the company overview, industry, headquarters, company size, products
+    and services, and publicly supported business signals. Cite the supporting
+    source URL for each factual finding. Do not invent facts. Mark unavailable or
+    uncertain information clearly.
+
+    Evidence:
+    {evidence_context}
+  expected_output: >
+    Structured, citation-aware company research findings. Each factual finding
+    must include a supporting source URL, while unavailable or inferred information
+    must be explicitly labeled.

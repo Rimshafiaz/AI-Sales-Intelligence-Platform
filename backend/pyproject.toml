@@ -6,8 +6,10 @@ readme = "README.md"
 requires-python = ">=3.12"
 dependencies = [
     "alembic>=1.18.5",
+    "crewai[google-genai]>=1.6.1",
     "fastapi>=0.141.1",
     "httpx>=0.28.1",
+    "litellm>=1.97.0",
     "psycopg2-binary>=2.9.12",
     "psycopg[binary]>=3.3.4",
     "pydantic>=2.13.4",
