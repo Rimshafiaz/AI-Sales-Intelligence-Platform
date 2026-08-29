@@ -1,6 +1,13 @@
 from datetime import date
 from typing import Literal, Self
-from pydantic import BaseModel, Field, HttpUrl, field_validator, model_validator
+from pydantic import (
+    BaseModel,
+    Field,
+    HttpUrl,
+    field_serializer,
+    field_validator,
+    model_validator,
+)
 
 
 
@@ -15,6 +22,10 @@ def _required_text(value: str, field_name: str) -> str:
 class SourceCitation(BaseModel):
     source_url: HttpUrl
     supporting_excerpt: str | None = Field(default=None, max_length=500)
+
+    @field_serializer("source_url")
+    def serialize_source_url(self, value: HttpUrl) -> str:
+        return str(value)
 
     @field_validator("supporting_excerpt")
     @classmethod
@@ -63,6 +74,11 @@ class CompanyProfile(BaseModel):
         default_factory=list,
         max_length=10,
     )
+
+    @field_validator("products_and_services", "funding_information", mode="before")
+    @classmethod
+    def normalize_optional_finding_lists(cls, value: object) -> object:
+        return [] if value is None else value
 
 
 class TechnologyFinding(BaseModel):

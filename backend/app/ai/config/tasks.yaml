@@ -11,4 +11,9 @@ research_task:
   expected_output: >
     Structured, citation-aware company research findings. Each factual finding
     must include a supporting source URL, while unavailable or inferred information
-    must be explicitly labeled.
+    must be explicitly labeled. Return data matching ResearchAgentOutput: one
+    company_profile object with company_summary, optional single findings set to
+    null when unavailable, and products_and_services and funding_information as
+    lists (use [] when unavailable). Every finding must contain statement,
+    citations, is_inference, and rationale. Each citation must contain source_url
+    and may contain supporting_excerpt.
