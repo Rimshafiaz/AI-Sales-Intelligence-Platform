@@ -35,3 +35,22 @@ technology_task:
     An optional implication must have statement, citations, is_inference=true, and
     rationale. Each citation must contain source_url and may contain
     supporting_excerpt.
+
+news_task:
+  description: >
+    Analyze the supplied evidence for {company_name}. Today's date is {current_date}.
+    Extract only publicly supported business signals with one of these types: news,
+    hiring, expansion, funding, or announcement. Cite a supporting source URL for
+    every signal. Use occurred_at only when the evidence provides a full event date;
+    otherwise use null and state in the finding rationale that the event date is
+    unconfirmed. Do not invent events or dates. Do not describe an event as recent
+    when evidence shows it occurred more than 12 months before today's date. Return
+    an empty business_signals list when no supported signal exists.
+
+    Evidence:
+    {evidence_context}
+  expected_output: >
+    Data matching NewsAgentOutput: a business_signals list. Each item has signal_type,
+    a factual finding with statement, citations, is_inference=false, and rationale,
+    plus occurred_at as an ISO date or null. Each citation must contain source_url
+    and may contain supporting_excerpt.
