@@ -17,3 +17,21 @@ research_task:
     lists (use [] when unavailable). Every finding must contain statement,
     citations, is_inference, and rationale. Each citation must contain source_url
     and may contain supporting_excerpt.
+
+technology_task:
+  description: >
+    Analyze the supplied evidence for {company_name} to identify only technologies
+    and technical signals that are publicly supported by the evidence. Do not
+    invent, guess, or infer an unstated technology. Cite a supporting source URL
+    for every factual technology claim. You may include a technical implication
+    only when it is explicitly labeled is_inference=true and includes a rationale.
+    Return an empty technologies list when the evidence supports no technologies.
+
+    Evidence:
+    {evidence_context}
+  expected_output: >
+    Data matching TechnologyAgentOutput: a technologies list. Each item has a
+    technology finding with statement, citations, is_inference=false, and rationale.
+    An optional implication must have statement, citations, is_inference=true, and
+    rationale. Each citation must contain source_url and may contain
+    supporting_excerpt.
