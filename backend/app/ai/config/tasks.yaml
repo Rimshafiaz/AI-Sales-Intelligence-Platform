@@ -82,3 +82,42 @@ pain_point_task:
     plus a confidence value of low, medium, or high. Each citation must contain a
     source_url from the supplied specialist outputs and may contain
     supporting_excerpt.
+
+strategy_task:
+  description: >
+    Use the supplied specialist outputs and opportunity scoring rubric to prepare
+    an explainable sales recommendation for {company_name}. Follow the rubric when
+    assigning an opportunity score from 0 to 100 and choosing prioritize, consider,
+    or do_not_prioritize. Every score reason must be an evidence-backed inference
+    with citations and explain why the signal matters. The contact recommendation,
+    sales strategy, sales angle, value proposition, suggested decision-maker roles,
+    and outreach personalization rationale must be cited inferences, not established
+    facts. Do not invent company facts, pain points, buying intent, budgets, or named
+    decision makers. Use caveats when evidence is weak. Produce outreach drafts for
+    human review; do not imply that outreach will be sent automatically.
+    Keep the structured response concise: use one executive summary, one to three
+    score reasons, one to three suggested decision-maker roles, at most three
+    caveats, and concise one-sentence findings and rationales. Limit the cold email
+    to 120 words and the LinkedIn message to 60 words.
+
+    Opportunity scoring rubric:
+    {opportunity_rubric}
+
+    Company research output:
+    {research_output}
+
+    Technology output:
+    {technology_output}
+
+    News output:
+    {news_output}
+
+    Pain-point output:
+    {pain_point_output}
+  expected_output: >
+    Data matching StrategyAgentOutput: executive_summary, opportunity_assessment
+    with score and cited reasons, contact_recommendation with an inference-backed
+    rationale, confidence, strategy, suggested_decision_makers, personalized_outreach,
+    and caveats. The executive summary must be factual and cited. Recommendation
+    rationales and decision-maker rationales must use is_inference=true. Every
+    citation must contain source_url and may contain supporting_excerpt.

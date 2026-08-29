@@ -97,6 +97,11 @@ class OpportunityAssessment(BaseModel):
     reasons: list[InferenceBackedFinding] = Field(min_length=1, max_length=5)
 
 
+class ContactRecommendation(BaseModel):
+    recommendation: Literal["prioritize", "consider", "do_not_prioritize"]
+    rationale: InferenceBackedFinding
+
+
 class ReportConfidence(BaseModel):
     score: int = Field(ge=0, le=100)
     rationale: str = Field(max_length=1_000)
@@ -145,6 +150,7 @@ class SalesIntelligenceReport(BaseModel):
     technologies: list[TechnologyFinding] = Field(default_factory=list, max_length=10)
     business_signals: list[BusinessSignal] = Field(default_factory=list, max_length=10)
     opportunity_assessment: OpportunityAssessment
+    contact_recommendation: ContactRecommendation
     confidence: ReportConfidence
     pain_points: list[PainPointHypothesis] = Field(default_factory=list, max_length=5)
     strategy: SalesStrategy

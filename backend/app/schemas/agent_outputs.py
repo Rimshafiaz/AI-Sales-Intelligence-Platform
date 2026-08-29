@@ -5,6 +5,7 @@ from pydantic import BaseModel, Field, field_validator, model_validator
 from app.schemas.sales_intelligence_report import (
     BusinessSignal,
     CompanyProfile,
+    ContactRecommendation,
     DecisionMakerHypothesis,
     EvidenceBackedFinding,
     OpportunityAssessment,
@@ -43,6 +44,7 @@ class PainPointAgentOutput(BaseModel):
 class StrategyAgentOutput(BaseModel):
     executive_summary: EvidenceBackedFinding
     opportunity_assessment: OpportunityAssessment
+    contact_recommendation: ContactRecommendation
     confidence: ReportConfidence
     strategy: SalesStrategy
     suggested_decision_makers: list[DecisionMakerHypothesis] = Field(
