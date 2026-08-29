@@ -70,7 +70,8 @@ Evaluate signals together rather than independently. Multiple relevant signals
 that reinforce one another provide stronger evidence than a single isolated
 signal. Multiple weak or unrelated signals do not automatically constitute
 strong evidence. A credible pain-point hypothesis is especially important when
-assigning a high score.
+assigning a high score. The score must reflect the strength of the overall
+opportunity case, not simply the number of positive signals.
 
 ## Avoid False Precision
 

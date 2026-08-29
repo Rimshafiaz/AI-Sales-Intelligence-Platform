@@ -121,3 +121,41 @@ strategy_task:
     and caveats. The executive summary must be factual and cited. Recommendation
     rationales and decision-maker rationales must use is_inference=true. Every
     citation must contain source_url and may contain supporting_excerpt.
+
+reviewer_task:
+  description: >
+    Review the supplied candidate outputs for {company_name} using only the
+    original evidence context, opportunity scoring rubric, and reviewer checklist.
+    Do not research new facts, rewrite the report, or invent issues. Approve only
+    when there are no material grounding, citation, certainty, scoring-policy, or
+    outreach problems. When rejecting, return approved=false and clear issue text
+    identifying the unsupported claim, missing/invalid citation, or certainty
+    problem. Citation URLs may use harmless normalization such as a trailing slash.
+
+    Original evidence context:
+    {evidence_context}
+
+    Opportunity scoring rubric:
+    {opportunity_rubric}
+
+    Reviewer checklist:
+    {reviewer_checklist}
+
+    Company research output:
+    {research_output}
+
+    Technology output:
+    {technology_output}
+
+    News output:
+    {news_output}
+
+    Pain-point output:
+    {pain_point_output}
+
+    Strategy output:
+    {strategy_output}
+  expected_output: >
+    Data matching ReviewerOutput. Return approved=true with issues=[] only when
+    there are no material issues. Otherwise return approved=false with one or more
+    concise, clear revision instructions.
