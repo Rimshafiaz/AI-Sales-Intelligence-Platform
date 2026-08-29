@@ -108,6 +108,7 @@ class ReportConfidence(BaseModel):
 
 class PainPointHypothesis(BaseModel):
     hypothesis: InferenceBackedFinding
+    confidence: Literal["low", "medium", "high"]
 
 
 class SalesStrategy(BaseModel):

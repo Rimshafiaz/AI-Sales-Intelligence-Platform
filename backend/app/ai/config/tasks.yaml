@@ -54,3 +54,31 @@ news_task:
     a factual finding with statement, citations, is_inference=false, and rationale,
     plus occurred_at as an ISO date or null. Each citation must contain source_url
     and may contain supporting_excerpt.
+
+pain_point_task:
+  description: >
+    Analyze the supplied specialist outputs for {company_name}. Identify only
+    plausible business pain points supported by those outputs. Every pain point is
+    a hypothesis, not a confirmed internal fact: use is_inference=true, cautious
+    language such as may or likely, a rationale explaining why it is plausible, and
+    citations already present in the specialist outputs. Never invent evidence or
+    source URLs. Set confidence to low, medium, or high based on the strength and
+    amount of supplied support. Do not create a pain point from a generic company
+    description alone; require a concrete change or pressure signal such as stated
+    expansion, funding, hiring, or technical scale/complexity. Return an empty
+    pain_points list when there is no useful, evidence-backed hypothesis.
+
+    Company research output:
+    {research_output}
+
+    Technology output:
+    {technology_output}
+
+    News output:
+    {news_output}
+  expected_output: >
+    Data matching PainPointAgentOutput: a pain_points list. Each item has a
+    hypothesis containing statement, citations, is_inference=true, and rationale,
+    plus a confidence value of low, medium, or high. Each citation must contain a
+    source_url from the supplied specialist outputs and may contain
+    supporting_excerpt.
