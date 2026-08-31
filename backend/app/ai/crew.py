@@ -31,7 +31,7 @@ def _run_single_agent_crew(task, phase_label: str):
         agents=[task.agent],
         tasks=[task],
         process=Process.sequential,
-        verbose=True,
+        verbose=False,
     )
     crew.kickoff()
     return _extract_pydantic(task, phase_label)

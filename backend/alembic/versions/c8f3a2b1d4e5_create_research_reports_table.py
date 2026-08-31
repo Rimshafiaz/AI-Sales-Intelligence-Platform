@@ -27,8 +27,9 @@ def upgrade() -> None:
     sa.Column('company_id', sa.UUID(), nullable=False),
     sa.Column('user_id', sa.UUID(), nullable=False),
     sa.Column('report_data', JSONB(), nullable=False),
-    sa.Column('opportunity_score', sa.Integer(), nullable=True),
-    sa.Column('contact_recommendation', sa.String(), nullable=True),
+    sa.Column('opportunity_score', sa.Integer(), nullable=False),
+    sa.Column('contact_recommendation', sa.String(), nullable=False),
+    sa.Column('review_status', sa.Enum('draft', 'approved', name='report_review_status'), server_default='draft', nullable=False),
     sa.Column('generated_at', sa.DateTime(timezone=True), nullable=False),
     sa.Column('created_at', sa.DateTime(timezone=True), server_default=sa.text('now()'), nullable=False),
     sa.Column('updated_at', sa.DateTime(timezone=True), server_default=sa.text('now()'), nullable=False),
@@ -40,13 +41,18 @@ def upgrade() -> None:
     op.create_index(op.f('ix_research_reports_company_id'), 'research_reports', ['company_id'], unique=False)
     op.create_index(op.f('ix_research_reports_opportunity_score'), 'research_reports', ['opportunity_score'], unique=False)
     op.create_index(op.f('ix_research_reports_research_request_id'), 'research_reports', ['research_request_id'], unique=False)
+    op.create_index(op.f('ix_research_reports_review_status'), 'research_reports', ['review_status'], unique=False)
     op.create_index(op.f('ix_research_reports_user_id'), 'research_reports', ['user_id'], unique=False)
+    op.create_index('ix_research_reports_user_generated_at', 'research_reports', ['user_id', 'generated_at'], unique=False)
 
 
 def downgrade() -> None:
     """Downgrade schema."""
+    op.drop_index('ix_research_reports_user_generated_at', table_name='research_reports')
     op.drop_index(op.f('ix_research_reports_user_id'), table_name='research_reports')
+    op.drop_index(op.f('ix_research_reports_review_status'), table_name='research_reports')
     op.drop_index(op.f('ix_research_reports_research_request_id'), table_name='research_reports')
     op.drop_index(op.f('ix_research_reports_opportunity_score'), table_name='research_reports')
     op.drop_index(op.f('ix_research_reports_company_id'), table_name='research_reports')
     op.drop_table('research_reports')
+    sa.Enum(name='report_review_status').drop(op.get_bind(), checkfirst=True)

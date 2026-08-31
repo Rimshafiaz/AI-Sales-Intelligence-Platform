@@ -8,6 +8,7 @@ from app.db.base import Base
 from app.models.user import User
 from app.models.company import Company
 from app.models.research_request import ResearchRequest
+from app.models.research_report import ResearchReport
 from app.models.research_source import ResearchSource
 # Alembic Config object
 config = context.config

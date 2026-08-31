@@ -8,8 +8,9 @@ class ResearchReportResponse(BaseModel):
     id: UUID
     research_request_id: UUID
     company_id: UUID
-    opportunity_score: int | None
-    contact_recommendation: str | None
+    opportunity_score: int
+    contact_recommendation: str
+    review_status: str
     report_data: dict[str, Any]
     generated_at: datetime
     created_at: datetime

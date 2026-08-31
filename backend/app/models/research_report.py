@@ -1,7 +1,9 @@
 import uuid
 from datetime import datetime
+from enum import Enum
 from typing import TYPE_CHECKING
-from sqlalchemy import DateTime, ForeignKey, Integer, String, func
+
+from sqlalchemy import DateTime, Enum as SAEnum, ForeignKey, Index, Integer, String, func
 from sqlalchemy.dialects.postgresql import JSONB, UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -13,8 +15,21 @@ if TYPE_CHECKING:
     from app.models.user import User
 
 
+class ReportReviewStatus(str, Enum):
+    DRAFT = "draft"
+    APPROVED = "approved"
+
+
 class ResearchReport(Base):
     __tablename__ = "research_reports"
+
+    __table_args__ = (
+        Index(
+            "ix_research_reports_user_generated_at",
+            "user_id",
+            "generated_at",
+        ),
+    )
 
     id: Mapped[uuid.UUID] = mapped_column(
         UUID(as_uuid=True),
@@ -44,14 +59,27 @@ class ResearchReport(Base):
         JSONB,
         nullable=False,
     )
-    opportunity_score: Mapped[int | None] = mapped_column(
+    opportunity_score: Mapped[int] = mapped_column(
         Integer,
-        nullable=True,
+        nullable=False,
         index=True,
     )
-    contact_recommendation: Mapped[str | None] = mapped_column(
+    contact_recommendation: Mapped[str] = mapped_column(
         String,
-        nullable=True,
+        nullable=False,
+    )
+    review_status: Mapped[ReportReviewStatus] = mapped_column(
+        SAEnum(
+            ReportReviewStatus,
+            name="report_review_status",
+            values_callable=lambda enum_class: [
+                item.value for item in enum_class
+            ],
+        ),
+        default=ReportReviewStatus.DRAFT,
+        server_default=ReportReviewStatus.DRAFT.value,
+        nullable=False,
+        index=True,
     )
     generated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
