@@ -1,9 +1,10 @@
 import copy
+from datetime import date
 from uuid import UUID
 
 from sqlalchemy.orm import Session
 
-from app.models.research_report import ResearchReport
+from app.models.research_report import ReportReviewStatus, ResearchReport
 from app.models.user import User
 from app.repositories.research_reports import (
     approve_research_report,
@@ -139,17 +140,47 @@ def list_report_history_for_user(
     current_user: User,
     page: int,
     page_size: int,
+    company: str | None = None,
+    industry: str | None = None,
+    from_date: date | None = None,
+    to_date: date | None = None,
+    min_score: int | None = None,
+    max_score: int | None = None,
+    status: ReportReviewStatus | None = None,
 ) -> ReportListResponse:
+    if from_date is not None and to_date is not None and from_date > to_date:
+        raise ValueError("from_date cannot be after to_date.")
+    if (
+        min_score is not None
+        and max_score is not None
+        and min_score > max_score
+    ):
+        raise ValueError("min_score cannot be greater than max_score.")
+
     offset = (page - 1) * page_size
     summary_rows = list_report_summaries_for_user(
         db=db,
         user_id=current_user.id,
         limit=page_size,
         offset=offset,
+        company=company,
+        industry=industry,
+        from_date=from_date,
+        to_date=to_date,
+        min_score=min_score,
+        max_score=max_score,
+        status=status,
     )
     total = count_research_reports_for_user(
         db=db,
         user_id=current_user.id,
+        company=company,
+        industry=industry,
+        from_date=from_date,
+        to_date=to_date,
+        min_score=min_score,
+        max_score=max_score,
+        status=status,
     )
 
     items = [

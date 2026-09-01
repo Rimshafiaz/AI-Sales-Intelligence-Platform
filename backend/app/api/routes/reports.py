@@ -1,3 +1,4 @@
+from datetime import date
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
@@ -5,6 +6,7 @@ from sqlalchemy.orm import Session
 
 from app.api.dependencies.current_user import get_current_user
 from app.db.session import get_db
+from app.models.research_report import ReportReviewStatus
 from app.models.user import User
 from app.schemas.report_list import ReportListResponse
 from app.schemas.research_report import (
@@ -38,15 +40,35 @@ router = APIRouter(tags=["Reports"])
 def list_reports_endpoint(
     page: int = Query(default=1, ge=1),
     page_size: int = Query(default=10, ge=1, le=50),
+    company: str | None = Query(default=None, max_length=255),
+    industry: str | None = Query(default=None, max_length=100),
+    from_date: date | None = Query(default=None),
+    to_date: date | None = Query(default=None),
+    min_score: int | None = Query(default=None, ge=0, le=100),
+    max_score: int | None = Query(default=None, ge=0, le=100),
+    report_status: ReportReviewStatus | None = Query(default=None),
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    return list_report_history_for_user(
-        db=db,
-        current_user=current_user,
-        page=page,
-        page_size=page_size,
-    )
+    try:
+        return list_report_history_for_user(
+            db=db,
+            current_user=current_user,
+            page=page,
+            page_size=page_size,
+            company=company,
+            industry=industry,
+            from_date=from_date,
+            to_date=to_date,
+            min_score=min_score,
+            max_score=max_score,
+            status=report_status,
+        )
+    except ValueError as error:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail=str(error),
+        ) from error
 
 
 @router.post(
