@@ -35,6 +35,7 @@ def get_llm(
             "model": f"gemini/{settings.gemini_model}",
             "api_key": settings.gemini_api_key,
             "max_tokens": effective_max_tokens,
+            "num_retries": 1,
         }
         if temperature is not None:
             llm_kwargs["temperature"] = temperature

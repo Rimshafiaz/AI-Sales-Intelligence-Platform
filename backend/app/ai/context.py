@@ -13,7 +13,6 @@ def build_research_evidence_context(sources: list[ResearchSource]) -> str:
 
     for source in sources[:MAX_EVIDENCE_SOURCES]:
         lines = [
-            f"[Source ID: {source.id}]",
             f"URL: {source.url}",
             f"Type: {source.source_type}",
         ]

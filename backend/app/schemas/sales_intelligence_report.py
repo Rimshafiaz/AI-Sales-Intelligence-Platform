@@ -25,7 +25,7 @@ class SourceCitation(BaseModel):
 
     @field_serializer("source_url")
     def serialize_source_url(self, value: HttpUrl) -> str:
-        return str(value)
+        return str(value).rstrip("/")
 
     @field_validator("supporting_excerpt")
     @classmethod
