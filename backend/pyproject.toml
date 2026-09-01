@@ -19,3 +19,12 @@ dependencies = [
     "tavily-python>=0.7.27",
     "uvicorn>=0.52.1",
 ]
+
+[dependency-groups]
+dev = [
+    "pytest>=9.1.1",
+]
+
+[tool.pytest.ini_options]
+pythonpath = ["."]
+testpaths = ["tests"]
