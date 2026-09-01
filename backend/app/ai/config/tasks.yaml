@@ -159,3 +159,31 @@ reviewer_task:
     Data matching ReviewerOutput. Return approved=true with issues=[] only when
     there are no material issues. Otherwise return approved=false with one or more
     concise, clear revision instructions.
+
+company_discovery_task:
+  description: >
+    A salesperson is searching for companies worth researching. Match the
+    supplied evidence against the supplied criteria and shortlist the companies
+    the evidence genuinely supports. Use only the supplied evidence; do not add
+    companies from your own knowledge. For each selected candidate provide the
+    company name, its official website URL exactly as shown in the evidence when
+    the evidence identifies it, the industry when the evidence states it,
+    a one-sentence description, and a match explanation of one or two sentences
+    that explicitly names the criteria the company satisfies. Copy supporting
+    source URLs exactly from the evidence; never construct or modify URLs. Set
+    industry to null and omit website when the evidence does not state them.
+    Never describe a candidate as a verified customer, lead, or confirmed fit
+    beyond the evidence. Select at most five candidates and return an empty
+    candidates list when the evidence supports no matches.
+
+    Discovery criteria:
+    {criteria_context}
+
+    Evidence:
+    {evidence_context}
+  expected_output: >
+    Data matching CompanyDiscoveryTaskOutput: a candidates list with at most five
+    items. Each item has company_name, website as an exact URL string or null,
+    industry or null when unknown, short_description, match_explanation of one or
+    two sentences naming the satisfied criteria, and supporting_source_urls
+    copied exactly from the evidence.
