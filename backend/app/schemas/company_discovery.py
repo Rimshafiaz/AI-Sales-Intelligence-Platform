@@ -13,7 +13,19 @@ from pydantic import (
 
 
 class CompanyDiscoveryRequest(BaseModel):
-    model_config = ConfigDict(extra="forbid")
+    model_config = ConfigDict(
+        extra="forbid",
+        json_schema_extra={
+            "examples": [
+                {
+                    "industry": "fintech",
+                    "region": "San Francisco",
+                    "company_size": "50-200",
+                    "keywords": "payment infrastructure",
+                }
+            ]
+        },
+    )
 
     industry: str | None = Field(default=None, max_length=100)
     region: str | None = Field(default=None, max_length=100)

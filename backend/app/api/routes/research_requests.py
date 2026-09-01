@@ -23,6 +23,10 @@ router = APIRouter(tags=["Research Requests"])
     "/companies/{company_id}/research-requests",
     response_model=ResearchRequestResponse,
     status_code=status.HTTP_202_ACCEPTED,
+    summary="Start a research request for a company",
+    responses={
+        404: {"description": "Company unknown or owned by another user"},
+    },
 )
 async def create_research_request_endpoint(
     company_id: UUID,
@@ -52,6 +56,8 @@ async def create_research_request_endpoint(
     "/research-requests/{request_id}",
     response_model=ResearchRequestResponse,
     status_code=status.HTTP_200_OK,
+    summary="Show a research request's lifecycle status",
+    responses={404: {"description": "Request unknown or owned by another user"}},
 )
 async def get_research_request_endpoint(
     request_id: UUID,
@@ -77,6 +83,8 @@ async def get_research_request_endpoint(
     "/research-requests/{request_id}/sources",
     response_model=list[ResearchSourceResponse],
     status_code=status.HTTP_200_OK,
+    summary="List the collected evidence sources for a request",
+    responses={404: {"description": "Request unknown or owned by another user"}},
 )
 async def list_research_sources_endpoint(
     request_id: UUID,

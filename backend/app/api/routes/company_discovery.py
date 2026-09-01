@@ -17,6 +17,11 @@ router = APIRouter(tags=["Company Discovery"])
     "/company-discovery",
     response_model=CompanyDiscoveryResponse,
     status_code=status.HTTP_200_OK,
+    summary="Discover companies matching business criteria (stateless)",
+    responses={
+        422: {"description": "Empty or invalid criteria"},
+        503: {"description": "Search provider or AI failure"},
+    },
 )
 def discover_companies_endpoint(
     criteria: CompanyDiscoveryRequest,

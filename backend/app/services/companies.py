@@ -1,6 +1,7 @@
 from app.repositories.companies import create_company as create_company_repository
 from app.repositories.companies import get_company_by_id as get_company_by_id_repository
 from app.repositories.companies import list_companies_for_user as list_companies_for_user_repository, delete_company
+from app.repositories.research_reports import company_has_reports
 from app.schemas.company import CompanyCreate
 from app.models.user import User
 from app.models.company import Company
@@ -30,6 +31,10 @@ def delete_company_for_user(db:Session,company_id:uuid.UUID,user_id:uuid.UUID)->
     company = get_company_by_id(db,company_id,user_id)
     if company is None:
         return False
+    if company_has_reports(db, company.id):
+        raise ValueError(
+            "Company has reports and cannot be deleted. Reports are kept for history."
+        )
     delete_company(db,company)
     return True
     

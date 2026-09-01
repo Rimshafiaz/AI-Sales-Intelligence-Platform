@@ -14,7 +14,18 @@ MAX_REVIEW_NOTE_LENGTH = 2_000
 
 
 class ReportEditRequest(BaseModel):
-    model_config = ConfigDict(extra="forbid")
+    model_config = ConfigDict(
+        extra="forbid",
+        json_schema_extra={
+            "examples": [
+                {
+                    "cold_email": "Hi - saw Stripe is expanding internationally. Worth a 15-minute chat?",
+                    "linkedin_message": "Congrats on the expansion push! Open to connecting?",
+                    "review_note": "Private note; never part of the report body.",
+                }
+            ]
+        },
+    )
 
     strategy: str | None = Field(default=None, max_length=MAX_STRATEGY_LENGTH)
     sales_angle: str | None = Field(default=None, max_length=MAX_STRATEGY_LENGTH)
@@ -28,7 +39,11 @@ class ReportEditRequest(BaseModel):
         default=None,
         max_length=MAX_OUTREACH_LINKEDIN_LENGTH,
     )
-    review_note: str | None = Field(default=None, max_length=MAX_REVIEW_NOTE_LENGTH)
+    review_note: str | None = Field(
+        default=None,
+        max_length=MAX_REVIEW_NOTE_LENGTH,
+        description="Private note for the owner; edits to it also revert approval.",
+    )
 
     @field_validator(
         "strategy",
@@ -62,9 +77,21 @@ class ReportEditRequest(BaseModel):
 
 
 class RegenerateReportRequest(BaseModel):
-    model_config = ConfigDict(extra="forbid")
+    model_config = ConfigDict(
+        extra="forbid",
+        json_schema_extra={
+            "examples": [
+                {"instruction": "focus the outreach on hiring growth"},
+                {},
+            ]
+        },
+    )
 
-    instruction: str | None = Field(default=None, max_length=500)
+    instruction: str | None = Field(
+        default=None,
+        max_length=500,
+        description="Optional steering hint; treated as guidance, never as evidence.",
+    )
 
     @field_validator("instruction", mode="before")
     @classmethod

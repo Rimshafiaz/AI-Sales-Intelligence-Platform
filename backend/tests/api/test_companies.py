@@ -33,3 +33,10 @@ class TestCompanyOwnership:
     def test_foreign_user_cannot_delete(self, foreign_client, owned_company):
         resp = foreign_client.delete(f"/companies/{owned_company.id}")
         assert resp.status_code == 404
+
+    def test_delete_blocked_when_reports_exist(
+        self, auth_client, owned_company, owned_report
+    ):
+        resp = auth_client.delete(f"/companies/{owned_company.id}")
+        assert resp.status_code == 409
+        assert resp.json()["error"]["code"] == "conflict"

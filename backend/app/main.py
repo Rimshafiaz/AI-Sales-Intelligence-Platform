@@ -55,10 +55,10 @@ async def request_context_middleware(request: Request, call_next):
 register_exception_handlers(app)
 
 
-@app.get("/")
+@app.get("/", summary="Welcome message")
 def root():
     return {"message" : "Welcome to AI Sales Intelligence Platform"}
 
-@app.get("/health")
+@app.get("/health", summary="Health check", tags=["Health"])
 def health():
     return {"status" : "healthy"}

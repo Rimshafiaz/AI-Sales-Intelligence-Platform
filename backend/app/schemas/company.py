@@ -5,7 +5,16 @@ from datetime import datetime
 from pydantic import ConfigDict
 
 class CompanyCreate(BaseModel):
-    name: str = Field(...,max_length=255)
+    model_config = ConfigDict(
+        json_schema_extra={
+            "examples": [
+                {"name": "Stripe", "website": "https://stripe.com"},
+                {"name": "Some Startup Inc."},
+            ]
+        }
+    )
+
+    name: str = Field(..., max_length=255, description="Company display name; website is optional and can be resolved during research.")
     website: HttpUrl | None = None
 
     @field_validator("name",mode="after")

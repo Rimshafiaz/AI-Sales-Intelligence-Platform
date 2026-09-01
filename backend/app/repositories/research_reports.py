@@ -212,3 +212,12 @@ def count_research_reports_for_user(
         )
     )
     return db.scalar(statement)
+
+
+def company_has_reports(db: Session, company_id: UUID) -> bool:
+    statement = (
+        select(func.count(ResearchReport.id))
+        .where(ResearchReport.company_id == company_id)
+        .limit(1)
+    )
+    return db.scalar(statement) > 0

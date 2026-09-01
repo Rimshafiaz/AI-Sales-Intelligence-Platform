@@ -36,6 +36,8 @@ router = APIRouter(tags=["Reports"])
     "/reports",
     response_model=ReportListResponse,
     status_code=status.HTTP_200_OK,
+    summary="List the current user's report history",
+    responses={422: {"description": "Invalid pagination or filter values"}},
 )
 def list_reports_endpoint(
     page: int = Query(default=1, ge=1),
@@ -75,6 +77,12 @@ def list_reports_endpoint(
     "/research-requests/{request_id}/reports",
     response_model=ResearchReportResponse,
     status_code=status.HTTP_201_CREATED,
+    summary="Generate a report from a completed research request",
+    responses={
+        404: {"description": "Request unknown or owned by another user"},
+        409: {"description": "Request not completed, or a report already exists"},
+        503: {"description": "AI provider or evidence failure"},
+    },
 )
 def create_report_endpoint(
     request_id: UUID,
@@ -111,6 +119,8 @@ def create_report_endpoint(
     "/reports/{report_id}",
     response_model=ReportDetailResponse,
     status_code=status.HTTP_200_OK,
+    summary="Show a report with its evidence sources",
+    responses={404: {"description": "Report unknown or owned by another user"}},
 )
 def get_report_endpoint(
     report_id: UUID,
@@ -135,6 +145,8 @@ def get_report_endpoint(
     "/reports/{report_id}/approve",
     response_model=ResearchReportResponse,
     status_code=status.HTTP_200_OK,
+    summary="Approve a report (idempotent)",
+    responses={404: {"description": "Report unknown or owned by another user"}},
 )
 def approve_report_endpoint(
     report_id: UUID,
@@ -159,6 +171,11 @@ def approve_report_endpoint(
     "/reports/{report_id}",
     response_model=ResearchReportResponse,
     status_code=status.HTTP_200_OK,
+    summary="Edit the report's outreach fields (reverts to draft)",
+    responses={
+        404: {"description": "Report unknown or owned by another user"},
+        422: {"description": "Field outside the allowlist, blank, or too long"},
+    },
 )
 def edit_report_endpoint(
     report_id: UUID,
@@ -192,6 +209,11 @@ def edit_report_endpoint(
     "/reports/{report_id}/regenerate",
     response_model=ResearchReportResponse,
     status_code=status.HTTP_201_CREATED,
+    summary="Regenerate a report with optional guidance",
+    responses={
+        404: {"description": "Report unknown or owned by another user"},
+        503: {"description": "AI provider or evidence failure"},
+    },
 )
 def regenerate_report_endpoint(
     report_id: UUID,

@@ -1,6 +1,9 @@
 # Project-local planning file (intentionally not versioned)
 Plan.md
 
+# Local documentation draft (intentionally not versioned for now)
+docs/
+
 # Environment variables and secrets
 .env
 .env.*
