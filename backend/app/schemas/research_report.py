@@ -2,6 +2,7 @@ from datetime import datetime
 from typing import Any
 from uuid import UUID
 from pydantic import BaseModel, ConfigDict
+from app.schemas.research_source import ResearchSourceResponse
 
 
 class ResearchReportResponse(BaseModel):
@@ -16,3 +17,8 @@ class ResearchReportResponse(BaseModel):
     created_at: datetime
 
     model_config = ConfigDict(from_attributes=True)
+
+
+class ReportDetailResponse(BaseModel):
+    report: ResearchReportResponse
+    sources: list[ResearchSourceResponse]

@@ -43,6 +43,18 @@ def get_research_report_for_user(
     return db.scalar(statement)
 
 
+def get_research_report_by_id_for_user(
+    db: Session,
+    report_id: UUID,
+    user_id: UUID,
+) -> ResearchReport | None:
+    statement = select(ResearchReport).where(
+        ResearchReport.id == report_id,
+        ResearchReport.user_id == user_id,
+    )
+    return db.scalar(statement)
+
+
 def list_research_reports_for_user(
     db: Session,
     user_id: UUID,
