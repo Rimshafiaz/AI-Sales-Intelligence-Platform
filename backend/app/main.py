@@ -5,6 +5,7 @@ from app.api.routes.companies import router as company_router
 from app.api.routes.research_requests import router as research_requests_router
 from app.api.routes.reports import router as reports_router
 from app.api.routes.company_discovery import router as company_discovery_router
+from app.api.routes.dashboard import router as dashboard_router
 app = FastAPI(
     title = settings.app_name,
     version = settings.app_version,   
@@ -14,6 +15,7 @@ app.include_router(company_router)
 app.include_router(research_requests_router)
 app.include_router(reports_router)
 app.include_router(company_discovery_router)
+app.include_router(dashboard_router)
 @app.get("/")
 def root():
     return {"message" : "Welcome to AI Sales Intelligence Platform"}
