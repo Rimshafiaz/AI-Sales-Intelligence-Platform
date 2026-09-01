@@ -7,10 +7,13 @@ from app.models.research_report import ResearchReport
 from app.models.user import User
 from app.repositories.research_reports import (
     approve_research_report,
+    count_research_reports_for_user,
     get_research_report_by_id_for_user,
+    list_report_summaries_for_user,
     save_report_edits,
 )
 from app.repositories.research_sources import list_research_sources_for_user
+from app.schemas.report_list import ReportListResponse, ReportSummary
 from app.schemas.research_report import (
     ReportDetailResponse,
     ReportEditRequest,
@@ -128,4 +131,43 @@ def edit_report_for_user(
         report=report,
         report_data=merged_report_data,
         review_note=effective_note,
+    )
+
+
+def list_report_history_for_user(
+    db: Session,
+    current_user: User,
+    page: int,
+    page_size: int,
+) -> ReportListResponse:
+    offset = (page - 1) * page_size
+    summary_rows = list_report_summaries_for_user(
+        db=db,
+        user_id=current_user.id,
+        limit=page_size,
+        offset=offset,
+    )
+    total = count_research_reports_for_user(
+        db=db,
+        user_id=current_user.id,
+    )
+
+    items = [
+        ReportSummary(
+            id=report.id,
+            company_id=report.company_id,
+            company_name=company_name,
+            opportunity_score=report.opportunity_score,
+            contact_recommendation=report.contact_recommendation,
+            review_status=report.review_status.value,
+            generated_at=report.generated_at,
+        )
+        for report, company_name in summary_rows
+    ]
+
+    return ReportListResponse(
+        items=items,
+        total=total,
+        page=page,
+        page_size=page_size,
     )

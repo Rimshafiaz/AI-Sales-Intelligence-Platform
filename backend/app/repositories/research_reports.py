@@ -1,8 +1,9 @@
 from datetime import datetime, timezone
 from typing import Any
 from uuid import UUID
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.orm import Session
+from app.models.company import Company
 from app.models.research_report import ReportReviewStatus, ResearchReport
 
 
@@ -105,3 +106,30 @@ def list_research_reports_for_user(
         .limit(limit)
     )
     return db.scalars(statement).all()
+
+
+def list_report_summaries_for_user(
+    db: Session,
+    user_id: UUID,
+    limit: int,
+    offset: int,
+) -> list[tuple[ResearchReport, str]]:
+    statement = (
+        select(ResearchReport, Company.name)
+        .join(Company, ResearchReport.company_id == Company.id)
+        .where(ResearchReport.user_id == user_id)
+        .order_by(ResearchReport.generated_at.desc())
+        .limit(limit)
+        .offset(offset)
+    )
+    return db.execute(statement).all()
+
+
+def count_research_reports_for_user(
+    db: Session,
+    user_id: UUID,
+) -> int:
+    statement = select(func.count(ResearchReport.id)).where(
+        ResearchReport.user_id == user_id
+    )
+    return db.scalar(statement)

@@ -1,11 +1,12 @@
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.orm import Session
 
 from app.api.dependencies.current_user import get_current_user
 from app.db.session import get_db
 from app.models.user import User
+from app.schemas.report_list import ReportListResponse
 from app.schemas.research_report import (
     RegenerateReportRequest,
     ReportDetailResponse,
@@ -22,10 +23,30 @@ from app.services.reports import (
     approve_report_for_user,
     edit_report_for_user,
     get_report_detail_for_user,
+    list_report_history_for_user,
 )
 
 
 router = APIRouter(tags=["Reports"])
+
+
+@router.get(
+    "/reports",
+    response_model=ReportListResponse,
+    status_code=status.HTTP_200_OK,
+)
+def list_reports_endpoint(
+    page: int = Query(default=1, ge=1),
+    page_size: int = Query(default=10, ge=1, le=50),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    return list_report_history_for_user(
+        db=db,
+        current_user=current_user,
+        page=page,
+        page_size=page_size,
+    )
 
 
 @router.post(
