@@ -2,8 +2,12 @@ from uuid import UUID
 
 from sqlalchemy.orm import Session
 
+from app.models.research_report import ResearchReport
 from app.models.user import User
-from app.repositories.research_reports import get_research_report_by_id_for_user
+from app.repositories.research_reports import (
+    approve_research_report,
+    get_research_report_by_id_for_user,
+)
 from app.repositories.research_sources import list_research_sources_for_user
 from app.schemas.research_report import ReportDetailResponse, ResearchReportResponse
 from app.schemas.research_source import ResearchSourceResponse
@@ -37,4 +41,16 @@ def get_report_detail_for_user(
         sources=[
             ResearchSourceResponse.model_validate(source) for source in sources
         ],
+    )
+
+
+def approve_report_for_user(
+    db: Session,
+    report_id: UUID,
+    current_user: User,
+) -> ResearchReport | None:
+    return approve_research_report(
+        db=db,
+        report_id=report_id,
+        user_id=current_user.id,
     )

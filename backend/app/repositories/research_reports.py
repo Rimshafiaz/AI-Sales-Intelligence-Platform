@@ -1,9 +1,9 @@
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Any
 from uuid import UUID
 from sqlalchemy import select
 from sqlalchemy.orm import Session
-from app.models.research_report import ResearchReport
+from app.models.research_report import ReportReviewStatus, ResearchReport
 
 
 def create_research_report(
@@ -53,6 +53,29 @@ def get_research_report_by_id_for_user(
         ResearchReport.user_id == user_id,
     )
     return db.scalar(statement)
+
+
+def approve_research_report(
+    db: Session,
+    report_id: UUID,
+    user_id: UUID,
+) -> ResearchReport | None:
+    report = get_research_report_by_id_for_user(
+        db=db,
+        report_id=report_id,
+        user_id=user_id,
+    )
+    if report is None:
+        return None
+
+    if report.review_status == ReportReviewStatus.APPROVED:
+        return report
+
+    report.review_status = ReportReviewStatus.APPROVED
+    report.approved_at = datetime.now(timezone.utc)
+    db.commit()
+    db.refresh(report)
+    return report
 
 
 def list_research_reports_for_user(

@@ -12,7 +12,7 @@ from app.services.report_generation import (
     ReportGenerationFailed,
     generate_report_for_request,
 )
-from app.services.reports import get_report_detail_for_user
+from app.services.reports import approve_report_for_user, get_report_detail_for_user
 
 
 router = APIRouter(tags=["Reports"])
@@ -76,3 +76,27 @@ def get_report_endpoint(
         )
 
     return report_detail
+
+
+@router.post(
+    "/reports/{report_id}/approve",
+    response_model=ResearchReportResponse,
+    status_code=status.HTTP_200_OK,
+)
+def approve_report_endpoint(
+    report_id: UUID,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    approved_report = approve_report_for_user(
+        db=db,
+        report_id=report_id,
+        current_user=current_user,
+    )
+    if approved_report is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Report not found",
+        )
+
+    return approved_report

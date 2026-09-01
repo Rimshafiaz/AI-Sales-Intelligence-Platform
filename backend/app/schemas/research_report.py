@@ -12,6 +12,7 @@ class ResearchReportResponse(BaseModel):
     opportunity_score: int
     contact_recommendation: str
     review_status: str
+    approved_at: datetime | None = None
     report_data: dict[str, Any]
     generated_at: datetime
     created_at: datetime
