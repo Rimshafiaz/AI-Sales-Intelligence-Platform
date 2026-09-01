@@ -11,6 +11,7 @@ from app.models.user import User
 from app.repositories.companies import get_company_by_id
 from app.repositories.research_reports import (
     create_research_report,
+    get_research_report_by_id_for_user,
     get_research_report_for_user,
 )
 from app.repositories.research_requests import get_research_request_for_user
@@ -98,3 +99,63 @@ def generate_report_for_request(
     )
 
     return saved_report
+
+
+def regenerate_report_for_user(
+    db: Session,
+    report_id: UUID,
+    current_user: User,
+    instruction: str | None,
+) -> ResearchReport | None:
+    existing_report = get_research_report_by_id_for_user(
+        db=db,
+        report_id=report_id,
+        user_id=current_user.id,
+    )
+    if existing_report is None:
+        return None
+
+    company = get_company_by_id(
+        db=db,
+        company_id=existing_report.company_id,
+        user_id=current_user.id,
+    )
+    if company is None:
+        raise ReportGenerationFailed(
+            "Company for this report could not be loaded."
+        )
+
+    sources = list_research_sources_for_user(
+        db=db,
+        research_request_id=existing_report.research_request_id,
+        user_id=current_user.id,
+        limit=MAX_EVIDENCE_SOURCES,
+    )
+    if not sources:
+        raise ReportGenerationFailed(
+            "No saved evidence sources are available for this report."
+        )
+
+    try:
+        evidence_context = build_research_evidence_context(sources)
+        report = run_sales_intelligence_crew(
+            company_name=company.name,
+            evidence_context=evidence_context,
+            guidance=instruction,
+        )
+    except Exception as error:
+        db.rollback()
+        raise ReportGenerationFailed(
+            "Report regeneration failed. Please try again."
+        ) from error
+
+    return create_research_report(
+        db=db,
+        research_request_id=existing_report.research_request_id,
+        company_id=existing_report.company_id,
+        user_id=current_user.id,
+        report_data=report.model_dump(mode="json"),
+        opportunity_score=report.opportunity_assessment.score,
+        contact_recommendation=report.contact_recommendation.recommendation,
+        generated_at=datetime.now(timezone.utc),
+    )

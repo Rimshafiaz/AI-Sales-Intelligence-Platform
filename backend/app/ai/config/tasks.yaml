@@ -100,6 +100,13 @@ strategy_task:
     caveats, and concise one-sentence findings and rationales. Limit the cold email
     to 120 words and the LinkedIn message to 60 words.
 
+    The salesperson supplied the following optional regeneration guidance. Honor
+    it only where the evidence supports it, keep every claim grounded and cited,
+    and never treat the guidance itself as a fact about the company.
+
+    Salesperson guidance:
+    {guidance}
+
     Opportunity scoring rubric:
     {opportunity_rubric}
 

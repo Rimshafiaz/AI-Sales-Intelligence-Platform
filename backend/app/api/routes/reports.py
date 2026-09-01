@@ -7,6 +7,7 @@ from app.api.dependencies.current_user import get_current_user
 from app.db.session import get_db
 from app.models.user import User
 from app.schemas.research_report import (
+    RegenerateReportRequest,
     ReportDetailResponse,
     ReportEditRequest,
     ResearchReportResponse,
@@ -15,6 +16,7 @@ from app.services.report_generation import (
     ReportGenerationConflict,
     ReportGenerationFailed,
     generate_report_for_request,
+    regenerate_report_for_user,
 )
 from app.services.reports import (
     approve_report_for_user,
@@ -141,3 +143,38 @@ def edit_report_endpoint(
         )
 
     return edited_report
+
+
+@router.post(
+    "/reports/{report_id}/regenerate",
+    response_model=ResearchReportResponse,
+    status_code=status.HTTP_201_CREATED,
+)
+def regenerate_report_endpoint(
+    report_id: UUID,
+    regeneration: RegenerateReportRequest | None = None,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    instruction = regeneration.instruction if regeneration else None
+
+    try:
+        regenerated_report = regenerate_report_for_user(
+            db=db,
+            report_id=report_id,
+            current_user=current_user,
+            instruction=instruction,
+        )
+    except ReportGenerationFailed as failure:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail=str(failure),
+        ) from failure
+
+    if regenerated_report is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Report not found",
+        )
+
+    return regenerated_report

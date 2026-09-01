@@ -61,6 +61,21 @@ class ReportEditRequest(BaseModel):
         return stripped_roles
 
 
+class RegenerateReportRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    instruction: str | None = Field(default=None, max_length=500)
+
+    @field_validator("instruction", mode="before")
+    @classmethod
+    def strip_instruction(cls, value: object) -> object:
+        if isinstance(value, str):
+            stripped = value.strip()
+            return stripped or None
+
+        return value
+
+
 class ResearchReportResponse(BaseModel):
     id: UUID
     research_request_id: UUID

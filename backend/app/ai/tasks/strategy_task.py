@@ -21,10 +21,17 @@ def create_strategy_task(
     technology_output: TechnologyAgentOutput,
     news_output: NewsAgentOutput,
     pain_point_output: PainPointAgentOutput,
+    guidance: str | None = None,
 ) -> Task:
     clean_company_name = company_name.strip()
     if not clean_company_name:
         raise ValueError("Company name cannot be blank.")
+
+    clean_guidance = guidance.strip() if guidance else ""
+    if clean_guidance:
+        guidance_text = clean_guidance
+    else:
+        guidance_text = "No additional guidance."
 
     config = render_task_config(
         "strategy_task",
@@ -34,6 +41,7 @@ def create_strategy_task(
         technology_output=technology_output.model_dump_json(indent=2),
         news_output=news_output.model_dump_json(indent=2),
         pain_point_output=pain_point_output.model_dump_json(indent=2),
+        guidance=guidance_text,
     )
 
     return Task(
