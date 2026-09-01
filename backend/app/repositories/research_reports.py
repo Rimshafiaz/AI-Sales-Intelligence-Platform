@@ -78,6 +78,21 @@ def approve_research_report(
     return report
 
 
+def save_report_edits(
+    db: Session,
+    report: ResearchReport,
+    report_data: dict[str, Any],
+    review_note: str | None,
+) -> ResearchReport:
+    report.report_data = report_data
+    report.review_note = review_note
+    report.review_status = ReportReviewStatus.DRAFT
+    report.approved_at = None
+    db.commit()
+    db.refresh(report)
+    return report
+
+
 def list_research_reports_for_user(
     db: Session,
     user_id: UUID,

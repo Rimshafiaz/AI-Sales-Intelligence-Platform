@@ -6,13 +6,21 @@ from sqlalchemy.orm import Session
 from app.api.dependencies.current_user import get_current_user
 from app.db.session import get_db
 from app.models.user import User
-from app.schemas.research_report import ReportDetailResponse, ResearchReportResponse
+from app.schemas.research_report import (
+    ReportDetailResponse,
+    ReportEditRequest,
+    ResearchReportResponse,
+)
 from app.services.report_generation import (
     ReportGenerationConflict,
     ReportGenerationFailed,
     generate_report_for_request,
 )
-from app.services.reports import approve_report_for_user, get_report_detail_for_user
+from app.services.reports import (
+    approve_report_for_user,
+    edit_report_for_user,
+    get_report_detail_for_user,
+)
 
 
 router = APIRouter(tags=["Reports"])
@@ -100,3 +108,36 @@ def approve_report_endpoint(
         )
 
     return approved_report
+
+
+@router.patch(
+    "/reports/{report_id}",
+    response_model=ResearchReportResponse,
+    status_code=status.HTTP_200_OK,
+)
+def edit_report_endpoint(
+    report_id: UUID,
+    edits: ReportEditRequest,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    try:
+        edited_report = edit_report_for_user(
+            db=db,
+            report_id=report_id,
+            current_user=current_user,
+            edits=edits,
+        )
+    except ValueError as error:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail=str(error),
+        ) from error
+
+    if edited_report is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Report not found",
+        )
+
+    return edited_report
