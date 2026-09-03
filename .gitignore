@@ -73,3 +73,5 @@ docker-data/
 .DS_Store
 Thumbs.db
 Desktop.ini
+
+screens/

@@ -1,0 +1,52 @@
+@import 'tailwindcss';
+
+@theme {
+  /* Precision Editorial surfaces */
+  --color-canvas: #f8fafc;
+  --color-card: #ffffff;
+  --color-ink: #0f172a;
+  --color-ink-soft: #475569;
+  --color-ink-faint: #94a3b8;
+  --color-line: #cbd5e1;
+  --color-line-soft: #e2e8f0;
+  --color-slate-wash: #f1f5f9;
+
+  /* Single interactive accent (links, evidence anchors, focus) */
+  --color-action: #2563eb;
+
+  /* Attribution signals */
+  --color-inference-bg: #eef2ff;
+  --color-inference-edge: #c7d2fe;
+  --color-inference-ink: #3730a3;
+
+  /* Status */
+  --color-warn-ink: #b45309;
+  --color-warn-bg: #fef3c7;
+  --color-ok-ink: #065f46;
+  --color-ok-bg: #d1fae5;
+  --color-bad-ink: #991b1b;
+  --color-bad-bg: #fee2e2;
+
+  --font-display: 'Anybody', system-ui, sans-serif;
+  --font-ui: 'Instrument Sans', system-ui, sans-serif;
+  --font-narrative: 'Merriweather', Georgia, serif;
+
+  --radius-control: 4px;
+  --radius-card: 8px;
+}
+
+body {
+  margin: 0;
+  background-color: var(--color-canvas);
+  color: var(--color-ink);
+  font-family: var(--font-narrative);
+  font-feature-settings: 'tnum' 1;
+}
+
+.label-caps {
+  font-family: var(--font-ui);
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
