@@ -147,7 +147,7 @@ export default function DashboardPage() {
           <h1 className="font-display text-headline-xl font-semibold tracking-tight text-on-surface">
             Sales Intelligence Dashboard
           </h1>
-          <p className="text-body-lg text-on-surface-variant">
+          <p className="max-w-2xl text-body-md text-on-surface-variant">
             Evidence-backed account research and verified company dossiers.
           </p>
         </div>

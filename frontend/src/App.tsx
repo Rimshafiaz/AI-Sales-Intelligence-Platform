@@ -10,6 +10,7 @@ import HistoryPage from './pages/HistoryPage'
 import ResearchPage from './pages/ResearchPage'
 import ResearchProgressPage from './pages/ResearchProgressPage'
 import ReportReviewPage from './pages/ReportReviewPage'
+import NotFoundPage from './pages/NotFoundPage'
 
 function ProtectedLayout() {
   return (
@@ -54,11 +55,8 @@ export default function App() {
         <Route path="/research/:requestId" element={<ResearchProgressPage />} />
         <Route path="/reports/:reportId" element={<ReportReviewPage />} />
         <Route path="/history" element={<HistoryPage />} />
+        <Route path="*" element={<NotFoundPage />} />
       </Route>
-      <Route
-        path="*"
-        element={<Navigate to={session ? '/dashboard' : '/auth'} replace />}
-      />
     </Routes>
   )
 }
