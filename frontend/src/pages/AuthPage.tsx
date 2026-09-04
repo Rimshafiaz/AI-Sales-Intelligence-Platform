@@ -1,7 +1,8 @@
 import { useEffect, useState, type FormEvent } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { ArrowRight, CircleAlert, Eye, EyeOff, ShieldCheck } from 'lucide-react'
+import { CircleAlert, Eye, EyeOff } from 'lucide-react'
 import { IDLE_LOGOUT_FLAG, useAuth } from '../lib/auth'
+import { SalesLensMark } from '../components/SalesLensMark'
 
 type Mode = 'signin' | 'signup'
 type Notice = { kind: 'error' | 'info'; code: string | null; message: string; title?: string }
@@ -75,7 +76,7 @@ export default function AuthPage() {
   }
 
   const tabClass = (active: boolean) =>
-    'flex-1 px-2 py-1.5 rounded text-center text-label-md transition-all duration-150 ' +
+    'flex-1 px-2 py-1.5 rounded text-center text-label-md transition-all duration-150 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-secondary ' +
     (active
       ? 'bg-surface-container-lowest font-semibold text-on-surface shadow-sm'
       : 'font-medium text-on-surface-variant hover:text-on-surface')
@@ -86,15 +87,7 @@ export default function AuthPage() {
         <div className="relative flex flex-col gap-6 rounded-card bg-surface-container-lowest p-8 shadow-sm">
           <div className="flex flex-col items-center gap-1 text-center">
             <div className="flex h-8 items-center gap-2">
-              <svg width="24" height="24" viewBox="0 0 32 32" aria-hidden="true">
-                <rect width="32" height="32" rx="6" fill="#000000" />
-                <g fill="#f7f9fb">
-                  <rect x="9" y="9" width="6" height="6" rx="1" />
-                  <rect x="17" y="9" width="6" height="6" rx="1" />
-                  <rect x="9" y="17" width="6" height="6" rx="1" />
-                  <rect x="17" y="17" width="6" height="6" rx="1" />
-                </g>
-              </svg>
+              <SalesLensMark size={24} />
               <span className="font-display text-lg font-bold tracking-tight text-on-surface">
                 SalesLens
               </span>
@@ -176,10 +169,10 @@ export default function AuthPage() {
                 type="email"
                 required
                 autoComplete="email"
-                placeholder="name@company.com"
+                placeholder="Enter email"
                 value={email}
                 onChange={(event) => setEmail(event.target.value)}
-                className="h-10 w-full rounded-control bg-surface-container-lowest px-3 text-body-md text-on-surface shadow-sm outline-none transition-all placeholder:text-outline-variant focus:bg-surface-container-low"
+                className="h-10 w-full rounded-control bg-surface-container-lowest px-3 text-body-md text-on-surface shadow-sm outline-none transition-all placeholder:text-outline-variant focus:bg-surface-container-low focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-secondary"
               />
             </div>
 
@@ -206,13 +199,13 @@ export default function AuthPage() {
                   placeholder="Enter password"
                   value={password}
                   onChange={(event) => setPassword(event.target.value)}
-                  className="h-10 w-full rounded-control bg-surface-container-lowest px-3 pr-10 text-body-md text-on-surface shadow-sm outline-none transition-all placeholder:text-outline-variant focus:bg-surface-container-low"
+                  className="h-10 w-full rounded-control bg-surface-container-lowest px-3 pr-10 text-body-md text-on-surface shadow-sm outline-none transition-all placeholder:text-outline-variant focus:bg-surface-container-low focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-secondary"
                 />
                 <button
                   type="button"
                   aria-label="Toggle password visibility"
                   onClick={() => setShowPassword((visible) => !visible)}
-                  className="absolute right-0 flex h-10 w-10 items-center justify-center text-outline transition-colors hover:text-on-surface"
+                  className="absolute right-0 flex h-10 w-10 items-center justify-center text-outline transition-colors hover:text-on-surface focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-secondary"
                 >
                   {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
                 </button>
@@ -222,7 +215,7 @@ export default function AuthPage() {
             <button
               type="submit"
               disabled={submitting}
-              className="mt-1 flex h-10 w-full items-center justify-center gap-2 rounded-control bg-primary text-headline-sm text-on-primary shadow-sm transition-all duration-150 hover:bg-inverse-surface active:scale-[0.99] disabled:cursor-not-allowed disabled:opacity-60"
+              className="mt-2 flex h-10 w-full items-center justify-center rounded-control bg-primary text-headline-sm text-on-primary shadow-sm transition-all duration-150 hover:bg-inverse-surface active:scale-[0.99] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-secondary disabled:cursor-not-allowed disabled:opacity-60"
             >
               <span>
                 {submitting
@@ -233,7 +226,6 @@ export default function AuthPage() {
                     ? 'Sign in to workspace'
                     : 'Create platform account'}
               </span>
-              {!submitting && <ArrowRight size={18} />}
             </button>
           </form>
 
@@ -241,20 +233,19 @@ export default function AuthPage() {
             <button
               type="button"
               onClick={() => setModeAndReset(mode === 'signin' ? 'signup' : 'signin')}
-              className="text-body-sm text-on-surface-variant transition-colors hover:text-on-surface"
+              className="text-body-sm text-on-surface-variant transition-colors hover:text-on-surface focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-secondary"
             >
-              {mode === 'signin' ? "Don't have an account? " : 'Already have credentials? '}
+              {mode === 'signin' ? "Don't have an account? " : 'Already have an account? '}
               <span className="font-semibold text-on-surface underline underline-offset-4">
                 {mode === 'signin' ? 'Sign up' : 'Sign in'}
               </span>
             </button>
           </div>
 
-          <div className="mt-1 flex items-start gap-2 rounded-lg bg-surface-container-low p-3">
-            <ShieldCheck size={16} className="mt-0.5 shrink-0 text-outline" />
-            <p className="text-label-sm leading-relaxed text-on-surface-variant">
-              SalesLens is an evidence-backed intelligence platform. Outreach is
-              never automatically sent.
+          <div className="mt-1 flex items-center justify-center gap-2 rounded-lg bg-surface-container-low p-3">
+            <SalesLensMark size={14} />
+            <p className="text-label-sm text-on-surface-variant">
+              SalesLens is an evidence-backed intelligence platform.
             </p>
           </div>
         </div>
