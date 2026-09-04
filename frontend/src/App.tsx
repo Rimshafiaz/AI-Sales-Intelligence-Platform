@@ -2,6 +2,7 @@ import type { ReactNode } from 'react'
 import { Navigate, Outlet, Route, Routes } from 'react-router-dom'
 import { useAuth } from './lib/auth'
 import { AppHeader } from './components/AppHeader'
+import { AppFooter } from './components/AppFooter'
 import AuthPage from './pages/AuthPage'
 import DashboardPage from './pages/DashboardPage'
 import DiscoveryPage from './pages/DiscoveryPage'
@@ -12,9 +13,12 @@ import ReportReviewPage from './pages/ReportReviewPage'
 
 function ProtectedLayout() {
   return (
-    <div className="min-h-screen">
+    <div className="flex min-h-screen flex-col">
       <AppHeader />
-      <Outlet />
+      <div className="flex-1">
+        <Outlet />
+      </div>
+      <AppFooter />
     </div>
   )
 }

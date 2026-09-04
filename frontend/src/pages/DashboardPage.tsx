@@ -1,17 +1,6 @@
 import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import {
-  ArrowRight,
-  Building2,
-  CheckCircle2,
-  CircleAlert,
-  FileSearch,
-  FileText,
-  Hourglass,
-  PenLine,
-  Shapes,
-  TrendingUp,
-} from 'lucide-react'
+import { ChevronRight } from 'lucide-react'
 import { api } from '../lib/api'
 import type {
   DashboardSummary,
@@ -27,14 +16,6 @@ interface DashboardActivity {
   occurred_at: string
 }
 
-const ACTIVITY_ICONS: Record<string, typeof FileText> = {
-  research_requested: Hourglass,
-  research_completed: CheckCircle2,
-  research_failed: CircleAlert,
-  report_generated: FileText,
-  report_approved: CheckCircle2,
-}
-
 function relativeTime(iso: string): string {
   const seconds = Math.floor((Date.now() - new Date(iso).getTime()) / 1000)
   if (seconds < 60) return 'just now'
@@ -47,74 +28,51 @@ function relativeTime(iso: string): string {
   return `${days}d ago`
 }
 
-function ActivityRow({ event }: { event: DashboardActivity }) {
-  const failed = event.event_type === 'research_failed'
-  const Icon =
-    failed
-      ? CircleAlert
-      : ACTIVITY_ICONS[event.event_type] ?? FileText
-  const tileClass = failed
-    ? 'bg-error-container text-on-error-container'
-    : event.event_type === 'research_requested'
-      ? 'bg-surface-container-high text-outline'
-      : 'bg-surface-container-high text-on-surface'
-  const title = event.event_type
+function eventTitle(eventType: string): string {
+  return eventType
     .split('_')
-    .map((word) => word.charAt(0).toUpperCase() + word.slice(1))
+    .map((word, index) =>
+      index === 0 ? word.charAt(0).toUpperCase() + word.slice(1) : word,
+    )
     .join(' ')
-
-  return (
-    <div className="relative flex items-start gap-3">
-      <div
-        className={
-          'flex h-8 w-8 shrink-0 items-center justify-center rounded ' + tileClass
-        }
-      >
-        <Icon size={18} />
-      </div>
-      <div className="flex min-w-0 flex-1 flex-col gap-0.5">
-        <div className="flex items-center justify-between">
-          <span
-            className={
-              'font-label-md font-semibold text-on-surface ' +
-              (failed ? 'text-error' : '')
-            }
-          >
-            {title}
-          </span>
-          <span className="text-tabular-data text-outline">
-            {relativeTime(event.occurred_at)}
-          </span>
-        </div>
-        <p className="truncate text-body-sm text-on-surface-variant">
-          {event.company_name}
-          {event.status ? ` — ${event.status}` : ''}
-        </p>
-      </div>
-    </div>
-  )
 }
 
-function ScorePill({ score }: { score: number }) {
-  const dot = score >= 70 ? 'bg-secondary' : score >= 40 ? 'bg-warn-ink' : 'bg-outline'
+function scoreTier(score: number): { label: string; tone: string } {
+  if (score >= 70) return { label: 'High', tone: 'text-secondary' }
+  if (score >= 40) return { label: 'Medium', tone: 'text-on-surface-variant' }
+  return { label: 'Low', tone: 'text-outline' }
+}
+
+function activityDot(eventType: string): string {
+  if (eventType === 'research_failed') return 'bg-error'
+  if (eventType === 'research_requested')
+    return 'border border-outline bg-surface-container-lowest'
+  return 'bg-on-surface'
+}
+
+function ActivityRow({ event }: { event: DashboardActivity }) {
   return (
-    <div className="inline-flex items-center gap-1 rounded-full bg-surface-container px-2 py-0.5">
-      <span className={'h-2 w-2 rounded-full ' + dot} />
-      <span className="text-tabular-data font-semibold text-on-surface">{score}</span>
-      <span className="text-label-sm text-outline">/100</span>
+    <div className="relative">
+      <span
+        className={'absolute -left-5 top-1.5 h-2 w-2 rounded-full ' + activityDot(event.event_type)}
+      />
+      <p className="text-body-md font-medium text-on-surface">
+        {eventTitle(event.event_type)}
+      </p>
+      <p className="mt-0.5 min-w-0 truncate text-body-sm text-on-surface-variant">
+        {event.company_name} &middot; {relativeTime(event.occurred_at)}
+      </p>
     </div>
   )
 }
 
 function StatusChip({ status }: { status: 'draft' | 'approved' }) {
   return status === 'approved' ? (
-    <span className="inline-flex items-center gap-1 rounded bg-surface-container-high px-2 py-0.5 text-label-sm text-on-surface-variant">
-      <CheckCircle2 size={14} />
+    <span className="inline-flex items-center gap-1 rounded-control border border-forest bg-forest-wash px-1.5 py-0.5 font-ui text-[11px] font-medium text-ok-ink">
       Approved
     </span>
   ) : (
-    <span className="inline-flex items-center gap-1 rounded bg-surface-container px-2 py-0.5 text-label-sm text-outline">
-      <PenLine size={14} />
+    <span className="inline-flex items-center rounded-control border border-warn-bg bg-warn-bg px-1.5 py-0.5 font-ui text-[11px] font-medium text-warn-ink">
       Draft
     </span>
   )
@@ -158,46 +116,33 @@ export default function DashboardPage() {
     return (
       <main className="mx-auto max-w-6xl px-4 py-8 sm:px-6">
         <div className="h-16 animate-pulse rounded bg-surface-container-low" />
-        <div className="mt-8 grid grid-cols-1 gap-6 md:grid-cols-2">
-          {[1, 2].map((index) => (
-            <div key={index} className="h-40 animate-pulse rounded bg-surface-container-lowest shadow-sm" />
-          ))}
-        </div>
-        <div className="mt-6 h-28 animate-pulse rounded bg-surface-container-lowest shadow-sm" />
+        <div className="mt-6 h-24 animate-pulse rounded-card bg-surface-container-lowest shadow-sm" />
+        <div className="mt-6 h-64 animate-pulse rounded-card bg-surface-container-lowest shadow-sm" />
       </main>
     )
   }
 
-  const metrics: { label: string; icon: typeof FileText; value: string; suffix?: string }[] = [
+  const stats: { value: string; label: string }[] = [
+    { value: String(summary.reports_generated), label: 'reports generated' },
+    { value: String(summary.companies_researched), label: 'companies researched' },
+    { value: String(summary.industries_researched), label: 'industries researched' },
     {
-      label: 'Reports generated',
-      icon: FileText,
-      value: String(summary.reports_generated),
-    },
-    {
-      label: 'Companies researched',
-      icon: Building2,
-      value: String(summary.companies_researched),
-    },
-    {
-      label: 'Industries researched',
-      icon: Shapes,
-      value: String(summary.industries_researched),
-    },
-    {
-      label: 'Avg opportunity score',
-      icon: TrendingUp,
       value:
         summary.average_opportunity_score !== null
           ? String(summary.average_opportunity_score)
           : '\u2014',
-      suffix: summary.average_opportunity_score !== null ? '/ 100' : undefined,
+      label: 'avg opportunity /100',
     },
   ]
 
+  const activity = summary.recent_activity
+    .slice()
+    .sort((a, b) => b.occurred_at.localeCompare(a.occurred_at))
+    .slice(0, 6)
+
   return (
-    <main className="mx-auto flex w-full max-w-6xl flex-col gap-8 px-4 py-8 sm:px-6">
-      <section className="flex flex-col justify-between gap-6 md:flex-row md:items-end">
+    <main className="mx-auto flex w-full max-w-6xl flex-col gap-6 px-4 py-8 sm:px-6">
+      <section className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
         <div className="max-w-2xl space-y-1">
           <h1 className="font-display text-headline-xl font-semibold tracking-tight text-on-surface">
             Sales Intelligence Dashboard
@@ -206,199 +151,150 @@ export default function DashboardPage() {
             Evidence-backed account research and verified company dossiers.
           </p>
         </div>
-      </section>
-
-      <section className="grid grid-cols-1 gap-6 md:grid-cols-2">
-        <div className="group relative flex flex-col justify-between rounded bg-surface-container-lowest p-8 shadow-sm transition-all hover:shadow-md">
-          <div className="flex flex-col gap-3">
-            <div className="flex items-center justify-between">
-              <span className="text-label-sm uppercase tracking-widest text-outline">
-                01 / Discovery
-              </span>
-              <div className="flex h-8 w-8 items-center justify-center rounded bg-surface-container text-on-surface">
-                <FileSearch size={18} />
-              </div>
-            </div>
-            <div className="space-y-1">
-              <h2 className="font-display text-headline-lg font-semibold tracking-tight text-on-surface">
-                Discover companies
-              </h2>
-              <p className="max-w-md text-body-md text-on-surface-variant">
-                Define ICP criteria (industry, geography, headcount) to surface
-                matched prospects with evidence.
-              </p>
-            </div>
-          </div>
-          <div className="flex items-center justify-between pt-8">
-            <button
-              type="button"
-              onClick={() => navigate('/discover')}
-              className="inline-flex items-center gap-2 rounded bg-primary px-4 py-2 text-label-md text-on-primary transition-colors hover:bg-surface-tint"
-            >
-              Discover companies
-              <ArrowRight size={16} />
-            </button>
-          </div>
-        </div>
-
-        <div className="group relative flex flex-col justify-between rounded bg-surface-container-lowest p-8 shadow-sm transition-all hover:shadow-md">
-          <div className="flex flex-col gap-3">
-            <div className="flex items-center justify-between">
-              <span className="text-label-sm uppercase tracking-widest text-outline">
-                02 / Research
-              </span>
-              <div className="flex h-8 w-8 items-center justify-center rounded bg-surface-container text-on-surface">
-                <FileSearch size={18} />
-              </div>
-            </div>
-            <div className="space-y-1">
-              <h2 className="font-display text-headline-lg font-semibold tracking-tight text-on-surface">
-                Research a company
-              </h2>
-              <p className="max-w-md text-body-md text-on-surface-variant">
-                Input any company name or URL to collect real-time web citations
-                and build an intelligence dossier.
-              </p>
-            </div>
-          </div>
-          <div className="flex items-center justify-between pt-8">
-            <button
-              type="button"
-              onClick={() => navigate('/research')}
-              className="inline-flex items-center gap-2 rounded bg-surface-container-high px-4 py-2 text-label-md text-on-surface transition-colors hover:bg-surface-variant"
-            >
-              Research a company
-              <ArrowRight size={16} />
-            </button>
-          </div>
+        <div className="flex shrink-0 flex-col gap-2 sm:flex-row sm:items-center">
+          <button
+            type="button"
+            onClick={() => navigate('/research')}
+            className="inline-flex w-full items-center justify-center gap-2 rounded-control bg-primary px-4 py-2 text-label-md font-medium text-on-primary transition-colors hover:bg-inverse-surface sm:w-auto"
+          >
+            Research a company
+          </button>
+          <button
+            type="button"
+            onClick={() => navigate('/discover')}
+            className="inline-flex w-full items-center justify-center gap-2 rounded-control border border-line bg-surface-container-lowest px-4 py-2 text-label-md font-medium text-on-surface transition-colors hover:border-outline hover:bg-surface-container-low sm:w-auto"
+          >
+            Discover companies
+          </button>
         </div>
       </section>
 
-      <section className="w-full overflow-hidden rounded bg-surface-container-lowest shadow-sm">
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4">
-          {metrics.map((metric) => (
-            <div key={metric.label} className="flex flex-col justify-between gap-2 p-6">
-              <div className="flex items-center justify-between">
-                <span className="text-label-sm uppercase tracking-wider text-outline">
-                  {metric.label}
-                </span>
-                <metric.icon size={16} className="text-outline" />
-              </div>
-              <div className="flex items-baseline gap-2">
-                <span className="font-display text-numeric-metric font-semibold text-on-surface">
-                  {metric.value}
-                </span>
-                {metric.suffix && (
-                  <span className="text-body-md text-outline">{metric.suffix}</span>
-                )}
-              </div>
-            </div>
-          ))}
-        </div>
+      <section className="flex flex-wrap items-center gap-x-5 gap-y-2 px-1">
+        {stats.map((stat, index) => (
+          <div key={stat.label} className="flex items-baseline gap-1.5">
+            {index > 0 && <span className="mr-3.5 hidden h-4 w-px bg-line-soft sm:block" />}
+            <span className="font-display text-headline-md font-semibold text-on-surface">
+              {stat.value}
+            </span>
+            <span className="text-body-sm text-on-surface-variant">{stat.label}</span>
+          </div>
+        ))}
       </section>
 
-      <section className="grid grid-cols-1 gap-8 lg:grid-cols-12">
+      <section className="grid grid-cols-1 gap-6 lg:grid-cols-12">
         <div className="flex flex-col gap-3 lg:col-span-8">
           <div className="flex items-center justify-between px-1">
-            <div className="flex items-center gap-2">
-              <h3 className="font-display text-headline-md font-semibold text-on-surface">
-                Recent Reports
-              </h3>
-              <span className="rounded bg-surface-container px-2 py-0.5 text-label-sm text-on-surface-variant">
-                {recent.total} total
-              </span>
-            </div>
+            <h2 className="font-display text-headline-md font-semibold text-on-surface">
+              Recent reports
+            </h2>
             <button
               type="button"
               onClick={() => navigate('/history')}
-              className="group inline-flex items-center gap-1 text-label-md text-on-surface-variant transition-colors hover:text-on-surface"
+              className="text-label-md font-medium text-secondary transition-colors hover:text-on-surface"
             >
-              View all in History
-              <ArrowRight
-                size={16}
-                className="transition-transform group-hover:translate-x-0.5"
-              />
+              View all reports
             </button>
           </div>
 
           {recent.items.length === 0 ? (
-            <div className="rounded bg-surface-container-lowest p-8 text-center shadow-sm">
+            <div className="flex flex-col items-center gap-4 rounded-card bg-surface-container-lowest p-8 text-center shadow-sm">
               <p className="text-body-md text-on-surface-variant">
                 No reports yet. Generate your first one from the workflows above.
               </p>
+              <div className="flex flex-col gap-2 sm:flex-row">
+                <button
+                  type="button"
+                  onClick={() => navigate('/research')}
+                  className="inline-flex w-full items-center justify-center gap-2 rounded-control bg-primary px-4 py-2 text-label-md font-medium text-on-primary transition-colors hover:bg-inverse-surface sm:w-auto"
+                >
+                  Research a company
+                </button>
+                <button
+                  type="button"
+                  onClick={() => navigate('/discover')}
+                  className="inline-flex w-full items-center justify-center gap-2 rounded-control border border-line bg-surface-container-lowest px-4 py-2 text-label-md font-medium text-on-surface transition-colors hover:border-outline hover:bg-surface-container-low sm:w-auto"
+                >
+                  Discover companies
+                </button>
+              </div>
             </div>
           ) : (
-            <div className="overflow-hidden rounded bg-surface-container-lowest shadow-sm">
-              <table className="w-full text-left">
+            <div className="overflow-hidden rounded-card bg-surface-container-lowest shadow-sm">
+              <div className="overflow-x-auto">
+                <table className="w-full min-w-[560px] table-fixed text-left">
                 <thead>
                   <tr className="bg-surface-container-low text-label-sm uppercase tracking-wider text-outline">
-                    <th className="px-4 py-2">Company</th>
-                    <th className="px-4 py-2">Opportunity Score</th>
-                    <th className="px-4 py-2">Review Status</th>
-                    <th className="px-4 py-2">Generated</th>
-                    <th className="px-4 py-2 text-right">Inspect</th>
+                    <th className="w-[45%] px-4 py-2 font-medium">Company</th>
+                    <th className="w-[19%] px-4 py-2 font-medium">Score</th>
+                    <th className="w-[17%] px-4 py-2 font-medium">Status</th>
+                    <th className="w-[15%] px-4 py-2 font-medium">Age</th>
+                    <th className="w-[4%] px-2 py-2">
+                      <span className="sr-only">Open</span>
+                    </th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-line-soft text-on-surface">
-                  {recent.items.map((item: ReportListItem) => (
-                    <tr
-                      key={item.id}
-                      onClick={() => navigate(`/reports/${item.id}`)}
-                      className="group cursor-pointer transition-colors hover:bg-surface-container-low"
-                    >
-                      <td className="px-4 py-3">
-                        <div className="flex items-center gap-2">
-                          <div className="flex h-7 w-7 items-center justify-center rounded bg-surface-container font-display text-sm font-semibold text-on-surface">
-                            {item.company_name.charAt(0).toUpperCase()}
+                  {recent.items.map((item: ReportListItem) => {
+                    const tier = scoreTier(item.opportunity_score)
+                    return (
+                      <tr
+                        key={item.id}
+                        onClick={() => navigate(`/reports/${item.id}`)}
+                        className="group cursor-pointer transition-colors hover:bg-surface-container-low"
+                      >
+                        <td className="px-4 py-3.5">
+                          <div className="flex items-center gap-2.5">
+                            <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-control bg-surface-container font-display text-sm font-semibold text-on-surface">
+                              {item.company_name.charAt(0).toUpperCase()}
+                            </div>
+                            <span className="font-display text-headline-sm font-semibold text-on-surface">
+                              {item.company_name}
+                            </span>
                           </div>
-                          <div className="font-display text-headline-sm font-medium text-on-surface">
-                            {item.company_name}
+                        </td>
+                        <td className="px-4 py-3.5">
+                          <div className="flex items-baseline gap-1.5">
+                            <span className="font-display text-headline-md font-semibold text-on-surface">
+                              {item.opportunity_score}
+                            </span>
+                            <span className="text-body-sm text-outline">/100</span>
+                            <span className={'text-label-sm tracking-wide ' + tier.tone}>
+                              {tier.label}
+                            </span>
                           </div>
-                        </div>
-                      </td>
-                      <td className="px-4 py-3">
-                        <ScorePill score={item.opportunity_score} />
-                      </td>
-                      <td className="px-4 py-3">
-                        <StatusChip status={item.review_status} />
-                      </td>
-                      <td className="px-4 py-3 text-tabular-data text-on-surface-variant">
-                        {relativeTime(item.generated_at)}
-                      </td>
-                      <td className="px-4 py-3 text-right">
-                        <ArrowRight
-                          size={18}
-                          className="text-outline transition-all group-hover:translate-x-1 group-hover:text-on-surface"
-                        />
-                      </td>
-                    </tr>
-                  ))}
+                        </td>
+                        <td className="px-4 py-3.5">
+                          <StatusChip status={item.review_status} />
+                        </td>
+                        <td className="px-4 py-3.5 text-tabular-data text-on-surface-variant">
+                          {relativeTime(item.generated_at)}
+                        </td>
+                        <td className="w-10 px-2 py-3.5 text-right">
+                          <ChevronRight
+                            size={16}
+                            className="text-outline opacity-0 transition-opacity group-hover:opacity-100"
+                          />
+                        </td>
+                      </tr>
+                    )
+                  })}
                 </tbody>
               </table>
+              </div>
             </div>
           )}
         </div>
 
         <div className="flex flex-col gap-3 lg:col-span-4">
-          <div className="flex items-center justify-between px-1">
-            <h3 className="font-display text-headline-md font-semibold text-on-surface">
-              Activity Stream
-            </h3>
-            <span className="text-label-sm uppercase tracking-wider text-outline">
-              Latest
-            </span>
-          </div>
-          <div className="flex flex-col gap-6 rounded bg-surface-container-lowest p-6 shadow-sm">
-            {summary.recent_activity.length === 0 && (
+          <h2 className="px-1 label-caps text-ink-faint">Recent activity</h2>
+          <div className="ml-1 flex flex-col gap-4 border-l border-line-soft pl-4">
+            {activity.length === 0 && (
               <p className="text-body-sm text-on-surface-variant">
                 No activity yet. Start by discovering or researching a company.
               </p>
             )}
-            {summary.recent_activity.map((event, index) => (
-              <ActivityRow
-                key={`${event.event_type}-${event.occurred_at}-${index}`}
-                event={event}
-              />
+            {activity.map((event) => (
+              <ActivityRow key={`${event.event_type}-${event.occurred_at}`} event={event} />
             ))}
           </div>
         </div>
