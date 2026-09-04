@@ -1,64 +1,61 @@
 import type { ReactNode } from 'react'
-import { Navigate, Route, Routes } from 'react-router-dom'
-import { LogOut } from 'lucide-react'
+import { Navigate, Outlet, Route, Routes } from 'react-router-dom'
 import { useAuth } from './lib/auth'
+import { AppHeader } from './components/AppHeader'
+import { Button } from './components/ui'
 import AuthPage from './pages/AuthPage'
+import DiscoveryPage from './pages/DiscoveryPage'
+import ResearchPage from './pages/ResearchPage'
+import ResearchProgressPage from './pages/ResearchProgressPage'
+import ReportReviewPage from './pages/ReportReviewPage'
 
-const SCREENS: { path: string; label: string }[] = [
+const UNBUILT_SCREENS: { path: string; label: string }[] = [
   { path: '/dashboard', label: 'Dashboard' },
-  { path: '/discover', label: 'Company Discovery' },
-  { path: '/research', label: 'Research a Company' },
-  { path: '/research/:requestId', label: 'Research Progress' },
-  { path: '/reports/:reportId', label: 'Report Review' },
   { path: '/history', label: 'History' },
 ]
 
-function AppHeader() {
-  const { session, signOut } = useAuth()
+function DashboardStub() {
   return (
-    <header className="flex h-12 items-center justify-between border-b border-line-soft bg-card px-4 sm:px-6">
-      <div className="flex items-center gap-2">
-        <svg width="20" height="20" viewBox="0 0 32 32" aria-hidden="true">
-          <rect width="32" height="32" rx="6" fill="#0f172a" />
-          <g fill="#f8fafc">
-            <rect x="9" y="9" width="6" height="6" rx="1" />
-            <rect x="17" y="9" width="6" height="6" rx="1" />
-            <rect x="9" y="17" width="6" height="6" rx="1" />
-            <rect x="17" y="17" width="6" height="6" rx="1" />
-          </g>
-        </svg>
-        <span className="font-display text-sm font-bold tracking-tight text-ink">SalesLens</span>
+    <main className="mx-auto max-w-3xl px-8 py-16">
+      <p className="label-caps text-ink-faint">SalesLens shell placeholder</p>
+      <h1 className="mt-2 font-display text-3xl font-semibold text-ink">Dashboard</h1>
+      <p className="mt-4 text-sm text-ink-soft">
+        The real dashboard is built in Milestone 58. Until then, the two
+        workflows are reachable here:
+      </p>
+      <div className="mt-6 flex flex-col gap-3 sm:flex-row">
+        <Button onClick={() => (window.location.href = '/discover')}>
+          Discover companies
+        </Button>
+        <Button variant="secondary" onClick={() => (window.location.href = '/research')}>
+          Research a company
+        </Button>
       </div>
-      <div className="flex items-center gap-3">
-        <span className="hidden text-sm text-ink-soft sm:block">{session?.user.email}</span>
-        <button
-          type="button"
-          onClick={() => void signOut()}
-          className="flex h-8 items-center gap-1.5 rounded-control border border-line px-2.5 font-ui text-[13px] font-medium text-ink transition-colors hover:border-ink-faint hover:bg-canvas"
-        >
-          <LogOut size={15} />
-          Log out
-        </button>
-      </div>
-    </header>
+    </main>
   )
 }
 
 function ShellStub({ label }: { label: string }) {
   const apiUrl = import.meta.env.VITE_API_URL ?? 'http://localhost:8000'
   return (
-    <>
+    <main className="mx-auto max-w-3xl px-8 py-16">
+      <p className="label-caps text-ink-faint">SalesLens shell placeholder</p>
+      <h1 className="mt-2 font-display text-3xl font-semibold text-ink">{label}</h1>
+      <p className="mt-4 text-sm text-ink-soft">
+        This screen is not built yet. The shell routes, auth gate, API client
+        (<span className="font-display text-action">{apiUrl}</span>) and design tokens
+        are live.
+      </p>
+    </main>
+  )
+}
+
+function ProtectedLayout() {
+  return (
+    <div className="min-h-screen">
       <AppHeader />
-      <main className="mx-auto max-w-3xl px-8 py-16">
-        <p className="label-caps text-ink-faint">SalesLens shell placeholder</p>
-        <h1 className="mt-2 font-display text-3xl font-semibold text-ink">{label}</h1>
-        <p className="mt-4 text-sm text-ink-soft">
-          This screen is not built yet. The shell routes, auth gate, API client
-          (<span className="font-display text-action">{apiUrl}</span>) and design tokens
-          are live.
-        </p>
-      </main>
-    </>
+      <Outlet />
+    </div>
   )
 }
 
@@ -80,17 +77,22 @@ export default function App() {
         path="/auth"
         element={session ? <Navigate to="/dashboard" replace /> : <AuthPage />}
       />
-      {SCREENS.map((screen) => (
-        <Route
-          key={screen.path}
-          path={screen.path}
-          element={
-            <ProtectedRoute>
-              <ShellStub label={screen.label} />
-            </ProtectedRoute>
-          }
-        />
-      ))}
+      <Route
+        element={
+          <ProtectedRoute>
+            <ProtectedLayout />
+          </ProtectedRoute>
+        }
+      >
+        <Route path="/discover" element={<DiscoveryPage />} />
+        <Route path="/dashboard" element={<DashboardStub />} />
+        <Route path="/research" element={<ResearchPage />} />
+        <Route path="/research/:requestId" element={<ResearchProgressPage />} />
+        <Route path="/reports/:reportId" element={<ReportReviewPage />} />
+        {UNBUILT_SCREENS.map((screen) => (
+          <Route key={screen.path} path={screen.path} element={<ShellStub label={screen.label} />} />
+        ))}
+      </Route>
       <Route
         path="*"
         element={<Navigate to={session ? '/dashboard' : '/auth'} replace />}

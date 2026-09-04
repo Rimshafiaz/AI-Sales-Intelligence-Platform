@@ -2,6 +2,7 @@ import time
 import uuid
 
 from fastapi import FastAPI, Request
+from fastapi.middleware.cors import CORSMiddleware
 
 from app.core.config import settings
 from app.core.exceptions import register_exception_handlers
@@ -19,6 +20,15 @@ logger = get_logger(__name__)
 app = FastAPI(
     title = settings.app_name,
     version = settings.app_version,
+)
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=[
+        origin.strip() for origin in settings.cors_origins.split(",") if origin.strip()
+    ],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
 )
 app.include_router(user_router)
 app.include_router(company_router)

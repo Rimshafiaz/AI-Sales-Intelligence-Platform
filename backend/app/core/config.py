@@ -14,6 +14,8 @@ class Settings(BaseSettings):
     app_version: str = "1.0.0"
     app_env: str = "development"
 
+    cors_origins: str = "http://localhost:5173,http://localhost:4173"
+
     database_url: str
     supabase_url: str
     supabase_service_role_key: str
