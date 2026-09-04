@@ -2,7 +2,7 @@ import { useCallback, useEffect, useState } from 'react'
 import { Link, useNavigate, useParams } from 'react-router-dom'
 import { Check, ExternalLink, Loader2, XCircle } from 'lucide-react'
 import { api } from '../lib/api'
-import type { Company, ResearchRequest, ResearchSource } from '../lib/types'
+import type { Company, ReportListResponse, ResearchRequest, ResearchSource } from '../lib/types'
 import { Button, Notice } from '../components/ui'
 
 type StageState = 'done' | 'active' | 'pending'
@@ -57,9 +57,8 @@ export default function ResearchProgressPage() {
   const [loadError, setLoadError] = useState<string | null>(null)
   const [company, setCompany] = useState<Company | null>(null)
   const [sources, setSources] = useState<ResearchSource[] | null>(null)
-  const [generating, setGenerating] = useState(false)
+  const [generatePhase, setGeneratePhase] = useState<'idle' | 'starting' | 'polling'>('idle')
   const [generateError, setGenerateError] = useState<string | null>(null)
-
   const loadRequest = useCallback(async () => {
     if (!requestId) return null
     try {
@@ -99,20 +98,50 @@ export default function ResearchProgressPage() {
   }, [request, loadError, loadRequest])
 
   async function handleGenerate() {
-    if (!request || generating) return
-    setGenerating(true)
+    if (!request || generatePhase !== 'idle') return
     setGenerateError(null)
+    setGeneratePhase('starting')
     try {
-      const report = await api<{ id: string }>(
-        `/research-requests/${request.id}/reports`,
-        { method: 'POST' },
-      )
-      navigate(`/reports/${report.id}`)
+      await api<{ status: string }>(`/research-requests/${request.id}/reports`, {
+        method: 'POST',
+      })
+      setGeneratePhase('polling')
     } catch (e) {
-      setGenerateError(e instanceof Error ? e.message : 'Report generation failed.')
-      setGenerating(false)
+      setGenerateError(e instanceof Error ? e.message : 'Could not start report generation.')
+      setGeneratePhase('idle')
     }
   }
+
+  useEffect(() => {
+    if (generatePhase !== 'polling' || !request) return
+    const requestIdLocal = request.id
+    let attempts = 0
+    const interval = setInterval(async () => {
+      attempts += 1
+      try {
+        const page = await api<ReportListResponse>('/reports', {
+          params: { page: 1, page_size: 5 },
+        })
+        const found = page.items.find(
+          (item) => item.research_request_id === requestIdLocal,
+        )
+        if (found) {
+          setGeneratePhase('idle')
+          navigate(`/reports/${found.id}`)
+          return
+        }
+      } catch {
+        // transient poll failure; keep polling
+      }
+      if (attempts >= 200) {
+        setGeneratePhase('idle')
+        setGenerateError(
+          'Generation did not finish in time. Check History; the report may appear there.',
+        )
+      }
+    }, 3000)
+    return () => clearInterval(interval)
+  }, [generatePhase, request, navigate])
 
   async function handleRetry() {
     if (!request) return
@@ -216,23 +245,33 @@ export default function ResearchProgressPage() {
               <h2 className="label-caps text-ink-soft">
                 Evidence collected {sources ? `(${sources.length} sources)` : ''}
               </h2>
-              <Button onClick={handleGenerate} disabled={generating}>
-                {generating ? (
-                  <>
-                    <Loader2 size={15} className="animate-spin" />
-                    Generating report...
-                  </>
-                ) : (
-                  'Generate report'
-                )}
-              </Button>
+              {generatePhase === 'polling' ? (
+                <div className="flex items-center gap-2 rounded-control bg-slate-wash p-2.5">
+                  <Loader2 size={15} className="animate-spin text-action" />
+                  <p className="font-ui text-sm text-ink">
+                    Report generation is running. This takes 1 to 5 minutes; you
+                    will be moved to the report automatically.
+                  </p>
+                </div>
+              ) : (
+                <Button onClick={handleGenerate} disabled={generatePhase !== 'idle'}>
+                  {generatePhase === 'starting' ? (
+                    <>
+                      <Loader2 size={15} className="animate-spin" />
+                      Starting...
+                    </>
+                  ) : (
+                    'Generate report'
+                  )}
+                </Button>
+              )}
             </div>
             {generateError && (
               <div className="mt-3">
                 <Notice kind="error">{generateError}</Notice>
               </div>
             )}
-            {generating && (
+            {generatePhase === 'polling' && (
               <p className="mt-3 font-narrative text-sm leading-relaxed text-ink-soft">
                 Six analysis agents are reviewing the evidence. This takes one to
                 five minutes. The platform never sends outreach on its own.

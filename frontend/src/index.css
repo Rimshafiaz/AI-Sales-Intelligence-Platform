@@ -1,50 +1,144 @@
 @import 'tailwindcss';
 
 @theme {
-  /* Precision Editorial surfaces */
-  --color-canvas: #f8fafc;
-  --color-card: #ffffff;
-  --color-ink: #0f172a;
-  --color-ink-soft: #475569;
-  --color-ink-faint: #94a3b8;
-  --color-line: #cbd5e1;
-  --color-line-soft: #e2e8f0;
-  --color-slate-wash: #f1f5f9;
+  /* Precision Editorial — exact tokens from the approved mockups */
+  --color-surface: #f7f9fb;
+  --color-surface-bright: #f7f9fb;
+  --color-surface-dim: #d8dadc;
+  --color-surface-container-lowest: #ffffff;
+  --color-surface-container-low: #f2f4f6;
+  --color-surface-container: #eceef0;
+  --color-surface-container-high: #e6e8ea;
+  --color-surface-container-highest: #e0e3e5;
+  --color-surface-variant: #e0e3e5;
+  --color-on-surface: #191c1e;
+  --color-on-surface-variant: #45464d;
+  --color-outline: #76777d;
+  --color-outline-variant: #c6c6cd;
+  --color-surface-tint: #565e74;
+  --color-primary: #000000;
+  --color-on-primary: #ffffff;
+  --color-primary-container: #131b2e;
+  --color-on-primary-container: #7c839b;
+  --color-secondary: #0051d5;
+  --color-on-secondary: #ffffff;
+  --color-secondary-container: #316bf3;
+  --color-inverse-surface: #2d3133;
+  --color-inverse-on-surface: #eff1f3;
+  --color-inverse-primary: #bec6e0;
+  --color-error: #ba1a1a;
+  --color-on-error: #ffffff;
+  --color-error-container: #ffdad6;
+  --color-on-error-container: #93000a;
 
-  /* Single interactive accent (links, evidence anchors, focus) */
-  --color-action: #2563eb;
-
-  /* Attribution signals */
-  --color-inference-bg: #eef2ff;
-  --color-inference-edge: #c7d2fe;
-  --color-inference-ink: #3730a3;
-
-  /* Status */
+  /* Status (semantic, used by badges) */
   --color-warn-ink: #b45309;
   --color-warn-bg: #fef3c7;
   --color-ok-ink: #065f46;
   --color-ok-bg: #d1fae5;
-  --color-bad-ink: #991b1b;
-  --color-bad-bg: #fee2e2;
 
+  /* Font family aliases (mockup runtime config) */
+  --font-headline: 'Inter', system-ui, sans-serif;
   --font-display: 'Anybody', system-ui, sans-serif;
-  --font-ui: 'Instrument Sans', system-ui, sans-serif;
+  --font-label: 'Anybody', system-ui, sans-serif;
+  --font-body: 'Merriweather', Georgia, serif;
+  --font-ui: 'Inter', system-ui, sans-serif;
   --font-narrative: 'Merriweather', Georgia, serif;
+  --font-headline-xl: 'Inter', system-ui, sans-serif;
+  --font-headline-lg: 'Inter', system-ui, sans-serif;
+  --font-headline-md: 'Inter', system-ui, sans-serif;
+  --font-headline-sm: 'Inter', system-ui, sans-serif;
+  --font-body-lg: 'Inter', system-ui, sans-serif;
+  --font-body-md: 'Inter', system-ui, sans-serif;
+  --font-body-sm: 'Inter', system-ui, sans-serif;
+  --font-label-md: 'Inter', system-ui, sans-serif;
+  --font-label-sm: 'Inter', system-ui, sans-serif;
+  --font-tabular-data: 'Inter', system-ui, sans-serif;
+  --font-numeric-metric: 'Inter', system-ui, sans-serif;
 
-  --radius-control: 4px;
-  --radius-card: 8px;
+  /* Exact font sizes from the mockup config */
+  --text-label-sm: 11px;
+  --text-label-sm--line-height: 14px;
+  --text-label-sm--letter-spacing: 0.04em;
+  --text-label-sm--font-weight: 500;
+  --text-label-md: 13px;
+  --text-label-md--line-height: 16px;
+  --text-label-md--font-weight: 500;
+  --text-body-sm: 13px;
+  --text-body-sm--line-height: 18px;
+  --text-body-md: 14px;
+  --text-body-md--line-height: 20px;
+  --text-body-md--letter-spacing: -0.006em;
+  --text-body-lg: 16px;
+  --text-body-lg--line-height: 24px;
+  --text-body-lg--letter-spacing: -0.01em;
+  --text-headline-sm: 15px;
+  --text-headline-sm--line-height: 22px;
+  --text-headline-sm--letter-spacing: -0.01em;
+  --text-headline-sm--font-weight: 600;
+  --text-headline-md: 18px;
+  --text-headline-md--line-height: 26px;
+  --text-headline-md--letter-spacing: -0.015em;
+  --text-headline-md--font-weight: 600;
+  --text-headline-lg: 24px;
+  --text-headline-lg--line-height: 32px;
+  --text-headline-lg--letter-spacing: -0.02em;
+  --text-headline-lg--font-weight: 600;
+  --text-headline-xl: 36px;
+  --text-headline-xl--line-height: 44px;
+  --text-headline-xl--letter-spacing: -0.025em;
+  --text-headline-xl--font-weight: 600;
+  --text-tabular-data: 13px;
+  --text-tabular-data--line-height: 18px;
+  --text-numeric-metric: 30px;
+  --text-numeric-metric--line-height: 36px;
+  --text-numeric-metric--letter-spacing: -0.02em;
+  --text-numeric-metric--font-weight: 600;
+
+  /* Exact radius scale from the mockup config */
+  --radius: 0.125rem;
+  --radius-lg: 0.25rem;
+  --radius-xl: 0.5rem;
+  --radius-full: 0.75rem;
+
+  /* Exact spacing scale from the mockup config */
+  --spacing-space-xxs: 0.125rem;
+  --spacing-space-xs: 0.25rem;
+  --spacing-space-sm: 0.5rem;
+  --spacing-space-md: 0.75rem;
+  --spacing-space-base: 1rem;
+  --spacing-space-lg: 1.5rem;
+  --spacing-space-xl: 2rem;
+  --spacing-space-2xl: 3rem;
+
+  /* Legacy aliases (existing screens keep working during the port) */
+  --color-canvas: #f7f9fb;
+  --color-card: #ffffff;
+  --color-panel: #f2f4f6;
+  --color-ink: #191c1e;
+  --color-ink-soft: #45464d;
+  --color-ink-faint: #76777d;
+  --color-line: #c6c6cd;
+  --color-line-soft: #e0e3e5;
+  --color-action: #0051d5;
+  --color-bad-ink: #93000a;
+  --color-bad-bg: #ffdad6;
+  --color-slate-wash: #f2f4f6;
 }
 
 body {
   margin: 0;
-  background-color: var(--color-canvas);
-  color: var(--color-ink);
-  font-family: var(--font-narrative);
+  background-color: var(--color-surface);
+  color: var(--color-on-surface);
+  font-family: 'Inter', system-ui, sans-serif;
+  font-size: 14px;
+  line-height: 20px;
+  letter-spacing: -0.006em;
   font-feature-settings: 'tnum' 1;
 }
 
 .label-caps {
-  font-family: var(--font-ui);
+  font-family: var(--font-label);
   font-size: 11px;
   font-weight: 600;
   letter-spacing: 0.04em;

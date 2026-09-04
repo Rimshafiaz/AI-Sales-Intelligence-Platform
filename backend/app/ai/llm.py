@@ -23,6 +23,8 @@ def get_llm(
             api_key=settings.groq_api_key,
             temperature=0.2 if temperature is None else temperature,
             max_tokens=effective_max_tokens,
+            timeout=180,
+            num_retries=1,
         )
 
     if settings.llm_provider == "gemini":
@@ -36,6 +38,7 @@ def get_llm(
             "api_key": settings.gemini_api_key,
             "max_tokens": effective_max_tokens,
             "num_retries": 1,
+            "timeout": 180,
         }
         if temperature is not None:
             llm_kwargs["temperature"] = temperature

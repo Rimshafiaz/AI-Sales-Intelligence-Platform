@@ -6,11 +6,6 @@ import { useAuth } from '../lib/auth'
 type Mode = 'signin' | 'signup'
 type Notice = { kind: 'error' | 'info'; code: string | null; message: string }
 
-const inputClass =
-  'h-10 w-full rounded-lg border border-line-soft bg-card px-3 font-narrative text-sm text-ink ' +
-  'shadow-sm outline-none transition-all placeholder:text-ink-faint focus:bg-slate-wash ' +
-  'focus:border-line'
-
 export default function AuthPage() {
   const { signIn, signUp } = useAuth()
   const navigate = useNavigate()
@@ -22,7 +17,7 @@ export default function AuthPage() {
   const [notice, setNotice] = useState<Notice | null>(null)
   const [submitting, setSubmitting] = useState(false)
 
-  function switchMode(next: Mode) {
+  function setModeAndReset(next: Mode) {
     setMode(next)
     setNotice(null)
   }
@@ -67,29 +62,32 @@ export default function AuthPage() {
     }
   }
 
-  const tabBase =
-    'flex-1 px-3 py-1.5 rounded-control font-ui text-[13px] text-center transition-all duration-150'
+  const tabClass = (active: boolean) =>
+    'flex-1 px-2 py-1.5 rounded text-center text-label-md transition-all duration-150 ' +
+    (active
+      ? 'bg-surface-container-lowest font-semibold text-on-surface shadow-sm'
+      : 'font-medium text-on-surface-variant hover:text-on-surface')
 
   return (
-    <main className="flex min-h-screen items-center justify-center bg-canvas px-4 py-12">
+    <main className="flex min-h-screen items-center justify-center bg-surface px-4 py-12">
       <div className="w-full max-w-md">
-        <div className="relative flex flex-col gap-6 rounded-card border border-line-soft bg-card p-8 shadow-sm">
+        <div className="relative flex flex-col gap-6 rounded-xl bg-surface-container-lowest p-8 shadow-sm">
           <div className="flex flex-col items-center gap-1 text-center">
-            <div className="flex h-8 items-center justify-center gap-2">
+            <div className="flex h-8 items-center gap-2">
               <svg width="24" height="24" viewBox="0 0 32 32" aria-hidden="true">
-                <rect width="32" height="32" rx="6" fill="#0f172a" />
-                <g fill="#f8fafc">
+                <rect width="32" height="32" rx="6" fill="#000000" />
+                <g fill="#f7f9fb">
                   <rect x="9" y="9" width="6" height="6" rx="1" />
                   <rect x="17" y="9" width="6" height="6" rx="1" />
                   <rect x="9" y="17" width="6" height="6" rx="1" />
                   <rect x="17" y="17" width="6" height="6" rx="1" />
                 </g>
               </svg>
-              <span className="font-display text-lg font-bold tracking-tight text-ink">
+              <span className="font-display text-lg font-bold tracking-tight text-on-surface">
                 SalesLens
               </span>
             </div>
-            <p className="font-ui text-[11px] uppercase tracking-wider text-ink-soft">
+            <p className="text-label-md uppercase tracking-wider text-on-surface-variant">
               Sales intelligence workspace
             </p>
           </div>
@@ -97,25 +95,26 @@ export default function AuthPage() {
           <div
             aria-label="Authentication mode"
             role="tablist"
-            className="flex items-center gap-0.5 rounded-lg bg-slate-wash p-0.5"
+            className="flex items-center gap-0.5 rounded-lg bg-surface-container-low p-0.5"
           >
-            {(['signin', 'signup'] as Mode[]).map((value) => (
-              <button
-                key={value}
-                type="button"
-                role="tab"
-                aria-selected={mode === value}
-                onClick={() => switchMode(value)}
-                className={
-                  tabBase +
-                  (mode === value
-                    ? ' bg-card font-semibold text-ink shadow-sm'
-                    : ' font-medium text-ink-soft hover:text-ink')
-                }
-              >
-                {value === 'signin' ? 'Sign in' : 'Sign up'}
-              </button>
-            ))}
+            <button
+              type="button"
+              role="tab"
+              aria-selected={mode === 'signin'}
+              onClick={() => setModeAndReset('signin')}
+              className={tabClass(mode === 'signin')}
+            >
+              Sign in
+            </button>
+            <button
+              type="button"
+              role="tab"
+              aria-selected={mode === 'signup'}
+              onClick={() => setModeAndReset('signup')}
+              className={tabClass(mode === 'signup')}
+            >
+              Sign up
+            </button>
           </div>
 
           {notice && (
@@ -123,24 +122,24 @@ export default function AuthPage() {
               role="alert"
               className={
                 'flex items-start gap-2 rounded-lg p-3 ' +
-                (notice.kind === 'error'
-                  ? 'bg-bad-bg/40 text-bad-ink'
-                  : 'bg-slate-wash text-ink-soft')
+                (notice.kind === 'error' ? 'bg-error-container/40' : 'bg-surface-container-low')
               }
             >
               {notice.kind === 'error' && (
-                <CircleAlert size={18} className="mt-px shrink-0" />
+                <CircleAlert size={18} className="mt-px shrink-0 text-error" />
               )}
               <div className="min-w-0 flex-1">
                 <div className="mb-0.5 flex items-center justify-between gap-2">
-                  <span className="font-ui text-[11px] font-semibold uppercase">
+                  <span className="text-label-sm font-semibold uppercase text-error">
                     {notice.kind === 'error' ? 'Authentication error' : 'Confirmation required'}
                   </span>
                   {notice.code && (
-                    <span className="font-mono text-[10px] uppercase">{notice.code}</span>
+                    <span className="font-mono text-[10px] text-error">{notice.code}</span>
                   )}
                 </div>
-                <p className="text-[13px] font-medium leading-tight">{notice.message}</p>
+                <p className="text-body-sm font-medium leading-tight text-on-surface">
+                  {notice.message}
+                </p>
               </div>
             </div>
           )}
@@ -149,9 +148,9 @@ export default function AuthPage() {
             <div className="flex flex-col gap-1.5">
               <label
                 htmlFor="email"
-                className="flex items-center justify-between font-ui text-[13px] font-medium text-ink-soft"
+                className="text-label-md font-medium text-on-surface-variant"
               >
-                <span>Email</span>
+                Email
               </label>
               <input
                 id="email"
@@ -162,7 +161,7 @@ export default function AuthPage() {
                 placeholder="name@company.com"
                 value={email}
                 onChange={(event) => setEmail(event.target.value)}
-                className={inputClass}
+                className="h-10 w-full rounded-lg bg-surface-container-lowest px-3 text-body-md text-on-surface shadow-sm outline-none transition-all placeholder:text-outline-variant focus:bg-surface-container-low"
               />
             </div>
 
@@ -170,14 +169,12 @@ export default function AuthPage() {
               <div className="flex items-center justify-between">
                 <label
                   htmlFor="password"
-                  className="font-ui text-[13px] font-medium text-ink-soft"
+                  className="text-label-md font-medium text-on-surface-variant"
                 >
                   Password
                 </label>
                 {mode === 'signup' && (
-                  <span className="font-ui text-[11px] text-ink-faint">
-                    Minimum 8 characters
-                  </span>
+                  <span className="text-label-sm text-outline">Minimum 8 characters</span>
                 )}
               </div>
               <div className="relative flex items-center">
@@ -191,13 +188,13 @@ export default function AuthPage() {
                   placeholder="Enter password"
                   value={password}
                   onChange={(event) => setPassword(event.target.value)}
-                  className={inputClass + ' pr-10'}
+                  className="h-10 w-full rounded-lg bg-surface-container-lowest px-3 pr-10 text-body-md text-on-surface shadow-sm outline-none transition-all placeholder:text-outline-variant focus:bg-surface-container-low"
                 />
                 <button
                   type="button"
                   aria-label="Toggle password visibility"
                   onClick={() => setShowPassword((visible) => !visible)}
-                  className="absolute right-0 flex h-10 w-10 items-center justify-center text-ink-faint transition-colors hover:text-ink"
+                  className="absolute right-0 flex h-10 w-10 items-center justify-center text-outline transition-colors hover:text-on-surface"
                 >
                   {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
                 </button>
@@ -207,7 +204,7 @@ export default function AuthPage() {
             <button
               type="submit"
               disabled={submitting}
-              className="mt-1 flex h-10 w-full items-center justify-center gap-2 rounded-lg bg-ink font-ui text-sm font-semibold text-canvas shadow-sm transition-all duration-150 hover:bg-ink-soft active:scale-[0.99] disabled:cursor-not-allowed disabled:opacity-60"
+              className="mt-1 flex h-10 w-full items-center justify-center gap-2 rounded-lg bg-primary text-headline-sm text-on-primary shadow-sm transition-all duration-150 hover:bg-inverse-surface active:scale-[0.99] disabled:cursor-not-allowed disabled:opacity-60"
             >
               <span>
                 {submitting
@@ -225,19 +222,19 @@ export default function AuthPage() {
           <div className="pt-1 text-center">
             <button
               type="button"
-              onClick={() => switchMode(mode === 'signin' ? 'signup' : 'signin')}
-              className="text-[13px] text-ink-soft transition-colors hover:text-ink"
+              onClick={() => setModeAndReset(mode === 'signin' ? 'signup' : 'signin')}
+              className="text-body-sm text-on-surface-variant transition-colors hover:text-on-surface"
             >
               {mode === 'signin' ? "Don't have an account? " : 'Already have credentials? '}
-              <span className="font-semibold text-ink underline underline-offset-4">
+              <span className="font-semibold text-on-surface underline underline-offset-4">
                 {mode === 'signin' ? 'Sign up' : 'Sign in'}
               </span>
             </button>
           </div>
 
-          <div className="mt-1 flex items-start gap-2 rounded-lg bg-slate-wash p-3">
-            <ShieldCheck size={16} className="mt-0.5 shrink-0 text-ink-faint" />
-            <p className="text-[11px] leading-relaxed text-ink-soft">
+          <div className="mt-1 flex items-start gap-2 rounded-lg bg-surface-container-low p-3">
+            <ShieldCheck size={16} className="mt-0.5 shrink-0 text-outline" />
+            <p className="text-label-sm leading-relaxed text-on-surface-variant">
               SalesLens is an evidence-backed intelligence platform. Outreach is
               never automatically sent.
             </p>

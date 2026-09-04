@@ -6,6 +6,7 @@ from pydantic import BaseModel
 
 class ReportSummary(BaseModel):
     id: UUID
+    research_request_id: UUID
     company_id: UUID
     company_name: str
     opportunity_score: int

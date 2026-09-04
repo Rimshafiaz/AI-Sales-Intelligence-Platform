@@ -186,6 +186,7 @@ def list_report_history_for_user(
     items = [
         ReportSummary(
             id=report.id,
+            research_request_id=report.research_request_id,
             company_id=report.company_id,
             company_name=company_name,
             opportunity_score=report.opportunity_score,

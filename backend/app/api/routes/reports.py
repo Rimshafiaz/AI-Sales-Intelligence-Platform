@@ -1,13 +1,19 @@
 from datetime import date
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query, status
 from sqlalchemy.orm import Session
 
 from app.api.dependencies.current_user import get_current_user
 from app.db.session import get_db
 from app.models.research_report import ReportReviewStatus
+from app.models.research_request import ResearchStatus
 from app.models.user import User
+from app.repositories.research_reports import (
+    get_research_report_by_id_for_user,
+    get_research_report_for_user,
+)
+from app.repositories.research_requests import get_research_request_for_user
 from app.schemas.report_list import ReportListResponse
 from app.schemas.research_report import (
     RegenerateReportRequest,
@@ -16,10 +22,8 @@ from app.schemas.research_report import (
     ResearchReportResponse,
 )
 from app.services.report_generation import (
-    ReportGenerationConflict,
-    ReportGenerationFailed,
-    generate_report_for_request,
-    regenerate_report_for_user,
+    run_generation_background,
+    run_regeneration_background,
 )
 from app.services.reports import (
     approve_report_for_user,
@@ -75,44 +79,53 @@ def list_reports_endpoint(
 
 @router.post(
     "/research-requests/{request_id}/reports",
-    response_model=ResearchReportResponse,
-    status_code=status.HTTP_201_CREATED,
-    summary="Generate a report from a completed research request",
+    status_code=status.HTTP_202_ACCEPTED,
+    summary="Start asynchronous report generation for a completed request",
     responses={
+        202: {"description": "Generation started; poll report history for the new draft"},
         404: {"description": "Request unknown or owned by another user"},
         409: {"description": "Request not completed, or a report already exists"},
-        503: {"description": "AI provider or evidence failure"},
     },
 )
 def create_report_endpoint(
     request_id: UUID,
+    background_tasks: BackgroundTasks,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    try:
-        report = generate_report_for_request(
-            db=db,
-            request_id=request_id,
-            current_user=current_user,
-        )
-    except ReportGenerationConflict as conflict:
-        raise HTTPException(
-            status_code=status.HTTP_409_CONFLICT,
-            detail=str(conflict),
-        ) from conflict
-    except ReportGenerationFailed as failure:
-        raise HTTPException(
-            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            detail=str(failure),
-        ) from failure
-
-    if report is None:
+    research_request = get_research_request_for_user(
+        db=db,
+        request_id=request_id,
+        user_id=current_user.id,
+    )
+    if research_request is None:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Research request not found",
         )
+    if research_request.status != ResearchStatus.COMPLETED:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Research request is not completed yet.",
+        )
+    existing_report = get_research_report_for_user(
+        db=db,
+        research_request_id=research_request.id,
+        user_id=current_user.id,
+    )
+    if existing_report is not None:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="A report already exists for this research request.",
+        )
 
-    return report
+    background_tasks.add_task(
+        run_generation_background,
+        request_id=request_id,
+        user_id=current_user.id,
+    )
+
+    return {"status": "generating"}
 
 
 @router.get(
@@ -207,39 +220,38 @@ def edit_report_endpoint(
 
 @router.post(
     "/reports/{report_id}/regenerate",
-    response_model=ResearchReportResponse,
-    status_code=status.HTTP_201_CREATED,
-    summary="Regenerate a report with optional guidance",
+    status_code=status.HTTP_202_ACCEPTED,
+    summary="Start an asynchronous report regeneration",
     responses={
+        202: {"description": "Regeneration started; poll report history for the new draft"},
         404: {"description": "Report unknown or owned by another user"},
-        503: {"description": "AI provider or evidence failure"},
     },
 )
 def regenerate_report_endpoint(
     report_id: UUID,
     regeneration: RegenerateReportRequest | None = None,
+    background_tasks: BackgroundTasks = BackgroundTasks(),
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
     instruction = regeneration.instruction if regeneration else None
 
-    try:
-        regenerated_report = regenerate_report_for_user(
-            db=db,
-            report_id=report_id,
-            current_user=current_user,
-            instruction=instruction,
-        )
-    except ReportGenerationFailed as failure:
-        raise HTTPException(
-            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            detail=str(failure),
-        ) from failure
-
-    if regenerated_report is None:
+    existing_report = get_research_report_by_id_for_user(
+        db=db,
+        report_id=report_id,
+        user_id=current_user.id,
+    )
+    if existing_report is None:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Report not found",
         )
 
-    return regenerated_report
+    background_tasks.add_task(
+        run_regeneration_background,
+        report_id=report_id,
+        user_id=current_user.id,
+        instruction=instruction,
+    )
+
+    return {"status": "regenerating"}

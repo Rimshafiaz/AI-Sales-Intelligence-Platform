@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { Link, useParams } from 'react-router-dom'
+import { Link, useNavigate, useParams } from 'react-router-dom'
 import { Check, Copy, Loader2 } from 'lucide-react'
 import { api } from '../lib/api'
 import {
@@ -9,7 +9,14 @@ import {
   type ReportDetail,
 } from '../lib/report'
 import type { Company } from '../lib/types'
-import { Button, Notice } from '../components/ui'
+import {
+  Button,
+  Notice,
+  RecommendationBadge,
+  StatusBadge,
+  TextField,
+  TextareaField,
+} from '../components/ui'
 import { FindingText } from '../components/report/FindingText'
 
 function SectionHeader({ number, title }: { number: string; title: string }) {
@@ -19,43 +26,6 @@ function SectionHeader({ number, title }: { number: string; title: string }) {
       <span>+</span>
       <span>{title}</span>
     </h2>
-  )
-}
-
-function StatusBadge({ status }: { status: 'draft' | 'approved' }) {
-  return status === 'approved' ? (
-    <span className="inline-flex items-center gap-1 rounded-control border border-forest bg-forest-wash px-1.5 py-0.5 font-display text-[11px] font-semibold text-ok-ink">
-      <Check size={12} />
-      Approved
-    </span>
-  ) : (
-    <span className="inline-flex items-center rounded-control border border-warn-bg bg-warn-bg px-1.5 py-0.5 font-display text-[11px] font-semibold text-warn-ink">
-      Draft
-    </span>
-  )
-}
-
-function RecommendationBadge({ recommendation }: { recommendation: string }) {
-  const styles: Record<string, string> = {
-    prioritize: 'border-forest bg-forest-wash text-ok-ink',
-    consider: 'border-warn-bg bg-warn-bg text-warn-ink',
-    do_not_prioritize: 'border-line bg-slate-wash text-ink-soft',
-  }
-  const label: Record<string, string> = {
-    prioritize: 'Prioritize',
-    consider: 'Consider',
-    do_not_prioritize: 'Do not prioritize',
-  }
-  return (
-    <span
-      className={
-        'inline-flex items-center gap-1.5 rounded-control border px-1.5 py-0.5 font-display text-[11px] font-semibold ' +
-        (styles[recommendation] ?? styles.consider)
-      }
-    >
-      <span className="h-1.5 w-1.5 rounded-full bg-current" />
-      {label[recommendation] ?? recommendation}
-    </span>
   )
 }
 
@@ -88,12 +58,28 @@ function CopyButton({ text }: { text: string }) {
 
 export default function ReportReviewPage() {
   const { reportId } = useParams<{ reportId: string }>()
+  const navigate = useNavigate()
   const [detail, setDetail] = useState<ReportDetail | null>(null)
   const [loadError, setLoadError] = useState<string | null>(null)
   const [company, setCompany] = useState<Company | null>(null)
   const [approving, setApproving] = useState(false)
   const [actionError, setActionError] = useState<string | null>(null)
-  const [futureNotice, setFutureNotice] = useState<string | null>(null)
+  const [editMode, setEditMode] = useState(false)
+  const [saving, setSaving] = useState(false)
+  const [showRegenerate, setShowRegenerate] = useState(false)
+  const [regenPhase, setRegenPhase] = useState<'idle' | 'starting' | 'polling'>('idle')
+  const [regenInstruction, setRegenInstruction] = useState('')
+
+  interface EditFormState {
+    strategy: string
+    sales_angle: string
+    value_proposition: string
+    roles: string[]
+    cold_email: string
+    linkedin_message: string
+    review_note: string
+  }
+  const [editForm, setEditForm] = useState<EditFormState | null>(null)
 
   useEffect(() => {
     if (!reportId) return
@@ -134,6 +120,112 @@ export default function ReportReviewPage() {
       setApproving(false)
     }
   }
+
+  function startEdit() {
+    if (!detail) return
+    const d = detail.report.report_data
+    setEditForm({
+      strategy: d.strategy.recommended_strategy.statement,
+      sales_angle: d.strategy.recommended_sales_angle.statement,
+      value_proposition: d.strategy.suggested_value_proposition.statement,
+      roles: d.suggested_decision_makers.map((maker) => maker.suggested_role),
+      cold_email: d.personalized_outreach.cold_email,
+      linkedin_message: d.personalized_outreach.linkedin_message,
+      review_note: detail.report.review_note ?? '',
+    })
+    setEditMode(true)
+    setShowRegenerate(false)
+    setActionError(null)
+  }
+
+  function cancelEdit() {
+    setEditMode(false)
+    setEditForm(null)
+    setActionError(null)
+  }
+
+  async function saveEdits() {
+    if (!detail || !editForm) return
+    setSaving(true)
+    setActionError(null)
+    try {
+      const body: Record<string, unknown> = {}
+      if (editForm.strategy.trim()) body.strategy = editForm.strategy.trim()
+      if (editForm.sales_angle.trim()) body.sales_angle = editForm.sales_angle.trim()
+      if (editForm.value_proposition.trim())
+        body.value_proposition = editForm.value_proposition.trim()
+      const roles = editForm.roles.map((role) => role.trim()).filter((role) => role)
+      if (roles.length > 0) body.suggested_decision_makers = roles
+      if (editForm.cold_email.trim()) body.cold_email = editForm.cold_email.trim()
+      if (editForm.linkedin_message.trim())
+        body.linkedin_message = editForm.linkedin_message.trim()
+      if (editForm.review_note.trim()) body.review_note = editForm.review_note.trim()
+
+      if (Object.keys(body).length > 0) {
+        await api(`/reports/${detail.report.id}`, { method: 'PATCH', body })
+      }
+      const fresh = await api<ReportDetail>(`/reports/${detail.report.id}`)
+      setDetail(fresh)
+      setEditMode(false)
+      setEditForm(null)
+    } catch (e) {
+      setActionError(e instanceof Error ? e.message : 'Could not save changes.')
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  async function handleRegenerate() {
+    if (!detail || regenPhase !== 'idle') return
+    setActionError(null)
+    setRegenPhase('starting')
+    try {
+      const instruction = regenInstruction.trim()
+      await api<{ status: string }>(`/reports/${detail.report.id}/regenerate`, {
+        method: 'POST',
+        body: instruction ? { instruction } : {},
+      })
+      setRegenPhase('polling')
+    } catch (e) {
+      setActionError(e instanceof Error ? e.message : 'Could not start regeneration.')
+      setRegenPhase('idle')
+    }
+  }
+
+  useEffect(() => {
+    if (regenPhase !== 'polling' || !detail) return
+    const original = detail.report
+    let attempts = 0
+    const interval = setInterval(async () => {
+      attempts += 1
+      try {
+        const page = await api<{
+          items: { id: string; research_request_id: string; generated_at: string }[]
+        }>('/reports', { params: { page: 1, page_size: 5 } })
+        const found = page.items.find(
+          (item) =>
+            item.research_request_id === original.research_request_id &&
+            item.id !== original.id &&
+            new Date(item.generated_at) > new Date(original.generated_at),
+        )
+        if (found) {
+          setRegenPhase('idle')
+          setRegenInstruction('')
+          navigate(`/reports/${found.id}`)
+          return
+        }
+      } catch {
+        // transient poll failure; keep polling
+      }
+      if (attempts >= 200) {
+        setRegenPhase('idle')
+        setActionError(
+          'Regeneration is taking longer than expected. Check History in a minute; the new draft may appear there.',
+        )
+      }
+    }, 3000)
+    return () => clearInterval(interval)
+  }, [regenPhase, detail, navigate])
 
   if (loadError) {
     return (
@@ -193,26 +285,158 @@ export default function ReportReviewPage() {
           </Button>
           <Button
             variant="secondary"
-            onClick={() =>
-              setFutureNotice('Editing arrives in the next milestone (M57).')
-            }
+            onClick={startEdit}
+            disabled={editMode || regenPhase !== 'idle'}
           >
             Edit draft
           </Button>
           <Button
             variant="secondary"
-            onClick={() =>
-              setFutureNotice('Regeneration arrives in the next milestone (M57).')
-            }
+            onClick={() => {
+              setEditMode(false)
+              setEditForm(null)
+              setShowRegenerate((visible) => !visible)
+            }}
+            disabled={editMode || regenPhase !== 'idle'}
           >
             Regenerate
           </Button>
         </div>
       </div>
-      {futureNotice && (
-        <div className="mt-3">
-          <Notice kind="info">{futureNotice}</Notice>
-        </div>
+      {editMode && editForm && (
+        <section className="mt-3 rounded-card border border-line-soft bg-card p-5">
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <h2 className="label-caps text-ink-soft">Edit draft</h2>
+            <p className="text-xs text-ink-faint">
+              Saving any change returns the report to draft. Evidence and scores
+              are not editable.
+            </p>
+          </div>
+          <div className="mt-4 space-y-4">
+            <TextareaField
+              label="Recommended strategy"
+              value={editForm.strategy}
+              onChange={(event) =>
+                setEditForm({ ...editForm, strategy: event.target.value })
+              }
+            />
+            <TextareaField
+              label="Recommended sales angle"
+              value={editForm.sales_angle}
+              onChange={(event) =>
+                setEditForm({ ...editForm, sales_angle: event.target.value })
+              }
+            />
+            <TextareaField
+              label="Suggested value proposition"
+              value={editForm.value_proposition}
+              onChange={(event) =>
+                setEditForm({ ...editForm, value_proposition: event.target.value })
+              }
+            />
+            {editForm.roles.length > 0 && (
+              <div>
+                <p className="font-ui text-[13px] font-medium text-ink-soft">
+                  Decision-maker roles
+                </p>
+                <div className="mt-1.5 space-y-2">
+                  {editForm.roles.map((role, index) => (
+                    <input
+                      key={index}
+                      value={role}
+                      onChange={(event) =>
+                        setEditForm({
+                          ...editForm,
+                          roles: editForm.roles.map((existing, position) =>
+                            position === index ? event.target.value : existing,
+                          ),
+                        })
+                      }
+                      className="h-9 w-full rounded-control border border-line bg-card px-3 font-ui text-sm text-ink focus:border-ink focus:outline focus:outline-1 focus:outline-action"
+                      placeholder={`Role ${index + 1}`}
+                    />
+                  ))}
+                </div>
+              </div>
+            )}
+            <TextareaField
+              label="Cold email"
+              rows={6}
+              value={editForm.cold_email}
+              onChange={(event) =>
+                setEditForm({ ...editForm, cold_email: event.target.value })
+              }
+            />
+            <TextareaField
+              label="LinkedIn message"
+              rows={4}
+              value={editForm.linkedin_message}
+              onChange={(event) =>
+                setEditForm({ ...editForm, linkedin_message: event.target.value })
+              }
+            />
+            <TextareaField
+              label="Review note (private)"
+              rows={3}
+              value={editForm.review_note}
+              onChange={(event) =>
+                setEditForm({ ...editForm, review_note: event.target.value })
+              }
+            />
+          </div>
+          <div className="mt-4 flex justify-end gap-2">
+            <Button variant="secondary" onClick={cancelEdit} disabled={saving}>
+              Cancel
+            </Button>
+            <Button onClick={saveEdits} disabled={saving}>
+              {saving ? 'Saving...' : 'Save changes'}
+            </Button>
+          </div>
+        </section>
+      )}
+
+      {showRegenerate && (
+        <section className="mt-3 rounded-card border border-line-soft bg-card p-5">
+          <h2 className="label-caps text-ink-soft">Regenerate report</h2>
+          <p className="mt-1 text-xs text-ink-faint">
+            Creates a new draft from the same evidence. The original report is
+            kept. Takes 1 to 5 minutes.
+          </p>
+          {regenPhase === 'polling' ? (
+            <div className="mt-3 flex items-center gap-2 rounded-control bg-slate-wash p-3">
+              <Loader2 size={15} className="animate-spin text-action" />
+              <p className="font-ui text-sm text-ink">
+                Regeneration is running. This typically takes 1 to 5 minutes.
+                Keep this page open; you will be moved to the new draft
+                automatically.
+              </p>
+            </div>
+          ) : (
+            <>
+              <div className="mt-3">
+                <TextField
+                  label="Guidance (optional)"
+                  placeholder="e.g. focus the outreach on hiring growth"
+                  maxLength={500}
+                  value={regenInstruction}
+                  onChange={(event) => setRegenInstruction(event.target.value)}
+                />
+              </div>
+              <div className="mt-4 flex justify-end gap-2">
+                <Button
+                  variant="secondary"
+                  onClick={() => setShowRegenerate(false)}
+                  disabled={regenPhase !== 'idle'}
+                >
+                  Cancel
+                </Button>
+                <Button onClick={handleRegenerate} disabled={regenPhase !== 'idle'}>
+                  Regenerate report
+                </Button>
+              </div>
+            </>
+          )}
+        </section>
       )}
       {actionError && (
         <div className="mt-3">

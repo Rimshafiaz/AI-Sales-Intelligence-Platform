@@ -1,4 +1,11 @@
-import { useId, type ButtonHTMLAttributes, type InputHTMLAttributes, type ReactNode } from 'react'
+import { Check } from 'lucide-react'
+import {
+  useId,
+  type ButtonHTMLAttributes,
+  type InputHTMLAttributes,
+  type ReactNode,
+  type TextareaHTMLAttributes,
+} from 'react'
 
 type ButtonVariant = 'primary' | 'secondary'
 
@@ -81,5 +88,75 @@ export function Notice({
         <p className={code ? 'mt-0.5' : ''}>{children}</p>
       </div>
     </div>
+  )
+}
+
+export function StatusBadge({ status }: { status: 'draft' | 'approved' }) {
+  return status === 'approved' ? (
+    <span className="inline-flex items-center gap-1 rounded-control border border-forest bg-forest-wash px-1.5 py-0.5 font-display text-[11px] font-semibold text-ok-ink">
+      <Check size={12} />
+      Approved
+    </span>
+  ) : (
+    <span className="inline-flex items-center rounded-control border border-warn-bg bg-warn-bg px-1.5 py-0.5 font-display text-[11px] font-semibold text-warn-ink">
+      Draft
+    </span>
+  )
+}
+
+export function RecommendationBadge({ recommendation }: { recommendation: string }) {
+  const styles: Record<string, string> = {
+    prioritize: 'border-forest bg-forest-wash text-ok-ink',
+    consider: 'border-warn-bg bg-warn-bg text-warn-ink',
+    do_not_prioritize: 'border-line bg-slate-wash text-ink-soft',
+  }
+  const label: Record<string, string> = {
+    prioritize: 'Prioritize',
+    consider: 'Consider',
+    do_not_prioritize: 'Do not prioritize',
+  }
+  return (
+    <span
+      className={
+        'inline-flex items-center gap-1.5 rounded-control border px-1.5 py-0.5 font-display text-[11px] font-semibold ' +
+        (styles[recommendation] ?? styles.consider)
+      }
+    >
+      <span className="h-1.5 w-1.5 rounded-full bg-current" />
+      {label[recommendation] ?? recommendation}
+    </span>
+  )
+}
+
+interface TextareaFieldProps extends TextareaHTMLAttributes<HTMLTextAreaElement> {
+  label: string
+  hint?: string
+}
+
+export function TextareaField({
+  label,
+  hint,
+  className = '',
+  ...props
+}: TextareaFieldProps) {
+  const id = useId()
+  return (
+    <label htmlFor={id} className="block">
+      <span className="flex items-baseline justify-between">
+        <span className="font-ui text-[13px] font-medium text-ink-soft">{label}</span>
+        {hint && <span className="font-ui text-[11px] text-ink-faint">{hint}</span>}
+      </span>
+      <textarea
+        id={id}
+        rows={4}
+        className={
+          'mt-1.5 block w-full rounded-control border border-line bg-card px-3 py-2 ' +
+          'font-ui text-sm text-ink placeholder:text-ink-faint ' +
+          'focus:border-ink focus:outline focus:outline-1 focus:outline-action ' +
+          className
+        }
+        {...props}
+      />
+    </label>
   )
 }

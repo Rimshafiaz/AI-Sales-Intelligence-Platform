@@ -1,8 +1,10 @@
 import uuid
 
 import pytest
+from sqlalchemy import select
 
 from app.integrations.search_provider import CollectedSource
+from app.models.research_report import ResearchReport
 from app.models.research_request import ResearchRequest
 from app.repositories.research_sources import create_research_sources
 from app.schemas.sales_intelligence_report import SalesIntelligenceReport
@@ -81,7 +83,11 @@ class TestReportGeneration:
         assert resp.json()["error"]["code"] == "conflict"
 
     def test_generate_on_completed_request_saves_report(
-        self, auth_client, owned_completed_request, mocked_crew, db
+        self,
+        auth_client,
+        owned_completed_request,
+        mocked_crew,
+        db,
     ):
         create_research_sources(
             db=db,
@@ -97,13 +103,20 @@ class TestReportGeneration:
         resp = auth_client.post(
             f"/research-requests/{owned_completed_request.id}/reports"
         )
-        assert resp.status_code == 201
-        body = resp.json()
-        assert body["review_status"] == "draft"
-        assert body["opportunity_score"] == 64
-        assert body["contact_recommendation"] == "consider"
+        assert resp.status_code == 202
+        assert resp.json() == {"status": "generating"}
         assert len(mocked_crew) == 1
         assert mocked_crew[0]["company"].startswith("TestCorp-")
+
+        saved = db.scalars(
+            select(ResearchReport).where(
+                ResearchReport.research_request_id == owned_completed_request.id
+            )
+        ).all()
+        assert len(saved) == 1
+        assert saved[0].review_status.value == "draft"
+        assert saved[0].opportunity_score == 64
+        assert saved[0].contact_recommendation == "consider"
 
     def test_duplicate_generation_409(self, auth_client, owned_report, mocked_crew):
         resp = auth_client.post(
@@ -113,14 +126,19 @@ class TestReportGeneration:
         assert resp.json()["error"]["code"] == "conflict"
 
     def test_generate_without_sources_fails_safe(
-        self, auth_client, owned_completed_request, mocked_crew
+        self, auth_client, owned_completed_request, mocked_crew, db
     ):
         resp = auth_client.post(
             f"/research-requests/{owned_completed_request.id}/reports"
         )
-        assert resp.status_code == 503
-        assert resp.json()["error"]["code"] == "service_unavailable"
+        assert resp.status_code == 202
         assert mocked_crew == []
+        reports = db.scalars(
+            select(ResearchReport).where(
+                ResearchReport.research_request_id == owned_completed_request.id
+            )
+        ).all()
+        assert reports == []
 
 
 class TestReportReview:
@@ -190,17 +208,26 @@ class TestReportReview:
         assert resp.json()["review_status"] == "draft"
 
     def test_regenerate_creates_second_report(
-        self, auth_client, owned_report, mocked_crew
+        self, auth_client, owned_report, mocked_crew, db
     ):
         resp = auth_client.post(
             f"/reports/{owned_report.id}/regenerate",
             json={"instruction": "focus the outreach on hiring growth"},
         )
-        assert resp.status_code == 201
-        body = resp.json()
-        assert body["id"] != str(owned_report.id)
-        assert body["review_status"] == "draft"
+        assert resp.status_code == 202
+        assert resp.json() == {"status": "regenerating"}
         assert mocked_crew[0]["guidance"] == "focus the outreach on hiring growth"
+
+        reports = db.scalars(
+            select(ResearchReport).where(
+                ResearchReport.research_request_id
+                == owned_report.research_request_id
+            )
+        ).all()
+        assert len(reports) == 2
+        new_report = next(r for r in reports if r.id != owned_report.id)
+        assert new_report.review_status.value == "draft"
+        assert new_report.opportunity_score == 64
 
     def test_regenerate_with_blank_instruction_passes_none(
         self, auth_client, owned_report, mocked_crew
@@ -208,7 +235,7 @@ class TestReportReview:
         resp = auth_client.post(
             f"/reports/{owned_report.id}/regenerate", json={"instruction": "  "}
         )
-        assert resp.status_code == 201
+        assert resp.status_code == 202
         assert mocked_crew[0]["guidance"] is None
 
     def test_report_ownership_404(self, foreign_client, owned_report):
