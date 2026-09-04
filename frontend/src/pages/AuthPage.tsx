@@ -1,10 +1,10 @@
-import { useState, type FormEvent } from 'react'
+import { useEffect, useState, type FormEvent } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { ArrowRight, CircleAlert, Eye, EyeOff, ShieldCheck } from 'lucide-react'
-import { useAuth } from '../lib/auth'
+import { IDLE_LOGOUT_FLAG, useAuth } from '../lib/auth'
 
 type Mode = 'signin' | 'signup'
-type Notice = { kind: 'error' | 'info'; code: string | null; message: string }
+type Notice = { kind: 'error' | 'info'; code: string | null; message: string; title?: string }
 
 export default function AuthPage() {
   const { signIn, signUp } = useAuth()
@@ -16,6 +16,18 @@ export default function AuthPage() {
   const [showPassword, setShowPassword] = useState(false)
   const [notice, setNotice] = useState<Notice | null>(null)
   const [submitting, setSubmitting] = useState(false)
+
+  useEffect(() => {
+    if (sessionStorage.getItem(IDLE_LOGOUT_FLAG)) {
+      sessionStorage.removeItem(IDLE_LOGOUT_FLAG)
+      setNotice({
+        kind: 'info',
+        title: 'Signed out',
+        code: null,
+        message: 'You were signed out after 30 minutes of inactivity.',
+      })
+    }
+  }, [])
 
   function setModeAndReset(next: Mode) {
     setMode(next)
@@ -130,14 +142,20 @@ export default function AuthPage() {
               )}
               <div className="min-w-0 flex-1">
                 <div className="mb-0.5 flex items-center justify-between gap-2">
-                  <span className="text-label-sm font-semibold uppercase text-error">
-                    {notice.kind === 'error' ? 'Authentication error' : 'Confirmation required'}
+                  <span
+                    className={
+                      'text-label-sm font-medium uppercase ' +
+                      (notice.kind === 'error' ? 'text-error' : 'text-on-surface-variant')
+                    }
+                  >
+                    {notice.title ??
+                      (notice.kind === 'error' ? 'Authentication error' : 'Confirmation required')}
                   </span>
                   {notice.code && (
                     <span className="font-mono text-[10px] text-error">{notice.code}</span>
                   )}
                 </div>
-                <p className="text-body-sm font-medium leading-tight text-on-surface">
+                <p className="text-body-sm leading-snug text-on-surface">
                   {notice.message}
                 </p>
               </div>

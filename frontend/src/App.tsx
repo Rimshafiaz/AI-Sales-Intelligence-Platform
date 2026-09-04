@@ -12,6 +12,25 @@ import ResearchProgressPage from './pages/ResearchProgressPage'
 import ReportReviewPage from './pages/ReportReviewPage'
 import NotFoundPage from './pages/NotFoundPage'
 
+function IdleWarningBanner() {
+  const { idleWarning, staySignedIn } = useAuth()
+  if (!idleWarning) return null
+  return (
+    <div className="fixed bottom-5 right-5 z-50 w-80 rounded-card border border-line bg-surface-container-lowest p-4 shadow-sm">
+      <p className="text-body-sm text-on-surface">
+        You have been inactive. You will be signed out in 2 minutes.
+      </p>
+      <button
+        type="button"
+        onClick={staySignedIn}
+        className="mt-3 inline-flex items-center rounded-control bg-primary px-3 py-1.5 text-label-md font-medium text-on-primary transition-colors hover:bg-inverse-surface"
+      >
+        Stay signed in
+      </button>
+    </div>
+  )
+}
+
 function ProtectedLayout() {
   return (
     <div className="flex min-h-screen flex-col">
@@ -20,6 +39,7 @@ function ProtectedLayout() {
         <Outlet />
       </div>
       <AppFooter />
+      <IdleWarningBanner />
     </div>
   )
 }
