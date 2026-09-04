@@ -325,7 +325,7 @@ export default function HistoryPage() {
                     ].map((column) => (
                       <th
                         key={column}
-                        className="px-4 py-2.5 font-display text-[11px] font-semibold uppercase tracking-wide text-ink-soft"
+                        className="px-4 py-2.5 font-ui text-[11px] font-medium uppercase tracking-wide text-ink-soft"
                       >
                         {column}
                       </th>

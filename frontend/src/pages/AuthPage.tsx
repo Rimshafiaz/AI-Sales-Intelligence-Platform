@@ -71,7 +71,7 @@ export default function AuthPage() {
   return (
     <main className="flex min-h-screen items-center justify-center bg-surface px-4 py-12">
       <div className="w-full max-w-md">
-        <div className="relative flex flex-col gap-6 rounded-xl bg-surface-container-lowest p-8 shadow-sm">
+        <div className="relative flex flex-col gap-6 rounded-card bg-surface-container-lowest p-8 shadow-sm">
           <div className="flex flex-col items-center gap-1 text-center">
             <div className="flex h-8 items-center gap-2">
               <svg width="24" height="24" viewBox="0 0 32 32" aria-hidden="true">
@@ -95,7 +95,7 @@ export default function AuthPage() {
           <div
             aria-label="Authentication mode"
             role="tablist"
-            className="flex items-center gap-0.5 rounded-lg bg-surface-container-low p-0.5"
+            className="flex items-center gap-0.5 rounded-md bg-surface-container-low p-0.5"
           >
             <button
               type="button"
@@ -161,7 +161,7 @@ export default function AuthPage() {
                 placeholder="name@company.com"
                 value={email}
                 onChange={(event) => setEmail(event.target.value)}
-                className="h-10 w-full rounded-lg bg-surface-container-lowest px-3 text-body-md text-on-surface shadow-sm outline-none transition-all placeholder:text-outline-variant focus:bg-surface-container-low"
+                className="h-10 w-full rounded-control bg-surface-container-lowest px-3 text-body-md text-on-surface shadow-sm outline-none transition-all placeholder:text-outline-variant focus:bg-surface-container-low"
               />
             </div>
 
@@ -188,7 +188,7 @@ export default function AuthPage() {
                   placeholder="Enter password"
                   value={password}
                   onChange={(event) => setPassword(event.target.value)}
-                  className="h-10 w-full rounded-lg bg-surface-container-lowest px-3 pr-10 text-body-md text-on-surface shadow-sm outline-none transition-all placeholder:text-outline-variant focus:bg-surface-container-low"
+                  className="h-10 w-full rounded-control bg-surface-container-lowest px-3 pr-10 text-body-md text-on-surface shadow-sm outline-none transition-all placeholder:text-outline-variant focus:bg-surface-container-low"
                 />
                 <button
                   type="button"
@@ -204,7 +204,7 @@ export default function AuthPage() {
             <button
               type="submit"
               disabled={submitting}
-              className="mt-1 flex h-10 w-full items-center justify-center gap-2 rounded-lg bg-primary text-headline-sm text-on-primary shadow-sm transition-all duration-150 hover:bg-inverse-surface active:scale-[0.99] disabled:cursor-not-allowed disabled:opacity-60"
+              className="mt-1 flex h-10 w-full items-center justify-center gap-2 rounded-control bg-primary text-headline-sm text-on-primary shadow-sm transition-all duration-150 hover:bg-inverse-surface active:scale-[0.99] disabled:cursor-not-allowed disabled:opacity-60"
             >
               <span>
                 {submitting

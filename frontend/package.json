@@ -10,10 +10,10 @@
     "preview": "vite preview"
   },
   "dependencies": {
-    "@fontsource/anybody": "^5.3.0",
     "@fontsource/instrument-sans": "^5.3.0",
     "@fontsource/inter": "^5.3.0",
-    "@fontsource/merriweather": "^5.3.0",
+    "@fontsource/libre-baskerville": "^5.3.0",
+    "@fontsource/manrope": "^5.3.0",
     "@supabase/supabase-js": "^2.115.0",
     "@tailwindcss/vite": "^4.3.3",
     "lucide-react": "^1.40.0",

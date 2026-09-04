@@ -84,7 +84,7 @@ export function Notice({
       }
     >
       <div className="min-w-0 flex-1">
-        {code && <span className="font-display text-[11px] font-semibold uppercase">{code}</span>}
+        {code && <span className="font-ui text-[11px] font-medium uppercase">{code}</span>}
         <p className={code ? 'mt-0.5' : ''}>{children}</p>
       </div>
     </div>
@@ -93,12 +93,12 @@ export function Notice({
 
 export function StatusBadge({ status }: { status: 'draft' | 'approved' }) {
   return status === 'approved' ? (
-    <span className="inline-flex items-center gap-1 rounded-control border border-forest bg-forest-wash px-1.5 py-0.5 font-display text-[11px] font-semibold text-ok-ink">
+    <span className="inline-flex items-center gap-1 rounded-control border border-forest bg-forest-wash px-1.5 py-0.5 font-ui text-[11px] font-medium text-ok-ink">
       <Check size={12} />
       Approved
     </span>
   ) : (
-    <span className="inline-flex items-center rounded-control border border-warn-bg bg-warn-bg px-1.5 py-0.5 font-display text-[11px] font-semibold text-warn-ink">
+    <span className="inline-flex items-center rounded-control border border-warn-bg bg-warn-bg px-1.5 py-0.5 font-ui text-[11px] font-medium text-warn-ink">
       Draft
     </span>
   )
@@ -118,7 +118,7 @@ export function RecommendationBadge({ recommendation }: { recommendation: string
   return (
     <span
       className={
-        'inline-flex items-center gap-1.5 rounded-control border px-1.5 py-0.5 font-display text-[11px] font-semibold ' +
+        'inline-flex items-center gap-1.5 rounded-control border px-1.5 py-0.5 font-ui text-[11px] font-medium ' +
         (styles[recommendation] ?? styles.consider)
       }
     >

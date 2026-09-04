@@ -592,7 +592,7 @@ export default function ReportReviewPage() {
             {data.business_signals.map((signal) => (
               <li key={signal.finding.statement} className="py-3">
                 <div className="flex flex-wrap items-center gap-2">
-                  <span className="rounded-control border border-line bg-slate-wash px-1.5 py-0.5 font-display text-[10px] font-semibold uppercase text-ink-soft">
+                  <span className="rounded-control border border-line bg-slate-wash px-1.5 py-0.5 font-ui text-[10px] font-medium uppercase text-ink-soft">
                     {signal.signal_type}
                   </span>
                   {signal.occurred_at && (

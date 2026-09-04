@@ -133,7 +133,7 @@ export default function DiscoveryPage() {
         </div>
       </div>
 
-      <section className="mb-8 rounded-xl bg-surface-container-lowest p-space-lg shadow-md">
+      <section className="mb-8 rounded-card bg-surface-container-lowest p-space-lg shadow-md">
         <div className="mb-4 flex items-center justify-between">
           <div className="flex items-center gap-2">
             <SlidersIcon />
@@ -302,14 +302,14 @@ export default function DiscoveryPage() {
           {[1, 2, 3].map((index) => (
             <div
               key={index}
-              className="h-40 animate-pulse rounded-xl bg-surface-container-lowest shadow-md"
+              className="h-40 animate-pulse rounded-card bg-surface-container-lowest shadow-md"
             />
           ))}
         </div>
       )}
 
       {!searching && result && result.candidates.length === 0 && (
-        <div className="rounded-xl bg-surface-container-lowest p-8 text-center shadow-md">
+        <div className="rounded-card bg-surface-container-lowest p-8 text-center shadow-md">
           <p className="font-narrative text-sm text-on-surface-variant">
             No companies matched your criteria. Try broader terms.
           </p>
@@ -333,7 +333,7 @@ export default function DiscoveryPage() {
             {result.candidates.map((candidate) => (
               <article
                 key={candidate.company_name}
-                className="group relative overflow-hidden rounded-xl bg-surface-container-lowest p-space-lg shadow-md transition-all hover:shadow-xl"
+                className="group relative overflow-hidden rounded-card bg-surface-container-lowest p-space-lg shadow-md transition-all hover:shadow-xl"
               >
                 <div className="absolute bottom-0 left-0 top-0 w-1.5 bg-secondary" />
                 <div className="flex flex-col justify-between gap-6 pl-1.5 lg:flex-row lg:items-start">
@@ -412,7 +412,7 @@ export default function DiscoveryPage() {
                         startResearch(candidate.company_name, candidate.website)
                       }
                       disabled={busyCandidate !== null}
-                      className="inline-flex w-full items-center justify-center gap-1 rounded bg-primary px-4 py-2 font-display text-headline-sm text-on-primary shadow-sm transition-all hover:bg-primary-container active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-60 lg:w-full"
+                      className="inline-flex w-full items-center justify-center gap-1 rounded-control bg-primary px-4 py-2 font-display text-headline-sm text-on-primary shadow-sm transition-all hover:bg-primary-container active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-60 lg:w-full"
                     >
                       {busyCandidate === candidate.company_name ? (
                         <>
