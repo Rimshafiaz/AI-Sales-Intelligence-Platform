@@ -35,12 +35,12 @@
   --color-ok-bg: #d1fae5;
 
   --font-app: 'Inter', system-ui, sans-serif;
-  --font-display: 'Manrope', system-ui, sans-serif;
-  --font-body: 'Libre Baskerville', Georgia, serif;
+  --font-display: 'PT Serif', Georgia, serif;
+  --font-body: var(--font-narrative);
   --font-headline: var(--font-display);
   --font-label: var(--font-app);
   --font-ui: var(--font-app);
-  --font-narrative: 'Libre Baskerville', Georgia, serif;
+  --font-narrative: var(--font-app);
   --font-headline-xl: var(--font-display);
   --font-headline-lg: var(--font-display);
   --font-headline-md: var(--font-display);

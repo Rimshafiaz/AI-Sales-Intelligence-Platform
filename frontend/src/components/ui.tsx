@@ -25,6 +25,7 @@ export function Button({ variant = 'primary', className = '', children, ...props
       className={
         'inline-flex h-9 items-center justify-center gap-2 rounded-control px-3 ' +
         'font-ui text-sm font-semibold transition-colors ' +
+        'focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-secondary ' +
         'disabled:cursor-not-allowed disabled:opacity-60 ' +
         BUTTON_VARIANTS[variant] +
         (className ? ` ${className}` : '')

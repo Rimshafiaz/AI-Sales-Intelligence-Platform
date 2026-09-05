@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { ChevronRight } from 'lucide-react'
+import { ChevronRight, ArrowRight } from 'lucide-react'
 import { api } from '../lib/api'
 import type {
   DashboardSummary,
@@ -54,46 +54,46 @@ function ActivityRow({ event }: { event: DashboardActivity }) {
   return (
     <div className="relative">
       <span
-        className={'absolute -left-5 top-1.5 h-2 w-2 rounded-full ' + activityDot(event.event_type)}
+        className={'absolute -left-5 top-[6px] h-2 w-2 rounded-full ' + activityDot(event.event_type)}
       />
-      <p className="text-body-md font-medium text-on-surface">
-        {eventTitle(event.event_type)}
-      </p>
-      <p className="mt-0.5 min-w-0 truncate text-body-sm text-on-surface-variant">
-        {event.company_name} &middot; {relativeTime(event.occurred_at)}
+      <p className="truncate text-body-sm text-on-surface">
+        <span className="font-medium">{eventTitle(event.event_type)}</span>
+        <span className="text-on-surface-variant">
+          {' '}
+          &middot; {event.company_name} &middot; {relativeTime(event.occurred_at)}
+        </span>
       </p>
     </div>
   )
 }
 
-function StatusChip({ status }: { status: 'draft' | 'approved' }) {
-  return status === 'approved' ? (
-    <span className="inline-flex items-center gap-1 rounded-control border border-forest bg-forest-wash px-1.5 py-0.5 font-ui text-[11px] font-medium text-ok-ink">
-      Approved
-    </span>
-  ) : (
-    <span className="inline-flex items-center rounded-control border border-warn-bg bg-warn-bg px-1.5 py-0.5 font-ui text-[11px] font-medium text-warn-ink">
-      Draft
-    </span>
-  )
+function latestPerCompany(items: ReportListItem[]): ReportListItem[] {
+  const byCompany = new Map<string, ReportListItem>()
+  for (const item of items) {
+    const existing = byCompany.get(item.company_id)
+    if (!existing || item.generated_at.localeCompare(existing.generated_at) > 0) {
+      byCompany.set(item.company_id, item)
+    }
+  }
+  return Array.from(byCompany.values())
 }
 
 export default function DashboardPage() {
   const navigate = useNavigate()
   const [summary, setSummary] = useState<DashboardSummary | null>(null)
-  const [recent, setRecent] = useState<ReportListResponse | null>(null)
+  const [reports, setReports] = useState<ReportListResponse | null>(null)
   const [error, setError] = useState<string | null>(null)
 
   useEffect(() => {
     let cancelled = false
     Promise.all([
       api<DashboardSummary>('/dashboard/summary'),
-      api<ReportListResponse>('/reports', { params: { page: 1, page_size: 5 } }),
+      api<ReportListResponse>('/reports', { params: { page: 1, page_size: 50 } }),
     ])
       .then(([summaryData, reportsData]) => {
         if (cancelled) return
         setSummary(summaryData)
-        setRecent(reportsData)
+        setReports(reportsData)
       })
       .catch((e: unknown) => {
         if (!cancelled)
@@ -106,21 +106,34 @@ export default function DashboardPage() {
 
   if (error) {
     return (
-      <main className="mx-auto max-w-6xl px-4 py-8 sm:px-6">
+      <main className="mx-auto max-w-7xl px-4 py-8 sm:px-6">
         <Notice kind="error">{error}</Notice>
       </main>
     )
   }
 
-  if (!summary || !recent) {
+  if (!summary || !reports) {
     return (
-      <main className="mx-auto max-w-6xl px-4 py-8 sm:px-6">
+      <main className="mx-auto max-w-7xl px-4 py-8 sm:px-6">
         <div className="h-16 animate-pulse rounded bg-surface-container-low" />
         <div className="mt-6 h-24 animate-pulse rounded-card bg-surface-container-lowest shadow-sm" />
         <div className="mt-6 h-64 animate-pulse rounded-card bg-surface-container-lowest shadow-sm" />
       </main>
     )
   }
+
+  const items = reports.items
+  const drafts = items.filter((item) => item.review_status === 'draft')
+  const approved = items
+    .filter((item) => item.review_status === 'approved')
+    .sort((a, b) => b.generated_at.localeCompare(a.generated_at))
+  const opportunities = latestPerCompany(items)
+    .sort((a, b) => b.opportunity_score - a.opportunity_score)
+    .slice(0, 5)
+  const activity = summary.recent_activity
+    .slice()
+    .sort((a, b) => b.occurred_at.localeCompare(a.occurred_at))
+    .slice(0, 5)
 
   const stats: { value: string; label: string }[] = [
     { value: String(summary.reports_generated), label: 'reports generated' },
@@ -135,13 +148,34 @@ export default function DashboardPage() {
     },
   ]
 
-  const activity = summary.recent_activity
-    .slice()
-    .sort((a, b) => b.occurred_at.localeCompare(a.occurred_at))
-    .slice(0, 6)
+  const nextStep = (() => {
+    if (drafts.length > 0) {
+      const top = drafts[0]
+      return {
+        reason: `Highest-scoring draft in your queue at ${top.opportunity_score}/100.`,
+        action: `Review ${top.company_name}`,
+        to: `/reports/${top.id}`,
+        cta: 'Review report',
+      }
+    }
+    if (items.length > 0) {
+      return {
+        reason: 'Every generated report has been reviewed.',
+        action: 'Research your next account',
+        to: '/research',
+        cta: 'Start research',
+      }
+    }
+    return {
+      reason: 'No reports yet. Discovery finds candidates matched to your offer.',
+      action: 'Discover candidate companies',
+      to: '/discover',
+      cta: 'Start discovery',
+    }
+  })()
 
   return (
-    <main className="mx-auto flex w-full max-w-6xl flex-col gap-6 px-4 py-8 sm:px-6">
+    <main className="mx-auto flex w-full max-w-7xl flex-col gap-6 px-4 py-8 sm:px-6">
       <section className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
         <div className="max-w-2xl space-y-1">
           <h1 className="font-display text-headline-xl font-semibold tracking-tight text-on-surface">
@@ -181,113 +215,85 @@ export default function DashboardPage() {
         ))}
       </section>
 
-      <section className="grid grid-cols-1 gap-6 lg:grid-cols-12">
+      <button
+        type="button"
+        onClick={() => navigate(nextStep.to)}
+        className="group flex w-full items-center gap-4 border-y border-line-soft py-4 text-left transition-colors hover:bg-surface-container-low focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-secondary"
+      >
+        <span className="label-caps shrink-0 text-ink-faint">Next step</span>
+        <span className="min-w-0 flex-1">
+          <span className="block text-body-md font-medium text-on-surface">
+            {nextStep.action}
+          </span>
+          <span className="mt-0.5 block truncate text-body-sm text-on-surface-variant">
+            {nextStep.reason}
+          </span>
+        </span>
+        <ArrowRight size={16} className="shrink-0 text-outline transition-colors group-hover:text-on-surface" />
+      </button>
+
+      <section className="grid grid-cols-1 gap-8 lg:grid-cols-12">
         <div className="flex flex-col gap-3 lg:col-span-8">
           <div className="flex items-center justify-between px-1">
             <h2 className="font-display text-headline-md font-semibold text-on-surface">
-              Recent reports
+              Top opportunities
             </h2>
             <button
               type="button"
               onClick={() => navigate('/history')}
               className="text-label-md font-medium text-secondary transition-colors hover:text-on-surface"
             >
-              View all reports
+              All reports
             </button>
           </div>
 
-          {recent.items.length === 0 ? (
-            <div className="flex flex-col items-center gap-4 rounded-card bg-surface-container-lowest p-8 text-center shadow-sm">
+          {opportunities.length === 0 ? (
+            <div className="rounded-card bg-surface-container-lowest p-8 shadow-sm">
               <p className="text-body-md text-on-surface-variant">
-                No reports yet. Generate your first one from the workflows above.
+                No accounts yet. Research a company or discover candidates to build your
+                pipeline.
               </p>
-              <div className="flex flex-col gap-2 sm:flex-row">
-                <button
-                  type="button"
-                  onClick={() => navigate('/research')}
-                  className="inline-flex w-full items-center justify-center gap-2 rounded-control bg-primary px-4 py-2 text-label-md font-medium text-on-primary transition-colors hover:bg-inverse-surface sm:w-auto"
-                >
-                  Research a company
-                </button>
-                <button
-                  type="button"
-                  onClick={() => navigate('/discover')}
-                  className="inline-flex w-full items-center justify-center gap-2 rounded-control border border-line bg-surface-container-lowest px-4 py-2 text-label-md font-medium text-on-surface transition-colors hover:border-outline hover:bg-surface-container-low sm:w-auto"
-                >
-                  Discover companies
-                </button>
-              </div>
             </div>
           ) : (
-            <div className="overflow-hidden rounded-card bg-surface-container-lowest shadow-sm">
-              <div className="overflow-x-auto">
-                <table className="w-full min-w-[560px] table-fixed text-left">
-                <thead>
-                  <tr className="bg-surface-container-low text-label-sm uppercase tracking-wider text-outline">
-                    <th className="w-[45%] px-4 py-2 font-medium">Company</th>
-                    <th className="w-[19%] px-4 py-2 font-medium">Score</th>
-                    <th className="w-[17%] px-4 py-2 font-medium">Status</th>
-                    <th className="w-[15%] px-4 py-2 font-medium">Age</th>
-                    <th className="w-[4%] px-2 py-2">
-                      <span className="sr-only">Open</span>
-                    </th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-line-soft text-on-surface">
-                  {recent.items.map((item: ReportListItem) => {
-                    const tier = scoreTier(item.opportunity_score)
-                    return (
-                      <tr
-                        key={item.id}
-                        onClick={() => navigate(`/reports/${item.id}`)}
-                        className="group cursor-pointer transition-colors hover:bg-surface-container-low"
-                      >
-                        <td className="px-4 py-3.5">
-                          <div className="flex items-center gap-2.5">
-                            <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-control bg-surface-container font-display text-sm font-semibold text-on-surface">
-                              {item.company_name.charAt(0).toUpperCase()}
-                            </div>
-                            <span className="font-display text-headline-sm font-semibold text-on-surface">
-                              {item.company_name}
-                            </span>
-                          </div>
-                        </td>
-                        <td className="px-4 py-3.5">
-                          <div className="flex items-baseline gap-1.5">
-                            <span className="font-display text-headline-md font-semibold text-on-surface">
-                              {item.opportunity_score}
-                            </span>
-                            <span className="text-body-sm text-outline">/100</span>
-                            <span className={'text-label-sm tracking-wide ' + tier.tone}>
-                              {tier.label}
-                            </span>
-                          </div>
-                        </td>
-                        <td className="px-4 py-3.5">
-                          <StatusChip status={item.review_status} />
-                        </td>
-                        <td className="px-4 py-3.5 text-tabular-data text-on-surface-variant">
-                          {relativeTime(item.generated_at)}
-                        </td>
-                        <td className="w-10 px-2 py-3.5 text-right">
-                          <ChevronRight
-                            size={16}
-                            className="text-outline opacity-0 transition-opacity group-hover:opacity-100"
-                          />
-                        </td>
-                      </tr>
-                    )
-                  })}
-                </tbody>
-              </table>
-              </div>
+            <div className="divide-y divide-line-soft rounded-card border border-line-soft bg-surface-container-lowest shadow-sm">
+              {opportunities.map((item) => {
+                const tier = scoreTier(item.opportunity_score)
+                return (
+                  <button
+                    key={item.id}
+                    type="button"
+                    onClick={() => navigate(`/reports/${item.id}`)}
+                    className="group flex w-full items-center gap-3 px-4 py-3 text-left transition-colors hover:bg-surface-container-low"
+                  >
+                    <span className="min-w-0 flex-1 truncate text-body-md font-medium text-on-surface">
+                      {item.company_name}
+                    </span>
+                    <span className="shrink-0 text-tabular-data text-on-surface-variant">
+                      {relativeTime(item.generated_at)}
+                    </span>
+                    <span className="flex w-20 shrink-0 items-baseline justify-end gap-1">
+                      <span className="text-body-md font-semibold text-on-surface">
+                        {item.opportunity_score}
+                      </span>
+                      <span className="text-body-sm text-outline">/100</span>
+                    </span>
+                    <span
+                      className={'w-14 shrink-0 text-right text-label-sm tracking-wide ' + tier.tone}
+                    >
+                      {tier.label}
+                    </span>
+                    <ChevronRight
+                      size={16}
+                      className="shrink-0 text-outline opacity-0 transition-opacity group-hover:opacity-100"
+                    />
+                  </button>
+                )
+              })}
             </div>
           )}
-        </div>
 
-        <div className="flex flex-col gap-3 lg:col-span-4">
-          <h2 className="px-1 label-caps text-ink-faint">Recent activity</h2>
-          <div className="ml-1 flex flex-col gap-4 border-l border-line-soft pl-4">
+          <div className="mt-6 flex flex-col gap-3 border-l border-line-soft pl-4 pt-1">
+            <h3 className="label-caps text-ink-faint">Recent activity</h3>
             {activity.length === 0 && (
               <p className="text-body-sm text-on-surface-variant">
                 No activity yet. Start by discovering or researching a company.
@@ -297,6 +303,66 @@ export default function DashboardPage() {
               <ActivityRow key={`${event.event_type}-${event.occurred_at}`} event={event} />
             ))}
           </div>
+        </div>
+
+        <div className="flex flex-col gap-3 lg:col-span-4">
+          <div className="flex items-center justify-between px-1">
+            <h2 className="font-display text-headline-md font-semibold text-on-surface">
+              Needs attention
+            </h2>
+            {drafts.length > 0 && (
+              <span className="text-body-sm text-on-surface-variant">
+                {drafts.length} awaiting review
+              </span>
+            )}
+          </div>
+
+          {drafts.length === 0 && approved.length === 0 ? (
+            <div className="rounded-card border border-line-soft bg-surface-container-lowest p-4 shadow-sm">
+              <p className="text-body-sm text-on-surface-variant">
+                Nothing needs you right now. Every report has been reviewed.
+              </p>
+            </div>
+          ) : (
+            <div className="divide-y divide-line-soft rounded-card border border-line-soft bg-surface-container-lowest shadow-sm">
+              {drafts.length > 0 && (
+                <button
+                  type="button"
+                  onClick={() => navigate('/history')}
+                  className="group flex w-full items-center gap-3 px-4 py-4 text-left transition-colors hover:bg-surface-container-low"
+                >
+                  <span className="w-8 shrink-0 text-body-lg font-semibold text-on-surface">
+                    {drafts.length}
+                  </span>
+                  <span className="min-w-0 flex-1 text-body-md text-on-surface">
+                    {drafts.length === 1 ? 'report awaits' : 'reports await'} your review
+                  </span>
+                  <ArrowRight
+                    size={15}
+                    className="shrink-0 text-outline transition-colors group-hover:text-on-surface"
+                  />
+                </button>
+              )}
+              {approved.length > 0 && (
+                <button
+                  type="button"
+                  onClick={() => navigate(`/reports/${approved[0].id}`)}
+                  className="group flex w-full items-center gap-3 px-4 py-4 text-left transition-colors hover:bg-surface-container-low"
+                >
+                  <span className="w-8 shrink-0 text-body-lg font-semibold text-on-surface">
+                    {approved.length}
+                  </span>
+                  <span className="min-w-0 flex-1 text-body-md text-on-surface">
+                    {approved.length === 1 ? 'approved report' : 'approved reports'}
+                  </span>
+                  <ArrowRight
+                    size={15}
+                    className="shrink-0 text-outline transition-colors group-hover:text-on-surface"
+                  />
+                </button>
+              )}
+            </div>
+          )}
         </div>
       </section>
     </main>

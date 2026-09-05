@@ -159,7 +159,7 @@ export default function HistoryPage() {
   const totalPages = data ? Math.max(1, Math.ceil(data.total / data.page_size)) : 1
 
   return (
-    <main className="mx-auto max-w-6xl px-4 py-8 sm:px-6">
+    <main className="mx-auto max-w-7xl px-4 py-8 sm:px-6">
       <p className="label-caps text-ink-faint">Workspace &gt; Reports</p>
       <div className="mt-1 flex flex-wrap items-end justify-between gap-4">
         <div>

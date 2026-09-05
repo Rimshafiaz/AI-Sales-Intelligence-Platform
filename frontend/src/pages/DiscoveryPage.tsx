@@ -108,10 +108,10 @@ export default function DiscoveryPage() {
   const inputClass =
     'h-9 w-full bg-surface-container-low text-on-surface px-space-sm text-body-md rounded ' +
     'outline-none transition-colors placeholder:text-outline-variant ' +
-    'focus:bg-surface-container-lowest pr-8'
+    'focus:bg-surface-container-lowest focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-secondary pr-8'
 
   return (
-    <main className="mx-auto max-w-6xl px-4 py-8 sm:px-6">
+    <main className="mx-auto max-w-7xl px-4 py-8 sm:px-6">
       <div className="mb-8 flex flex-col justify-between gap-3 md:flex-row md:items-end">
         <div className="space-y-1">
           <div className="flex items-center gap-2">
@@ -144,7 +144,7 @@ export default function DiscoveryPage() {
           <button
             type="button"
             onClick={resetCriteria}
-            className="flex items-center gap-0.5 text-label-md text-on-surface-variant transition-colors hover:text-on-surface"
+            className="flex items-center gap-0.5 text-label-md text-on-surface-variant transition-colors hover:text-on-surface focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-secondary"
           >
             <RotateCcw size={16} />
             Reset query
@@ -163,7 +163,7 @@ export default function DiscoveryPage() {
               <div className="relative">
                 <input
                   id="filter-industry"
-                  placeholder="e.g. Developer Tools, Healthcare IT"
+                  placeholder="e.g. Fintech, healthcare IT"
                   value={criteria.industry}
                   onChange={(event) => update('industry', event.target.value)}
                   className={inputClass}
@@ -226,7 +226,7 @@ export default function DiscoveryPage() {
               <div className="relative">
                 <input
                   id="filter-keywords"
-                  placeholder="e.g. SOC2, Salesforce CRM, Series B"
+                  placeholder="e.g. SOC2, Series B"
                   value={criteria.keywords}
                   onChange={(event) => update('keywords', event.target.value)}
                   className={inputClass}
@@ -310,7 +310,7 @@ export default function DiscoveryPage() {
 
       {!searching && result && result.candidates.length === 0 && (
         <div className="rounded-card bg-surface-container-lowest p-8 text-center shadow-md">
-          <p className="font-narrative text-sm text-on-surface-variant">
+          <p className="text-body-md text-on-surface-variant">
             No companies matched your criteria. Try broader terms.
           </p>
         </div>
@@ -340,7 +340,7 @@ export default function DiscoveryPage() {
                   <div className="flex-1 space-y-3">
                     <div>
                       <div className="mb-0.5 flex flex-wrap items-center gap-x-2 gap-y-1">
-                        <h3 className="font-narrative text-headline-lg font-semibold text-on-surface">
+                        <h3 className="font-display text-headline-lg font-semibold text-on-surface">
                           {candidate.company_name}
                         </h3>
                         {candidate.website && (
@@ -348,7 +348,7 @@ export default function DiscoveryPage() {
                             href={candidate.website}
                             target="_blank"
                             rel="noopener noreferrer"
-                            className="inline-flex items-center gap-0.5 text-label-md text-secondary hover:underline"
+                            className="inline-flex items-center gap-0.5 text-label-md text-secondary hover:underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-secondary"
                           >
                             <span>{domainOf(candidate.website)}</span>
                             <ArrowUpRight size={14} />
@@ -391,7 +391,7 @@ export default function DiscoveryPage() {
                               href={url}
                               target="_blank"
                               rel="noopener noreferrer"
-                              className="inline-flex items-center gap-1 rounded-full bg-surface-container px-2 py-1 text-label-sm shadow-sm transition-colors hover:bg-surface-container-high"
+                              className="inline-flex items-center gap-1 rounded-full bg-surface-container px-2 py-1 text-label-sm shadow-sm transition-colors hover:bg-surface-container-high focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-secondary"
                             >
                               <Link2 size={14} className="text-secondary" />
                               <span className="font-medium text-on-surface">
@@ -412,7 +412,7 @@ export default function DiscoveryPage() {
                         startResearch(candidate.company_name, candidate.website)
                       }
                       disabled={busyCandidate !== null}
-                      className="inline-flex w-full items-center justify-center gap-1 rounded-control bg-primary px-4 py-2 font-display text-headline-sm text-on-primary shadow-sm transition-all hover:bg-primary-container active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-60 lg:w-full"
+                      className="inline-flex w-full items-center justify-center gap-1 rounded-control bg-primary px-4 py-2 font-display text-headline-sm text-on-primary shadow-sm transition-all hover:bg-inverse-surface active:scale-[0.98] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-secondary disabled:cursor-not-allowed disabled:opacity-60 lg:w-full"
                     >
                       {busyCandidate === candidate.company_name ? (
                         <>
