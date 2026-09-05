@@ -85,7 +85,7 @@ class DiscoveredCompanyCandidate(BaseModel):
 
 
 class CompanyDiscoveryResponse(BaseModel):
-    candidates: list[DiscoveredCompanyCandidate] = Field(max_length=5)
+    candidates: list[DiscoveredCompanyCandidate] = Field(max_length=10)
 
 
 class DiscoveredCompanyCandidateOutput(BaseModel):
@@ -114,7 +114,7 @@ class DiscoveredCompanyCandidateOutput(BaseModel):
 class CompanyDiscoveryTaskOutput(BaseModel):
     candidates: list[DiscoveredCompanyCandidateOutput] = Field(
         default_factory=list,
-        max_length=5,
+        max_length=10,
     )
 
 

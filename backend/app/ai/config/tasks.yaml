@@ -180,7 +180,7 @@ company_discovery_task:
     source URLs exactly from the evidence; never construct or modify URLs. Set
     industry to null and omit website when the evidence does not state them.
     Never describe a candidate as a verified customer, lead, or confirmed fit
-    beyond the evidence. Select at most five candidates and return an empty
+    beyond the evidence. Select at most ten candidates and return an empty
     candidates list when the evidence supports no matches.
 
     Discovery criteria:
@@ -189,7 +189,7 @@ company_discovery_task:
     Evidence:
     {evidence_context}
   expected_output: >
-    Data matching CompanyDiscoveryTaskOutput: a candidates list with at most five
+    Data matching CompanyDiscoveryTaskOutput: a candidates list with at most ten
     items. Each item has company_name, website as an exact URL string or null,
     industry or null when unknown, short_description, match_explanation of one or
     two sentences naming the satisfied criteria, and supporting_source_urls

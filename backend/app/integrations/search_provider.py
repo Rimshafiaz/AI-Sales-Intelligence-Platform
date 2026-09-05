@@ -49,12 +49,25 @@ class TavilySearchProvider:
         self.timeout_seconds = timeout_seconds
         self.retry_attempts = retry_attempts
 
-    def search(self, query: str) -> list[CollectedSource]:
+    def search(
+        self,
+        query: str,
+        max_results: int | None = None,
+        search_depth: str = "basic",
+    ) -> list[CollectedSource]:
         clean_query = query.strip()
         if not clean_query:
             raise ValueError("Search query cannot be blank.")
 
-        results = self._search(clean_query)
+        effective_max_results = (
+            self.max_results if max_results is None else max_results
+        )
+        if not 1 <= effective_max_results <= 20:
+            raise ValueError("max_results must be between 1 and 20.")
+        if search_depth not in {"basic", "advanced"}:
+            raise ValueError("search_depth must be 'basic' or 'advanced'.")
+
+        results = self._search(clean_query, effective_max_results, search_depth)
         sources: list[CollectedSource] = []
 
         for result in results:
@@ -64,19 +77,24 @@ class TavilySearchProvider:
 
             sources.append(source)
 
-            if len(sources) == self.max_results:
+            if len(sources) == effective_max_results:
                 break
 
         return sources
 
-    def _search(self, query: str) -> list[dict[str, object]]:
+    def _search(
+        self,
+        query: str,
+        max_results: int,
+        search_depth: str,
+    ) -> list[dict[str, object]]:
         for attempt in range(self.retry_attempts):
             try:
                 response = self.client.search(
                     query=query,
-                    search_depth="basic",
+                    search_depth=search_depth,
                     topic="general",
-                    max_results=self.max_results,
+                    max_results=max_results,
                     include_answer=False,
                     include_raw_content=False,
                     include_images=False,
