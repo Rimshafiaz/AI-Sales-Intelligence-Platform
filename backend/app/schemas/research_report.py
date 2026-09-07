@@ -3,6 +3,7 @@ from typing import Any
 from uuid import UUID
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
+from app.schemas.company_discovery import DiscoveryObjective
 from app.schemas.research_source import ResearchSourceResponse
 
 
@@ -121,3 +122,5 @@ class ResearchReportResponse(BaseModel):
 class ReportDetailResponse(BaseModel):
     report: ResearchReportResponse
     sources: list[ResearchSourceResponse]
+    goal: str | None = None
+    objective: DiscoveryObjective | None = None

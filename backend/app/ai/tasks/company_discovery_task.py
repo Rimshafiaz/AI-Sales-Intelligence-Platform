@@ -26,6 +26,7 @@ def _format_criteria(criteria: CompanyDiscoveryRequest) -> str:
 def create_company_discovery_task(
     criteria: CompanyDiscoveryRequest,
     evidence_context: str,
+    objective_context: str,
 ) -> Task:
     clean_evidence_context = evidence_context.strip()
     if not clean_evidence_context:
@@ -33,12 +34,18 @@ def create_company_discovery_task(
 
     criteria_context = _format_criteria(criteria)
     if not criteria_context:
-        raise ValueError("At least one discovery criterion is required.")
+        criteria_context = (
+            "Raw criteria not provided. Use the discovery objective below as "
+            "the match definition."
+        )
+    if not objective_context.strip():
+        raise ValueError("Objective context cannot be blank.")
 
     config = render_task_config(
         "company_discovery_task",
         criteria_context=criteria_context,
         evidence_context=clean_evidence_context,
+        objective_context=objective_context.strip(),
     )
 
     return Task(

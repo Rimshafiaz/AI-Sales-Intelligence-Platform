@@ -452,6 +452,13 @@ export default function ReportReviewPage() {
         <span className="font-mono">{report.id.slice(0, 8)}</span>
       </p>
 
+      {detail.goal && (
+        <p className="mt-2 max-w-3xl text-body-sm text-ink-soft">
+          <span className="font-medium text-ink">Researched for:</span>{' '}
+          {detail.goal}
+        </p>
+      )}
+
       <section className="mt-6 rounded-card border border-line-soft bg-card p-5">
         <div className="flex flex-wrap items-start justify-between gap-6">
           <div>

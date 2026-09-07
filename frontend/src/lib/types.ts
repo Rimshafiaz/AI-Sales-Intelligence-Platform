@@ -5,10 +5,35 @@ export interface DiscoveryCandidate {
   short_description: string | null
   match_explanation: string
   supporting_source_urls: string[]
+  fit_score: number | null
+  fit_tier: 'high' | 'medium' | 'low' | null
+  fit_reason: string | null
 }
 
 export interface DiscoveryResponse {
   candidates: DiscoveryCandidate[]
+}
+
+export interface DiscoveryObjective {
+  goal_type: string
+  seller_role: string | null
+  offering: string | null
+  target_sectors: string[]
+  target_geographies: string[]
+  company_size: string | null
+  stage: string | null
+  triggers: string[]
+  signals_to_look_for: string[]
+  decision_makers: string[]
+  search_queries: string[]
+  fit_rubric: string
+  desired_outcome: string
+}
+
+export interface ParseDiscoveryResponse {
+  objective: DiscoveryObjective
+  supported: boolean
+  message: string | null
 }
 
 export interface Company {

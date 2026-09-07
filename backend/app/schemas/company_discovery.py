@@ -1,6 +1,7 @@
-from typing import Self
+from typing import Literal, Self
 
 from pydantic import (
+    AliasChoices,
     BaseModel,
     ConfigDict,
     Field,
@@ -11,6 +12,114 @@ from pydantic import (
     model_validator,
 )
 
+GoalType = Literal[
+    "service_pitch",
+    "client_prospecting",
+    "investment",
+    "hiring",
+    "market_research",
+    "other",
+]
+SupportedGoalType = Literal["service_pitch", "client_prospecting"]
+
+ObjectiveChip = Literal["service_pitch", "client_prospecting", "investment", "hiring"]
+
+SUPPORTED_GOAL_TYPES: tuple[str, ...] = ("service_pitch", "client_prospecting")
+
+UNSUPPORTED_GOAL_MESSAGE = (
+    "That goal type is not supported yet. SalesLens currently finds local "
+    "businesses with measurable digital-growth opportunities: pitching a "
+    "service or finding clients. Jobs, investment, and other discovery modes "
+    "come later."
+)
+
+
+def _first_value(values: list[str]) -> str | None:
+    return values[0] if values else None
+
+
+class ParseDiscoveryRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    goal: str = Field(min_length=3, max_length=2_000)
+    objective_hint: ObjectiveChip | None = None
+    region: str | None = Field(default=None, max_length=100)
+    company_size: str | None = Field(default=None, max_length=100)
+
+    @field_validator("goal", "region", "company_size", mode="before")
+    @classmethod
+    def normalize_text(cls, value: object) -> object:
+        if isinstance(value, str):
+            return value.strip() or None
+        return value
+
+    @model_validator(mode="after")
+    def require_goal(self) -> Self:
+        if not self.goal:
+            raise ValueError("A discovery goal is required.")
+        return self
+
+
+class DiscoveryObjective(BaseModel):
+    goal_type: GoalType
+    seller_role: str | None = Field(default=None, max_length=60)
+    offering: str | None = Field(default=None, max_length=300)
+    target_sectors: list[str] = Field(default_factory=list, max_length=6)
+    target_geographies: list[str] = Field(default_factory=list, max_length=4)
+    company_size: str | None = Field(default=None, max_length=100)
+    stage: str | None = Field(default=None, max_length=60)
+    triggers: list[str] = Field(default_factory=list, max_length=8)
+    signals_to_look_for: list[str] = Field(default_factory=list, max_length=8)
+    decision_makers: list[str] = Field(default_factory=list, max_length=6)
+    search_queries: list[str] = Field(min_length=2, max_length=5)
+    fit_rubric: str = Field(min_length=3, max_length=1_000)
+    desired_outcome: str = Field(min_length=3, max_length=300)
+
+    @field_validator(
+        "seller_role",
+        "offering",
+        "company_size",
+        "stage",
+        "fit_rubric",
+        "desired_outcome",
+        mode="before",
+    )
+    @classmethod
+    def normalize_scalar_text(cls, value: object) -> object:
+        if isinstance(value, str):
+            return value.strip() or None
+        return value
+
+    @field_validator(
+        "target_sectors",
+        "target_geographies",
+        "triggers",
+        "signals_to_look_for",
+        "decision_makers",
+        "search_queries",
+        mode="before",
+    )
+    @classmethod
+    def normalize_list_text(cls, value: object) -> object:
+        if isinstance(value, list):
+            return [
+                item.strip()
+                for item in value
+                if isinstance(item, str) and item.strip()
+            ]
+        return value
+
+    @field_validator("search_queries", mode="after")
+    @classmethod
+    def clamp_query_lengths(cls, value: list[str]) -> list[str]:
+        return [query[:200] for query in value]
+
+
+class ParseDiscoveryResponse(BaseModel):
+    objective: DiscoveryObjective
+    supported: bool
+    message: str | None = None
+
 
 class CompanyDiscoveryRequest(BaseModel):
     model_config = ConfigDict(
@@ -18,21 +127,44 @@ class CompanyDiscoveryRequest(BaseModel):
         json_schema_extra={
             "examples": [
                 {
-                    "industry": "fintech",
-                    "region": "San Francisco",
-                    "company_size": "50-200",
-                    "keywords": "payment infrastructure",
+                    "goal_type": "service_pitch",
+                    "offering": "Website design and online booking setup",
+                    "desired_outcome": "Decide which businesses are worth pitching.",
+                    "business_category": "Beauty salons",
+                    "location": "Lahore",
                 }
             ]
         },
     )
 
-    industry: str | None = Field(default=None, max_length=100)
-    region: str | None = Field(default=None, max_length=100)
+    goal_type: SupportedGoalType = "service_pitch"
+    goal: str | None = Field(default=None, max_length=2_000)
+    objective: DiscoveryObjective | None = None
+    offering: str | None = Field(default=None, max_length=300)
+    desired_outcome: str | None = Field(default=None, max_length=300)
+    business_category: str | None = Field(
+        default=None,
+        max_length=100,
+        validation_alias=AliasChoices("business_category", "industry"),
+    )
+    location: str | None = Field(
+        default=None,
+        max_length=100,
+        validation_alias=AliasChoices("location", "region"),
+    )
     company_size: str | None = Field(default=None, max_length=100)
     keywords: str | None = Field(default=None, max_length=255)
 
-    @field_validator("industry", "region", "company_size", "keywords", mode="before")
+    @field_validator(
+        "goal",
+        "offering",
+        "desired_outcome",
+        "business_category",
+        "location",
+        "company_size",
+        "keywords",
+        mode="before",
+    )
     @classmethod
     def normalize_criteria(cls, value: object) -> object:
         if isinstance(value, str):
@@ -41,16 +173,49 @@ class CompanyDiscoveryRequest(BaseModel):
         return value
 
     @model_validator(mode="after")
-    def require_search_criteria(self) -> Self:
-        if not any(
-            [self.industry, self.region, self.company_size, self.keywords]
-        ):
+    def require_supported_local_discovery_input(self) -> Self:
+        if self.objective is not None:
+            if self.objective.goal_type not in SUPPORTED_GOAL_TYPES:
+                raise ValueError(UNSUPPORTED_GOAL_MESSAGE)
+            self.goal_type = self.objective.goal_type
+            self.offering = self.offering or self.objective.offering
+            self.desired_outcome = (
+                self.desired_outcome or self.objective.desired_outcome
+            )
+            self.business_category = (
+                self.business_category
+                or _first_value(self.objective.target_sectors)
+            )
+            self.location = self.location or _first_value(
+                self.objective.target_geographies
+            )
+
+        missing_fields = [
+            label
+            for label, value in {
+                "offering": self.offering,
+                "desired_outcome": self.desired_outcome,
+                "business_category": self.business_category,
+                "location": self.location,
+            }.items()
+            if not value
+        ]
+        if missing_fields:
             raise ValueError(
-                "Provide at least one discovery criterion: industry, region, "
-                "company_size, or keywords."
+                "Local business discovery requires: "
+                + ", ".join(missing_fields)
+                + "."
             )
 
         return self
+
+    @property
+    def industry(self) -> str:
+        return self.business_category or ""
+
+    @property
+    def region(self) -> str:
+        return self.location or ""
 
 
 class DiscoveredCompanyCandidate(BaseModel):
@@ -60,6 +225,9 @@ class DiscoveredCompanyCandidate(BaseModel):
     short_description: str | None = Field(default=None, max_length=1_000)
     match_explanation: str = Field(min_length=1, max_length=1_000)
     supporting_source_urls: list[HttpUrl] = Field(min_length=1, max_length=5)
+    fit_score: int | None = Field(default=None, ge=0, le=100)
+    fit_tier: Literal["high", "medium", "low"] | None = None
+    fit_reason: str | None = Field(default=None, max_length=1_000)
 
     @field_serializer("website")
     def serialize_website(self, value: HttpUrl | None) -> str | None:
@@ -85,7 +253,7 @@ class DiscoveredCompanyCandidate(BaseModel):
 
 
 class CompanyDiscoveryResponse(BaseModel):
-    candidates: list[DiscoveredCompanyCandidate] = Field(max_length=10)
+    candidates: list[DiscoveredCompanyCandidate] = Field(max_length=15)
 
 
 class DiscoveredCompanyCandidateOutput(BaseModel):
@@ -114,7 +282,29 @@ class DiscoveredCompanyCandidateOutput(BaseModel):
 class CompanyDiscoveryTaskOutput(BaseModel):
     candidates: list[DiscoveredCompanyCandidateOutput] = Field(
         default_factory=list,
-        max_length=10,
+        max_length=15,
+    )
+
+
+class QualifiedCandidateOutput(BaseModel):
+    company_name: str = Field(min_length=1, max_length=255)
+    website: str | None = Field(default=None, max_length=500)
+    fit_score: int = Field(ge=0, le=100)
+    fit_tier: Literal["high", "medium", "low"]
+    fit_reason: str = Field(min_length=3, max_length=1_000)
+
+    @field_validator("company_name", "fit_reason", mode="before")
+    @classmethod
+    def normalize_text(cls, value: object) -> object:
+        if isinstance(value, str):
+            return value.strip() or None
+        return value
+
+
+class QualificationTaskOutput(BaseModel):
+    candidates: list[QualifiedCandidateOutput] = Field(
+        default_factory=list,
+        max_length=15,
     )
 
 

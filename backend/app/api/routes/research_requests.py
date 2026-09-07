@@ -6,7 +6,10 @@ from sqlalchemy.orm import Session
 from app.api.dependencies.current_user import get_current_user
 from app.db.session import get_db
 from app.models.user import User
-from app.schemas.research_request import ResearchRequestResponse
+from app.schemas.research_request import (
+    ResearchRequestResponse,
+    ResearchRequestStartRequest,
+)
 from app.schemas.research_source import ResearchSourceResponse
 from app.services.research_runner import run_research
 from app.services.research_requests import (
@@ -31,6 +34,7 @@ router = APIRouter(tags=["Research Requests"])
 async def create_research_request_endpoint(
     company_id: UUID,
     background_tasks: BackgroundTasks,
+    payload: ResearchRequestStartRequest,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
@@ -38,6 +42,11 @@ async def create_research_request_endpoint(
         db=db,
         company_id=company_id,
         current_user=current_user,
+        goal=payload.goal,
+        objective=payload.objective.model_dump(mode="json") if payload.objective else None,
+        offering=payload.offering,
+        region=payload.region,
+        website=str(payload.website) if payload.website else None,
     )
     if research_request is None:
         raise HTTPException(

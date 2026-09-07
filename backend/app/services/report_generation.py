@@ -16,11 +16,49 @@ from app.repositories.research_reports import (
 )
 from app.repositories.research_requests import get_research_request_for_user
 from app.repositories.research_sources import list_research_sources_for_user
+from app.schemas.company_discovery import DiscoveryObjective
+from app.services.company_discovery import build_objective_context
 
 logger = get_logger(__name__)
 
 MAX_GENERATION_ATTEMPTS = 3
 GENERATION_RETRY_DELAY_SECONDS = 45
+
+
+def _objective_context_from_request(research_request) -> str | None:
+    raw_objective = getattr(research_request, "objective", None)
+    if not isinstance(raw_objective, dict):
+        return None
+    if "goal_type" in raw_objective:
+        try:
+            objective = DiscoveryObjective.model_validate(raw_objective)
+        except Exception as error:
+            logger.warning(
+                "Stored discovery objective could not be validated for request %s: %s",
+                getattr(research_request, "id", "?"),
+                error,
+            )
+            return None
+        return build_objective_context(
+            raw_objective.get("goal")
+            if isinstance(raw_objective.get("goal"), str)
+            else None,
+            objective,
+        )
+    goal = raw_objective.get("goal")
+    offering = raw_objective.get("offering")
+    if not isinstance(goal, str) and not isinstance(offering, str):
+        return None
+    lines = ["- Mode: manual known-prospect research"]
+    if isinstance(goal, str):
+        lines.append(f"- Original request: {goal}")
+    if isinstance(offering, str):
+        lines.append(f"- Offering: {offering}")
+    if isinstance(raw_objective.get("region"), str):
+        lines.append(f"- Target city/region: {raw_objective['region']}")
+    if isinstance(raw_objective.get("website"), str):
+        lines.append(f"- Provided website: {raw_objective['website']}")
+    return "\n".join(lines)
 
 
 def run_generation_background(request_id: UUID, user_id: UUID) -> None:
@@ -78,6 +116,9 @@ def run_generation_background(request_id: UUID, user_id: UUID) -> None:
                 report = run_sales_intelligence_crew(
                     company_name=company.name,
                     evidence_context=evidence_context,
+                    objective_context=_objective_context_from_request(
+                        research_request,
+                    ),
                 )
                 break
             except Exception as error:
@@ -151,10 +192,21 @@ def run_regeneration_background(
 
         try:
             evidence_context = build_research_evidence_context(sources)
+            research_request = get_research_request_for_user(
+                db=db,
+                request_id=existing_report.research_request_id,
+                user_id=user_id,
+            )
+            objective_context = (
+                _objective_context_from_request(research_request)
+                if research_request is not None
+                else None
+            )
             report = run_sales_intelligence_crew(
                 company_name=company.name,
                 evidence_context=evidence_context,
                 guidance=instruction,
+                objective_context=objective_context,
             )
         except Exception as error:
             db.rollback()

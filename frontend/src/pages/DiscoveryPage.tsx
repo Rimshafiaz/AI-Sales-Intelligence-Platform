@@ -1,34 +1,56 @@
-import { useState, type FormEvent } from 'react'
+import { useEffect, useState, type FormEvent } from 'react'
 import { useNavigate } from 'react-router-dom'
 import {
   ArrowUpRight,
-  Building2,
   CircleAlert,
   ExternalLink,
   FileSearch,
-  Globe,
   Info,
   Link2,
   Loader2,
   Microscope,
-  RotateCcw,
-  SlidersHorizontal,
+  Pencil,
+  Search,
   Sparkles,
-  Tag,
-  Users,
 } from 'lucide-react'
 import { api } from '../lib/api'
-import type { DiscoveryResponse } from '../lib/types'
+import type {
+  DiscoveryObjective,
+  DiscoveryResponse,
+  ParseDiscoveryResponse,
+} from '../lib/types'
 import { Button } from '../components/ui'
 
-interface Criteria {
-  industry: string
+interface GoalForm {
+  goal: string
   region: string
   company_size: string
-  keywords: string
 }
 
-const EMPTY_CRITERIA: Criteria = { industry: '', region: '', company_size: '', keywords: '' }
+const EMPTY_FORM: GoalForm = { goal: '', region: '', company_size: '' }
+
+const OBJECTIVE_CHIPS: { value: string; label: string }[] = [
+  { value: 'service_pitch', label: 'Pitch a service' },
+  { value: 'client_prospecting', label: 'Find clients' },
+  { value: 'investment', label: 'Investment' },
+  { value: 'hiring', label: 'Hiring' },
+]
+
+const GOAL_TYPE_LABELS: Record<string, string> = {
+  service_pitch: 'Pitch a service',
+  client_prospecting: 'Find clients',
+  investment: 'Investment',
+  hiring: 'Hiring',
+  market_research: 'Market research',
+  other: 'Custom goal',
+}
+
+const SEARCH_STAGES = [
+  'Interpreting your goal...',
+  'Searching the web for evidence...',
+  'Verifying candidates...',
+  'Scoring fit against your goal...',
+]
 
 function domainOf(url: string): string {
   try {
@@ -38,44 +60,94 @@ function domainOf(url: string): string {
   }
 }
 
+function joinItems(items: string[]): string {
+  return items.join(' · ')
+}
+
 export default function DiscoveryPage() {
   const navigate = useNavigate()
-  const [criteria, setCriteria] = useState<Criteria>(EMPTY_CRITERIA)
+  const [form, setForm] = useState<GoalForm>(EMPTY_FORM)
+  const [activeChip, setActiveChip] = useState<string | null>(null)
+  const [step, setStep] = useState<'form' | 'confirm'>('form')
+  const [parsing, setParsing] = useState(false)
+  const [objective, setObjective] = useState<DiscoveryObjective | null>(null)
+  const [gate, setGate] = useState<{ supported: boolean; message: string | null } | null>(null)
   const [searching, setSearching] = useState(false)
   const [searchError, setSearchError] = useState<string | null>(null)
   const [result, setResult] = useState<DiscoveryResponse | null>(null)
   const [busyCandidate, setBusyCandidate] = useState<string | null>(null)
   const [handoffError, setHandoffError] = useState<string | null>(null)
+  const [searchStage, setSearchStage] = useState(0)
 
-  function update(field: keyof Criteria, value: string) {
-    setCriteria((current) => ({ ...current, [field]: value }))
+  useEffect(() => {
+    if (!searching) {
+      setSearchStage(0)
+      return
+    }
+    const timer = window.setInterval(() => {
+      setSearchStage((current) =>
+        current < SEARCH_STAGES.length - 1 ? current + 1 : current,
+      )
+    }, 20000)
+    return () => window.clearInterval(timer)
+  }, [searching])
+
+  function update(field: keyof GoalForm, value: string) {
+    setForm((current) => ({ ...current, [field]: value }))
   }
 
-  function resetCriteria() {
-    setCriteria(EMPTY_CRITERIA)
-    setSearchError(null)
-  }
-
-  async function handleSearch(event: FormEvent) {
+  async function handleParse(event: FormEvent) {
     event.preventDefault()
-    if (searching) return
+    if (parsing) return
 
-    const payload = Object.fromEntries(
-      Object.entries(criteria).map(([key, value]) => [key, value.trim() || undefined]),
-    )
-    if (Object.values(payload).every((value) => value === undefined)) {
-      setSearchError('At least one criterion required.')
+    const goal = form.goal.trim()
+    if (goal.length < 3) {
+      setSearchError('Describe what you are looking for first.')
       return
     }
 
+    setParsing(true)
+    setSearchError(null)
+    setResult(null)
+    try {
+      const response = await api<ParseDiscoveryResponse>(
+        '/company-discovery/parse',
+        {
+          method: 'POST',
+          body: {
+            goal,
+            objective_hint: activeChip ?? undefined,
+            region: form.region.trim() || undefined,
+            company_size: form.company_size.trim() || undefined,
+          },
+        },
+      )
+      setObjective(response.objective)
+      setGate({ supported: response.supported, message: response.message })
+      setStep('confirm')
+    } catch (error) {
+      setSearchError(
+        error instanceof Error ? error.message : 'Could not interpret the goal.',
+      )
+    } finally {
+      setParsing(false)
+    }
+  }
+
+  async function handleConfirmedRun() {
+    if (searching || !objective) return
+
     setSearching(true)
     setSearchError(null)
-    setHandoffError(null)
-    setResult(null)
     try {
       const response = await api<DiscoveryResponse>('/company-discovery', {
         method: 'POST',
-        body: payload,
+        body: {
+          goal: form.goal.trim(),
+          objective,
+          region: form.region.trim() || undefined,
+          company_size: form.company_size.trim() || undefined,
+        },
       })
       setResult(response)
     } catch (error) {
@@ -96,7 +168,13 @@ export default function DiscoveryPage() {
       })
       const request = await api<{ id: string }>(
         `/companies/${company.id}/research-requests`,
-        { method: 'POST' },
+        {
+          method: 'POST',
+          body: {
+            goal: form.goal.trim() || undefined,
+            objective: objective ?? undefined,
+          },
+        },
       )
       navigate(`/research/${request.id}`)
     } catch (error) {
@@ -108,7 +186,7 @@ export default function DiscoveryPage() {
   const inputClass =
     'h-9 w-full bg-surface-container-low text-on-surface px-space-sm text-body-md rounded ' +
     'outline-none transition-colors placeholder:text-outline-variant ' +
-    'focus:bg-surface-container-lowest focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-secondary pr-8'
+    'focus:bg-surface-container-lowest focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-secondary'
 
   return (
     <main className="mx-auto max-w-7xl px-4 py-8 sm:px-6">
@@ -120,175 +198,246 @@ export default function DiscoveryPage() {
             </span>
             <span className="text-label-sm text-outline-variant">&bull;</span>
             <span className="text-label-sm text-on-surface-variant">
-              Evidence-backed shortlisting
+              Intent-driven shortlisting
             </span>
           </div>
           <h1 className="font-display text-headline-xl font-semibold tracking-tight text-on-surface">
-            Company Discovery
+            Find the companies worth pursuing
           </h1>
           <p className="max-w-2xl text-body-md text-on-surface-variant">
-            Surface prospect accounts matching your territory criteria. Candidates
-            are not saved until research is initiated.
+            Tell SalesLens what you are trying to sell and who you are looking
+            for. It discovers potential companies, verifies them against your
+            goal, and ranks the strongest opportunities. Candidates are not
+            saved until research is initiated.
           </p>
         </div>
       </div>
 
-      <section className="mb-8 rounded-card bg-surface-container-lowest p-space-lg shadow-md">
-        <div className="mb-4 flex items-center justify-between">
-          <div className="flex items-center gap-2">
-            <SlidersIcon />
-            <h2 className="font-display text-headline-sm font-semibold text-on-surface">
-              Ideal Customer Profile (ICP) Parameters
-            </h2>
-          </div>
-          <button
-            type="button"
-            onClick={resetCriteria}
-            className="flex items-center gap-0.5 text-label-md text-on-surface-variant transition-colors hover:text-on-surface focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-secondary"
-          >
-            <RotateCcw size={16} />
-            Reset query
-          </button>
-        </div>
-
-        <form className="space-y-4" onSubmit={handleSearch}>
-          <div className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-4">
+      {step === 'form' && (
+        <section className="mb-8 rounded-card bg-surface-container-lowest p-space-lg shadow-md">
+          <form className="space-y-4" onSubmit={handleParse}>
             <div className="space-y-1.5">
               <label
-                htmlFor="filter-industry"
+                htmlFor="discovery-goal"
                 className="block text-label-sm font-medium uppercase tracking-wide text-on-surface-variant"
               >
-                Industry &amp; Sector
+                What are you looking for?
               </label>
-              <div className="relative">
-                <input
-                  id="filter-industry"
-                  placeholder="e.g. Fintech, healthcare IT"
-                  value={criteria.industry}
-                  onChange={(event) => update('industry', event.target.value)}
-                  className={inputClass}
-                />
-                <Building2
-                  size={18}
-                  className="pointer-events-none absolute right-2.5 top-2.5 text-outline"
-                />
-              </div>
+              <textarea
+                id="discovery-goal"
+                rows={3}
+                placeholder="e.g. I'm a freelancer looking for beauty companies in Pakistan I can pitch website development to."
+                value={form.goal}
+                onChange={(event) => update('goal', event.target.value)}
+                className={
+                  inputClass +
+                  ' h-auto min-h-20 resize-y py-2 leading-relaxed'
+                }
+              />
             </div>
-            <div className="space-y-1.5">
-              <label
-                htmlFor="filter-region"
-                className="block text-label-sm font-medium uppercase tracking-wide text-on-surface-variant"
-              >
-                Geographic Footprint
-              </label>
-              <div className="relative">
+
+            <div className="flex flex-wrap items-center gap-2">
+              {OBJECTIVE_CHIPS.map((chip) => {
+                const active = activeChip === chip.value
+                return (
+                  <button
+                    key={chip.value}
+                    type="button"
+                    aria-pressed={active}
+                    onClick={() =>
+                      setActiveChip(active ? null : chip.value)
+                    }
+                    className={
+                      'rounded-full border px-3 py-1 text-label-md transition-colors focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-secondary ' +
+                      (active
+                        ? 'border-primary bg-primary text-on-primary'
+                        : 'border-line bg-surface-container-lowest text-on-surface-variant hover:border-outline hover:text-on-surface')
+                    }
+                  >
+                    {chip.label}
+                  </button>
+                )
+              })}
+              <span className="text-label-sm text-outline">
+                optional hint &mdash; your text always wins
+              </span>
+            </div>
+
+            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+              <div className="space-y-1.5">
+                <label
+                  htmlFor="discovery-region"
+                  className="block text-label-sm font-medium uppercase tracking-wide text-on-surface-variant"
+                >
+                  Where (optional)
+                </label>
                 <input
-                  id="filter-region"
-                  placeholder="e.g. EMEA, US-East, DACH"
-                  value={criteria.region}
+                  id="discovery-region"
+                  placeholder="e.g. Pakistan, UAE, US-East"
+                  value={form.region}
                   onChange={(event) => update('region', event.target.value)}
                   className={inputClass}
                 />
-                <Globe
-                  size={18}
-                  className="pointer-events-none absolute right-2.5 top-2.5 text-outline"
-                />
               </div>
-            </div>
-            <div className="space-y-1.5">
-              <label
-                htmlFor="filter-size"
-                className="block text-label-sm font-medium uppercase tracking-wide text-on-surface-variant"
-              >
-                Headcount Band
-              </label>
-              <div className="relative">
+              <div className="space-y-1.5">
+                <label
+                  htmlFor="discovery-size"
+                  className="block text-label-sm font-medium uppercase tracking-wide text-on-surface-variant"
+                >
+                  Company size (optional)
+                </label>
                 <input
-                  id="filter-size"
-                  placeholder="e.g. 50-250, 250-1000"
-                  value={criteria.company_size}
+                  id="discovery-size"
+                  placeholder="e.g. 50-250, startups"
+                  value={form.company_size}
                   onChange={(event) => update('company_size', event.target.value)}
                   className={inputClass}
                 />
-                <Users
-                  size={18}
-                  className="pointer-events-none absolute right-2.5 top-2.5 text-outline"
-                />
               </div>
             </div>
-            <div className="space-y-1.5">
-              <label
-                htmlFor="filter-keywords"
-                className="block text-label-sm font-medium uppercase tracking-wide text-on-surface-variant"
-              >
-                Intent &amp; Infrastructure Triggers
-              </label>
-              <div className="relative">
-                <input
-                  id="filter-keywords"
-                  placeholder="e.g. SOC2, Series B"
-                  value={criteria.keywords}
-                  onChange={(event) => update('keywords', event.target.value)}
-                  className={inputClass}
-                />
-                <Tag
-                  size={18}
-                  className="pointer-events-none absolute right-2.5 top-2.5 text-outline"
-                />
+
+            {searchError && (
+              <div className="flex items-start gap-2 rounded-lg bg-error-container/40 p-3">
+                <CircleAlert size={16} className="mt-0.5 shrink-0 text-error" />
+                <p className="text-body-sm text-on-surface">{searchError}</p>
               </div>
+            )}
+
+            <div className="flex flex-col justify-between gap-2 pt-1 sm:flex-row sm:items-center">
+              <div className="flex items-center gap-1 text-on-surface-variant">
+                <Info size={16} className="text-secondary" />
+                <span className="text-label-sm">
+                  We show what we understood before running anything.
+                </span>
+              </div>
+              <Button type="submit" disabled={parsing} className="h-10 px-space-lg">
+                {parsing ? (
+                  <>
+                    <Loader2 size={18} className="animate-spin" />
+                    Interpreting goal...
+                  </>
+                ) : (
+                  <>
+                    <FileSearch size={18} />
+                    Continue
+                  </>
+                )}
+              </Button>
             </div>
+          </form>
+        </section>
+      )}
+
+      {step === 'confirm' && objective && (
+        <section className="mb-8 rounded-card border border-line-soft bg-surface-container-lowest p-space-lg shadow-md">
+          <div className="flex items-center gap-2">
+            <Sparkles size={18} className="text-secondary" />
+            <span className="label-caps text-ink-faint">
+              Here&apos;s what we&apos;ll look for
+            </span>
           </div>
 
+          <p className="mt-3 text-body-lg font-medium text-on-surface">
+            {GOAL_TYPE_LABELS[objective.goal_type] ?? 'Custom goal'}
+            {objective.target_sectors.length > 0 && (
+              <span className="text-on-surface-variant">
+                {' '}
+                &middot; {joinItems(objective.target_sectors)}
+              </span>
+            )}
+            {objective.target_geographies.length > 0 && (
+              <span className="text-on-surface-variant">
+                {' '}
+                &middot; {joinItems(objective.target_geographies)}
+              </span>
+            )}
+          </p>
+
+          {objective.offering && (
+            <p className="mt-1 text-body-md text-on-surface-variant">
+              Offering: {objective.offering}
+            </p>
+          )}
+
+          {(objective.triggers.length > 0 ||
+            objective.signals_to_look_for.length > 0) && (
+            <div className="mt-3 flex flex-wrap gap-1.5">
+              {[...objective.triggers, ...objective.signals_to_look_for]
+                .slice(0, 8)
+                .map((signal) => (
+                  <span
+                    key={signal}
+                    className="rounded-control bg-surface-container px-2 py-0.5 text-label-sm text-on-surface-variant"
+                  >
+                    {signal}
+                  </span>
+                ))}
+            </div>
+          )}
+
+          <div className="mt-4 border-t border-line-soft pt-3">
+            <p className="label-caps text-ink-faint">We&apos;ll search</p>
+            <ul className="mt-1.5 space-y-1">
+              {objective.search_queries.map((query) => (
+                <li
+                  key={query}
+                  className="flex items-start gap-1.5 text-body-sm text-on-surface-variant"
+                >
+                  <Search size={13} className="mt-1 shrink-0 text-outline" />
+                  <span>{query}</span>
+                </li>
+              ))}
+            </ul>
+          </div>
+
+          {gate && !gate.supported && gate.message && (
+            <div className="mt-4 rounded-card border border-warn-bg bg-warn-bg p-4">
+              <p className="text-label-sm font-semibold uppercase tracking-wide text-warn-ink">
+                Not supported yet
+              </p>
+              <p className="mt-1 text-body-sm text-on-surface">{gate.message}</p>
+            </div>
+          )}
+
           {searchError && (
-            <div className="flex items-start gap-2 rounded-lg bg-error-container/40 p-3">
+            <div className="mt-4 flex items-start gap-2 rounded-lg bg-error-container/40 p-3">
               <CircleAlert size={16} className="mt-0.5 shrink-0 text-error" />
               <p className="text-body-sm text-on-surface">{searchError}</p>
             </div>
           )}
 
-          <div className="flex flex-col justify-between gap-2 pt-1 sm:flex-row sm:items-center">
-            <div className="flex items-center gap-1 text-on-surface-variant">
-              <Info size={16} className="text-secondary" />
-              <span className="text-label-sm">
-                At least one criterion required. Searches run against live web evidence.
-              </span>
-            </div>
-            <Button type="submit" disabled={searching} className="h-10 px-space-lg">
-              {searching ? (
-                <>
-                  <Loader2 size={18} className="animate-spin" />
-                  Evaluating signals...
-                </>
-              ) : (
-                <>
-                  <FileSearch size={18} />
-                  Find companies
-                </>
-              )}
-            </Button>
+          <div className="mt-4 flex flex-col gap-2 sm:flex-row sm:items-center">
+            {(!gate || gate.supported) && (
+              <Button
+                type="button"
+                onClick={handleConfirmedRun}
+                disabled={searching}
+                className="h-10 px-space-lg"
+              >
+                {searching ? (
+                  <>
+                    <Loader2 size={18} className="animate-spin" />
+                    Finding companies...
+                  </>
+                ) : (
+                  <>
+                    <FileSearch size={18} />
+                    Looks right &mdash; find companies
+                  </>
+                )}
+              </Button>
+            )}
+            <button
+              type="button"
+              onClick={() => setStep('form')}
+              className="inline-flex items-center justify-center gap-1.5 text-label-md font-medium text-secondary transition-colors hover:text-on-surface focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-secondary"
+            >
+              <Pencil size={14} />
+              Edit
+            </button>
           </div>
-        </form>
-      </section>
-
-      <div className="mb-6 flex items-center justify-between gap-4 rounded-lg bg-surface-container-low p-4 shadow-sm">
-        <div className="flex items-center gap-3">
-          <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-canvas text-on-surface">
-            <FileSearch size={18} />
-          </div>
-          <div>
-            <p className="font-display text-headline-sm font-semibold text-on-surface">
-              Discovery scratchpad
-            </p>
-            <p className="text-body-sm text-on-surface-variant">
-              Candidates are not saved to your workspace until you select{' '}
-              <strong className="font-semibold text-on-surface">
-                &quot;Research this company&quot;
-              </strong>
-              .
-            </p>
-          </div>
-        </div>
-      </div>
+        </section>
+      )}
 
       {handoffError && (
         <div className="mb-6 flex items-start gap-2 rounded-lg bg-error-container/40 p-3">
@@ -299,6 +448,12 @@ export default function DiscoveryPage() {
 
       {searching && (
         <div className="space-y-4">
+          <div className="flex items-center gap-2 rounded-card border border-line-soft bg-surface-container-lowest p-4 shadow-sm">
+            <Loader2 size={18} className="shrink-0 animate-spin text-secondary" />
+            <p className="text-body-md text-on-surface">
+              {SEARCH_STAGES[searchStage]}
+            </p>
+          </div>
           {[1, 2, 3].map((index) => (
             <div
               key={index}
@@ -311,22 +466,33 @@ export default function DiscoveryPage() {
       {!searching && result && result.candidates.length === 0 && (
         <div className="rounded-card bg-surface-container-lowest p-8 text-center shadow-md">
           <p className="text-body-md text-on-surface-variant">
-            No companies matched your criteria. Try broader terms.
+            No companies matched your goal. Try broader terms or edit the
+            interpretation.
           </p>
+          <button
+            type="button"
+            onClick={() => setStep('form')}
+            className="mt-3 text-label-md font-medium text-secondary transition-colors hover:text-on-surface focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-secondary"
+          >
+            Edit goal
+          </button>
         </div>
       )}
 
       {!searching && result && result.candidates.length > 0 && (
         <div className="mb-12 space-y-4">
-          <div className="flex items-center justify-between">
+          <div className="flex flex-col gap-1">
             <div className="flex items-center gap-2">
               <span className="font-display text-headline-md font-semibold text-on-surface">
-                Matched candidates
+                Potential prospects
               </span>
               <span className="rounded-full bg-surface-container-high px-2 py-0.5 text-label-sm font-semibold text-on-surface">
                 {result.candidates.length} found
               </span>
             </div>
+            <p className="text-body-sm text-on-surface-variant">
+              Ranked by how closely each company fits your goal.
+            </p>
           </div>
 
           <div className="space-y-4">
@@ -368,21 +534,53 @@ export default function DiscoveryPage() {
                     </div>
 
                     <div className="space-y-1.5 rounded-lg bg-surface-container-low p-4">
-                      <div className="flex items-center gap-1 text-secondary">
-                        <Sparkles size={18} />
-                        <span className="text-label-sm font-semibold uppercase tracking-wider">
-                          AI Signal Rationale
-                        </span>
-                      </div>
-                      <p className="font-narrative text-body-md leading-relaxed text-on-surface">
-                        {candidate.match_explanation}
-                      </p>
+                      {candidate.fit_score !== null && candidate.fit_score !== undefined ? (
+                        <>
+                          <div className="flex items-baseline gap-2">
+                            <span className="text-body-lg font-semibold text-on-surface">
+                              Fit {candidate.fit_score}
+                              <span className="text-body-sm font-medium text-outline">
+                                /100
+                              </span>
+                            </span>
+                            {candidate.fit_tier && (
+                              <span
+                                className={
+                                  'text-label-sm font-medium uppercase tracking-wide ' +
+                                  (candidate.fit_tier === 'high'
+                                    ? 'text-secondary'
+                                    : candidate.fit_tier === 'medium'
+                                      ? 'text-on-surface-variant'
+                                      : 'text-outline')
+                                }
+                              >
+                                {candidate.fit_tier} fit
+                              </span>
+                            )}
+                          </div>
+                          <p className="text-body-md leading-relaxed text-on-surface">
+                            {candidate.fit_reason || candidate.match_explanation}
+                          </p>
+                        </>
+                      ) : (
+                        <>
+                          <div className="flex items-center gap-1 text-secondary">
+                            <Sparkles size={18} />
+                            <span className="text-label-sm font-semibold uppercase tracking-wider">
+                              Why this is a good prospect
+                            </span>
+                          </div>
+                          <p className="text-body-md leading-relaxed text-on-surface">
+                            {candidate.match_explanation}
+                          </p>
+                        </>
+                      )}
                     </div>
 
                     {candidate.supporting_source_urls.length > 0 && (
                       <div className="space-y-1.5">
                         <span className="block text-label-sm font-medium uppercase tracking-wide text-outline">
-                          Verified Ground Truth Citations
+                          Evidence
                         </span>
                         <div className="flex flex-wrap items-center gap-2">
                           {candidate.supporting_source_urls.map((url) => (
@@ -438,8 +636,4 @@ export default function DiscoveryPage() {
       )}
     </main>
   )
-}
-
-function SlidersIcon() {
-  return <SlidersHorizontal size={20} className="text-on-surface" />
 }

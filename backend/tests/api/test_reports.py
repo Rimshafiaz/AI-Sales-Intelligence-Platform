@@ -26,8 +26,8 @@ def no_background_runner(monkeypatch):
 def mocked_crew(monkeypatch):
     calls = []
 
-    def fake_crew(company_name, evidence_context, guidance=None):
-        calls.append({"company": company_name, "guidance": guidance})
+    def fake_crew(company_name, evidence_context, guidance=None, objective_context=None):
+        calls.append({"company": company_name, "guidance": guidance, "objective_context": objective_context})
         return _fake_crew_result()
 
     monkeypatch.setattr(

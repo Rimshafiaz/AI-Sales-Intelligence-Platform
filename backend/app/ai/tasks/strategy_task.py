@@ -22,6 +22,7 @@ def create_strategy_task(
     news_output: NewsAgentOutput,
     pain_point_output: PainPointAgentOutput,
     guidance: str | None = None,
+    objective_context: str | None = None,
 ) -> Task:
     clean_company_name = company_name.strip()
     if not clean_company_name:
@@ -33,6 +34,9 @@ def create_strategy_task(
     else:
         guidance_text = "No additional guidance."
 
+    clean_objective = objective_context.strip() if objective_context else ""
+    objective_text = clean_objective or "No discovery objective provided."
+
     config = render_task_config(
         "strategy_task",
         company_name=clean_company_name,
@@ -42,6 +46,7 @@ def create_strategy_task(
         news_output=news_output.model_dump_json(indent=2),
         pain_point_output=pain_point_output.model_dump_json(indent=2),
         guidance=guidance_text,
+        objective_context=objective_text,
     )
 
     return Task(

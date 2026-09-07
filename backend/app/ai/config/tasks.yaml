@@ -66,7 +66,12 @@ pain_point_task:
     amount of supplied support. Do not create a pain point from a generic company
     description alone; require a concrete change or pressure signal such as stated
     expansion, funding, hiring, or technical scale/complexity. Return an empty
-    pain_points list when there is no useful, evidence-backed hypothesis.
+    pain_points list when there is no useful, evidence-backed hypothesis. When
+    a discovery objective is provided, prioritize pain points relevant to it;
+    when none is provided, stay general.
+
+    Discovery objective:
+    {objective_context}
 
     Company research output:
     {research_output}
@@ -106,6 +111,14 @@ strategy_task:
 
     Salesperson guidance:
     {guidance}
+
+    The discovery objective, when provided, is the source of truth for scoring
+    and positioning: score the opportunity relative to it, shape the contact
+    recommendation and sales angle around it, and write the outreach drafts in
+    the seller's role and voice.
+
+    Discovery objective:
+    {objective_context}
 
     Opportunity scoring rubric:
     {opportunity_rubric}
@@ -171,7 +184,9 @@ company_discovery_task:
   description: >
     A salesperson is searching for companies worth researching. Match the
     supplied evidence against the supplied criteria and shortlist the companies
-    the evidence genuinely supports. Use only the supplied evidence; do not add
+    the evidence genuinely supports. The discovery objective, when provided,
+    is the source of truth for what makes a company a good match; the
+    criteria list contains raw hints only. Use only the supplied evidence; do not add
     companies from your own knowledge. For each selected candidate provide the
     company name, its official website URL exactly as shown in the evidence when
     the evidence identifies it, the industry when the evidence states it,
@@ -180,17 +195,74 @@ company_discovery_task:
     source URLs exactly from the evidence; never construct or modify URLs. Set
     industry to null and omit website when the evidence does not state them.
     Never describe a candidate as a verified customer, lead, or confirmed fit
-    beyond the evidence. Select at most ten candidates and return an empty
+    beyond the evidence. Shortlist as many candidates as the evidence genuinely supports, up to fifteen, and return an empty
     candidates list when the evidence supports no matches.
 
     Discovery criteria:
     {criteria_context}
 
+    Discovery objective:
+    {objective_context}
+
     Evidence:
     {evidence_context}
   expected_output: >
-    Data matching CompanyDiscoveryTaskOutput: a candidates list with at most ten
+    Data matching CompanyDiscoveryTaskOutput: a candidates list with at most fifteen
     items. Each item has company_name, website as an exact URL string or null,
     industry or null when unknown, short_description, match_explanation of one or
     two sentences naming the satisfied criteria, and supporting_source_urls
     copied exactly from the evidence.
+
+goal_parser_task:
+  description: >
+    A salesperson describes what they want to discover in free text. Turn the
+    request into a structured discovery objective. Interpret the goal_type,
+    the seller's role, what they are offering or seeking, the target sectors,
+    geographies, company size and stage, the signals that make a company a
+    good fit, the decision makers worth reaching, and what the user wants to
+    do with the results (desired_outcome). Generate 3 to 4 concrete,
+    search-engine-friendly web queries that would find pages naming or listing
+    such companies: sector and geography plus signal nouns, no instructions,
+    no quotes. The supplied hints are defaults; the request text overrides
+    them. If the request is vague, choose the closest reasonable
+    interpretation. fit_rubric must describe, in two or three sentences, what
+    makes a company a strong fit for this objective.
+
+    User request:
+    {goal_context}
+
+    Hints:
+    {hint_context}
+  expected_output: >
+    Data matching DiscoveryObjective: goal_type chosen from service_pitch,
+    client_prospecting, investment, hiring, market_research, other;
+    seller_role, offering, company_size and stage as short strings or null;
+    short phrases in target_sectors, target_geographies, triggers,
+    signals_to_look_for and decision_makers; 2 to 5 search_queries; a two to
+    three sentence fit_rubric; and a one sentence desired_outcome.
+
+qualification_task:
+  description: >
+    You are qualifying shortlisted companies against a discovery objective.
+    For every candidate decide how well it fits what the user is trying to
+    accomplish, using the objective (especially the fit rubric and the signals
+    to look for) as the source of truth. Verification results are included:
+    an official website found (or none found) is evidence and may be decisive
+    for goals like pitching web services. Score every candidate from 0 to 100
+    for fit, set fit_tier to high for 70 or above, medium for 40 to 69, and
+    low below 40. fit_reason must be one or two sentences citing the concrete
+    evidence for the score (for example: no official website found while
+    running an active salon; or an established modern site already covers the
+    offering). Rank the output by fit_score, best first. Return every
+    candidate you were given, matched by company_name.
+
+    Discovery objective:
+    {objective_context}
+
+    Candidates and verification results:
+    {candidates_context}
+  expected_output: >
+    Data matching QualificationTaskOutput: one entry per input candidate,
+    each with company_name copied exactly, website copied from verification
+    or null, fit_score 0 to 100, fit_tier high, medium or low, and a one to
+    two sentence evidence-citing fit_reason. Sorted by fit_score, best first.

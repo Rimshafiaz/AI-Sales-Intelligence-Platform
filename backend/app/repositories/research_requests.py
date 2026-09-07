@@ -12,11 +12,13 @@ def create_research_request(
     db: Session,
     company_id: UUID,
     user_id: UUID,
+    objective: dict | None = None,
 ) -> ResearchRequest:
     research_request = ResearchRequest(
         company_id=company_id,
         user_id=user_id,
         status=ResearchStatus.PENDING,
+        objective=objective,
     )
     db.add(research_request)
     db.commit()

@@ -18,6 +18,9 @@ export default function ResearchPage() {
   const navigate = useNavigate()
   const [name, setName] = useState('')
   const [website, setWebsite] = useState('')
+  const [offering, setOffering] = useState('')
+  const [goal, setGoal] = useState('')
+  const [region, setRegion] = useState('')
   const [companies, setCompanies] = useState<Company[] | null>(null)
   const [companiesError, setCompaniesError] = useState<string | null>(null)
   const [submitting, setSubmitting] = useState(false)
@@ -32,10 +35,25 @@ export default function ResearchPage() {
       )
   }, [])
 
+  function scopeFields() {
+    const cleanOffering = offering.trim()
+    const cleanGoal = goal.trim()
+    const cleanRegion = region.trim()
+    return { cleanOffering, cleanGoal, cleanRegion }
+  }
+
   async function startRequest(companyId: string) {
+    const { cleanOffering, cleanGoal, cleanRegion } = scopeFields()
     const request = await api<{ id: string }>(
       `/companies/${companyId}/research-requests`,
-      { method: 'POST' },
+      {
+        method: 'POST',
+        body: {
+          goal: cleanGoal,
+          offering: cleanOffering,
+          ...(cleanRegion ? { region: cleanRegion } : {}),
+        },
+      },
     )
     navigate(`/research/${request.id}`)
   }
@@ -46,8 +64,17 @@ export default function ResearchPage() {
 
     const cleanName = name.trim()
     const cleanWebsite = website.trim()
+    const { cleanOffering, cleanGoal } = scopeFields()
     if (!cleanName) {
       setError('Company name is required.')
+      return
+    }
+    if (!cleanOffering) {
+      setError('Say what you are offering so the research can be scoped.')
+      return
+    }
+    if (!cleanGoal) {
+      setError('State the research goal, e.g. decide whether this business is worth pitching.')
       return
     }
     if (cleanWebsite && !isValidWebsite(cleanWebsite)) {
@@ -71,6 +98,11 @@ export default function ResearchPage() {
 
   async function handleQuickPick(company: Company) {
     if (busyCompanyId || submitting) return
+    const { cleanOffering, cleanGoal } = scopeFields()
+    if (!cleanOffering || !cleanGoal) {
+      setError('Fill in what you offer and the research goal above first.')
+      return
+    }
     setBusyCompanyId(company.id)
     setError(null)
     try {
@@ -88,8 +120,9 @@ export default function ResearchPage() {
         Research a company
       </h1>
       <p className="mt-2 max-w-2xl text-sm text-ink-soft">
-        Start from a company name. The system resolves the official website,
-        collects web evidence, and prepares it for report generation.
+        Name a business, say what you are offering and what you want to decide.
+        The system resolves its identity, collects evidence, and tells you
+        whether it is worth pursuing for your offer.
       </p>
 
       <form
@@ -100,16 +133,37 @@ export default function ResearchPage() {
           <TextField
             label="Company name"
             hint="Required"
-            placeholder="e.g. Stripe"
+            placeholder="e.g. Aleezay Hair Beauty Care Salon"
             value={name}
             onChange={(event) => setName(event.target.value)}
           />
           <TextField
             label="Website"
             hint="Optional"
-            placeholder="https://stripe.com"
+            placeholder="https://example.com"
             value={website}
             onChange={(event) => setWebsite(event.target.value)}
+          />
+          <TextField
+            label="What are you offering?"
+            hint="Required"
+            placeholder="e.g. Website design and online booking setup"
+            value={offering}
+            onChange={(event) => setOffering(event.target.value)}
+          />
+          <TextField
+            label="Research goal"
+            hint="Required"
+            placeholder="e.g. Decide whether this business is worth pitching"
+            value={goal}
+            onChange={(event) => setGoal(event.target.value)}
+          />
+          <TextField
+            label="City or region"
+            hint="Optional, recommended"
+            placeholder="e.g. Lahore"
+            value={region}
+            onChange={(event) => setRegion(event.target.value)}
           />
         </div>
         {error && (

@@ -58,9 +58,11 @@ def _run_phase_2(
     research: ResearchAgentOutput,
     technology: TechnologyAgentOutput,
     news: NewsAgentOutput,
+    objective_context: str | None,
 ) -> PainPointAgentOutput:
     pain_point_task = create_pain_point_task(
         company_name, research, technology, news,
+        objective_context=objective_context,
     )
     return _run_single_agent_crew(pain_point_task, "Phase 2 (Pain Point)")
 
@@ -72,10 +74,12 @@ def _run_phase_3(
     news: NewsAgentOutput,
     pain_point: PainPointAgentOutput,
     guidance: str | None,
+    objective_context: str | None,
 ) -> StrategyAgentOutput:
     strategy_task = create_strategy_task(
         company_name, research, technology, news, pain_point,
         guidance=guidance,
+        objective_context=objective_context,
     )
     return _run_single_agent_crew(strategy_task, "Phase 3 (Strategy)")
 
@@ -128,6 +132,7 @@ def run_sales_intelligence_crew(
     company_name: str,
     evidence_context: str,
     guidance: str | None = None,
+    objective_context: str | None = None,
 ) -> SalesIntelligenceReport:
     clean_company_name = company_name.strip()
     if not clean_company_name:
@@ -138,6 +143,9 @@ def run_sales_intelligence_crew(
         raise ValueError("Evidence context cannot be blank.")
 
     clean_guidance = guidance.strip() if guidance else None
+    clean_objective_context = (
+        objective_context.strip() if objective_context else None
+    )
 
     research, technology, news = _run_phase_1(
         clean_company_name, clean_evidence,
@@ -145,11 +153,13 @@ def run_sales_intelligence_crew(
 
     pain_point = _run_phase_2(
         clean_company_name, research, technology, news,
+        clean_objective_context,
     )
 
     strategy = _run_phase_3(
         clean_company_name, research, technology, news, pain_point,
         clean_guidance,
+        clean_objective_context,
     )
 
     reviewer = _run_phase_4(

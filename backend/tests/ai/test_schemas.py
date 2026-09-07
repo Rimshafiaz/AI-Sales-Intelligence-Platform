@@ -9,8 +9,13 @@ from app.models.research_source import ResearchSource
 from app.schemas.company_discovery import (
     CompanyDiscoveryRequest,
     CompanyDiscoveryTaskOutput,
+    DiscoveryObjective,
     DiscoveredCompanyCandidateOutput,
     company_discovery_response_from_task_output,
+)
+from app.schemas.research_request import (
+    KnownProspectResearchRequest,
+    ResearchRequestStartRequest,
 )
 from app.schemas.sales_intelligence_report import SalesIntelligenceReport
 
@@ -96,13 +101,67 @@ class TestConfigLoader:
 
 
 class TestDiscoverySchemas:
-    def test_at_least_one_criterion_required(self):
+    def _objective(self, goal_type: str = "service_pitch") -> DiscoveryObjective:
+        return DiscoveryObjective(
+            goal_type=goal_type,
+            offering="Website redesign services",
+            target_sectors=["Dental clinics"],
+            target_geographies=["Toronto"],
+            search_queries=["dental clinics Toronto", "Toronto dentists"],
+            fit_rubric="Look for local clinics with measurable website gaps.",
+            desired_outcome="Decide which clinics are worth pitching.",
+        )
+
+    def test_local_discovery_requires_all_core_fields(self):
         with pytest.raises(ValidationError):
             CompanyDiscoveryRequest()
 
-    def test_valid_criteria_accepted(self):
-        criteria = CompanyDiscoveryRequest(industry="  fintech  ")
-        assert criteria.industry == "fintech"
+    def test_valid_local_discovery_input_is_normalized(self):
+        criteria = CompanyDiscoveryRequest(
+            offering="  Website redesign services  ",
+            desired_outcome="  Decide which businesses are worth pitching.  ",
+            business_category="  Dental clinics  ",
+            location="  Toronto  ",
+        )
+        assert criteria.offering == "Website redesign services"
+        assert criteria.industry == "Dental clinics"
+        assert criteria.region == "Toronto"
+
+    def test_supported_objective_can_supply_required_discovery_fields(self):
+        criteria = CompanyDiscoveryRequest(objective=self._objective())
+        assert criteria.goal_type == "service_pitch"
+        assert criteria.offering == "Website redesign services"
+        assert criteria.business_category == "Dental clinics"
+        assert criteria.location == "Toronto"
+
+    def test_unsupported_discovery_objective_is_rejected(self):
+        with pytest.raises(ValidationError, match="not supported yet"):
+            CompanyDiscoveryRequest(objective=self._objective("hiring"))
+
+    def test_known_prospect_requires_scope_and_validates_website(self):
+        request = KnownProspectResearchRequest(
+            business_name="  Aleezay Hair Beauty Care Salon  ",
+            offering="Website design and online booking setup",
+            desired_outcome="Decide whether this salon is worth pitching.",
+            location="Lahore",
+            website="https://aleezay.example",
+        )
+        assert request.business_name == "Aleezay Hair Beauty Care Salon"
+
+        with pytest.raises(ValidationError):
+            KnownProspectResearchRequest(
+                business_name="Aleezay Hair Beauty Care Salon",
+                offering="",
+                desired_outcome="Decide whether this salon is worth pitching.",
+            )
+
+    def test_research_start_rejects_unsupported_objective(self):
+        with pytest.raises(ValidationError, match="not supported yet"):
+            ResearchRequestStartRequest(
+                goal="Decide whether this business is worth pitching.",
+                offering="Website redesign services",
+                objective=self._objective("investment"),
+            )
 
     def test_invalid_candidate_dropped_valid_kept(self):
         output = CompanyDiscoveryTaskOutput(

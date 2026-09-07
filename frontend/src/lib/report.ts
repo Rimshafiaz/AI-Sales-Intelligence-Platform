@@ -79,9 +79,13 @@ export interface SourceItem {
   retrieved_at: string
 }
 
+import type { DiscoveryObjective } from './types'
+
 export interface ReportDetail {
   report: ReportSummary
   sources: SourceItem[]
+  goal?: string | null
+  objective?: DiscoveryObjective | null
 }
 
 export function buildCitationIndex(sources: SourceItem[]): Map<string, number> {

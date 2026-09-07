@@ -14,10 +14,14 @@ def create_pain_point_task(
     research_output: ResearchAgentOutput,
     technology_output: TechnologyAgentOutput,
     news_output: NewsAgentOutput,
+    objective_context: str | None = None,
 ) -> Task:
     clean_company_name = company_name.strip()
     if not clean_company_name:
         raise ValueError("Company name cannot be blank.")
+
+    clean_objective = objective_context.strip() if objective_context else ""
+    objective_text = clean_objective or "No discovery objective provided."
 
     config = render_task_config(
         "pain_point_task",
@@ -25,6 +29,7 @@ def create_pain_point_task(
         research_output=research_output.model_dump_json(indent=2),
         technology_output=technology_output.model_dump_json(indent=2),
         news_output=news_output.model_dump_json(indent=2),
+        objective_context=objective_text,
     )
 
     return Task(

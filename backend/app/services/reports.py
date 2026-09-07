@@ -2,6 +2,7 @@ import copy
 from datetime import date
 from uuid import UUID
 
+from pydantic import ValidationError
 from sqlalchemy.orm import Session
 
 from app.models.research_report import ReportReviewStatus, ResearchReport
@@ -13,7 +14,9 @@ from app.repositories.research_reports import (
     list_report_summaries_for_user,
     save_report_edits,
 )
+from app.repositories.research_requests import get_research_request_for_user
 from app.repositories.research_sources import list_research_sources_for_user
+from app.schemas.company_discovery import DiscoveryObjective
 from app.schemas.report_list import ReportListResponse, ReportSummary
 from app.schemas.research_report import (
     ReportDetailResponse,
@@ -47,11 +50,32 @@ def get_report_detail_for_user(
         limit=DETAIL_SOURCE_LIMIT,
     )
 
+    research_request = get_research_request_for_user(
+        db=db,
+        request_id=report.research_request_id,
+        user_id=current_user.id,
+    )
+    goal: str | None = None
+    objective: DiscoveryObjective | None = None
+    if research_request is not None and isinstance(
+        research_request.objective, dict
+    ):
+        raw_goal = research_request.objective.get("goal")
+        goal = raw_goal if isinstance(raw_goal, str) and raw_goal.strip() else None
+        try:
+            objective = DiscoveryObjective.model_validate(
+                research_request.objective
+            )
+        except ValidationError:
+            objective = None
+
     return ReportDetailResponse(
         report=ResearchReportResponse.model_validate(report),
         sources=[
             ResearchSourceResponse.model_validate(source) for source in sources
         ],
+        goal=goal,
+        objective=objective,
     )
 
 

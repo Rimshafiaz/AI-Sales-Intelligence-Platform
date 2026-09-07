@@ -4,7 +4,7 @@ from enum import Enum
 from typing import TYPE_CHECKING
 
 from sqlalchemy import DateTime, Enum as SAEnum, ForeignKey, String, func
-from sqlalchemy.dialects.postgresql import UUID
+from sqlalchemy.dialects.postgresql import JSONB, UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.db.base import Base
@@ -76,6 +76,10 @@ class ResearchRequest(Base):
     )
     error_message:Mapped[str | None] = mapped_column(
         String,
+        nullable=True,
+    )
+    objective:Mapped[dict | None] = mapped_column(
+        JSONB,
         nullable=True,
     )
     company:Mapped["Company"] = relationship(
