@@ -1,5 +1,6 @@
 from typing import Literal
 
+from pydantic import AliasChoices, Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -25,6 +26,10 @@ class Settings(BaseSettings):
     supabase_jwks_url: str
 
     tavily_api_key: str | None = None
+    open_places_api_key: str | None = Field(
+        default=None,
+        validation_alias=AliasChoices("OPEN_PLACES_API_KEY", "Open_Places_API_KEY"),
+    )
     groq_api_key: str | None = None
     gemini_api_key: str | None = None
     llm_provider: Literal["groq", "gemini"] = "groq"

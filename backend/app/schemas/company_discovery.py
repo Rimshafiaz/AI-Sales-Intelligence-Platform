@@ -1,3 +1,4 @@
+from datetime import datetime
 from typing import Literal, Self
 
 from pydantic import (
@@ -152,6 +153,10 @@ class CompanyDiscoveryRequest(BaseModel):
         max_length=100,
         validation_alias=AliasChoices("location", "region"),
     )
+    latitude: float | None = Field(default=None, ge=-90, le=90)
+    longitude: float | None = Field(default=None, ge=-180, le=180)
+    radius_miles: float = Field(default=15, gt=0, le=50)
+    max_results: int = Field(default=50, ge=1, le=100)
     company_size: str | None = Field(default=None, max_length=100)
     keywords: str | None = Field(default=None, max_length=255)
 
@@ -207,6 +212,11 @@ class CompanyDiscoveryRequest(BaseModel):
                 + "."
             )
 
+        if (self.latitude is None) != (self.longitude is None):
+            raise ValueError(
+                "Local discovery coordinates require both latitude and longitude."
+            )
+
         return self
 
     @property
@@ -224,10 +234,18 @@ class DiscoveredCompanyCandidate(BaseModel):
     industry: str | None = Field(default=None, max_length=100)
     short_description: str | None = Field(default=None, max_length=1_000)
     match_explanation: str = Field(min_length=1, max_length=1_000)
-    supporting_source_urls: list[HttpUrl] = Field(min_length=1, max_length=5)
+    supporting_source_urls: list[HttpUrl] = Field(default_factory=list, max_length=5)
     fit_score: int | None = Field(default=None, ge=0, le=100)
     fit_tier: Literal["high", "medium", "low"] | None = None
     fit_reason: str | None = Field(default=None, max_length=1_000)
+    source_provider: str | None = Field(default=None, max_length=100)
+    source_record_id: str | None = Field(default=None, max_length=255)
+    source_retrieved_at: datetime | None = None
+    source_data_release: str | None = Field(default=None, max_length=100)
+    formatted_address: str | None = Field(default=None, max_length=500)
+    business_status: str | None = Field(default=None, max_length=100)
+    phone_number: str | None = Field(default=None, max_length=100)
+    website_verification_state: Literal["listed_unverified"] | None = None
 
     @field_serializer("website")
     def serialize_website(self, value: HttpUrl | None) -> str | None:
@@ -242,6 +260,12 @@ class DiscoveredCompanyCandidate(BaseModel):
         "industry",
         "short_description",
         "match_explanation",
+        "source_provider",
+        "source_record_id",
+        "source_data_release",
+        "formatted_address",
+        "business_status",
+        "phone_number",
         mode="before",
     )
     @classmethod
@@ -253,7 +277,7 @@ class DiscoveredCompanyCandidate(BaseModel):
 
 
 class CompanyDiscoveryResponse(BaseModel):
-    candidates: list[DiscoveredCompanyCandidate] = Field(max_length=15)
+    candidates: list[DiscoveredCompanyCandidate] = Field(max_length=100)
 
 
 class DiscoveredCompanyCandidateOutput(BaseModel):

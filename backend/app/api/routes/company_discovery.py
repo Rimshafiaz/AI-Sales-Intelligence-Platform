@@ -1,8 +1,9 @@
 from fastapi import APIRouter, Depends, HTTPException, status
 
 from app.api.dependencies.current_user import get_current_user
-from app.integrations.search_provider import SearchProviderError
+from app.integrations.open_places import OpenPlacesProviderError
 from app.models.user import User
+from app.services.local_business_discovery import LocalBusinessDiscoveryError
 from app.schemas.company_discovery import (
     CompanyDiscoveryRequest,
     CompanyDiscoveryResponse,
@@ -72,7 +73,16 @@ def discover_companies_endpoint(
             )
     try:
         return discover_companies(criteria)
-    except (SearchProviderError, RuntimeError, ValueError) as error:
+    except LocalBusinessDiscoveryError as error:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
+            detail=str(error),
+        ) from error
+    except (
+        OpenPlacesProviderError,
+        RuntimeError,
+        ValueError,
+    ) as error:
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
             detail="Company discovery failed. Please try again.",

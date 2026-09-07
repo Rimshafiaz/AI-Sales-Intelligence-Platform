@@ -14,6 +14,7 @@ from app.ai.tasks.qualification_task import (
     run_qualification_task,
 )
 from app.core.config import settings
+from app.integrations.open_places import create_open_places_provider
 from app.integrations.search_provider import (
     CollectedSource,
     TavilySearchProvider,
@@ -25,10 +26,12 @@ from app.schemas.company_discovery import (
     CompanyDiscoveryRequest,
     CompanyDiscoveryResponse,
     DiscoveryObjective,
+    DiscoveredCompanyCandidate,
     ParseDiscoveryRequest,
     QualificationTaskOutput,
     company_discovery_response_from_task_output,
 )
+from app.services.local_business_discovery import discover_local_businesses
 
 
 def check_supported_objective(
@@ -329,6 +332,5 @@ def qualify_candidates(
 def discover_companies(
     criteria: CompanyDiscoveryRequest,
 ) -> CompanyDiscoveryResponse:
-    search_provider = create_tavily_search_provider(settings.tavily_api_key)
-    response = generate_discovery_candidates(criteria, search_provider)
-    return qualify_candidates(criteria.objective, response, search_provider)
+    provider = create_open_places_provider(settings.open_places_api_key)
+    return discover_local_businesses(criteria, provider)
