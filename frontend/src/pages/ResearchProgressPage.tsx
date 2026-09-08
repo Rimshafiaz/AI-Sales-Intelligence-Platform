@@ -59,6 +59,8 @@ export default function ResearchProgressPage() {
   const [sources, setSources] = useState<ResearchSource[] | null>(null)
   const [generatePhase, setGeneratePhase] = useState<'idle' | 'starting' | 'polling'>('idle')
   const [generateError, setGenerateError] = useState<string | null>(null)
+  const [evidencePhase, setEvidencePhase] = useState<'idle' | 'starting'>('idle')
+  const [evidenceError, setEvidenceError] = useState<string | null>(null)
   const loadRequest = useCallback(async () => {
     if (!requestId) return null
     try {
@@ -92,7 +94,7 @@ export default function ResearchProgressPage() {
 
   useEffect(() => {
     if (loadError) return
-    if (request?.objective?.mode === 'known_prospect') return
+    if (request?.objective?.mode === 'known_prospect' && request.status === 'pending') return
     if (request && (request.status === 'completed' || request.status === 'failed')) return
     const interval = setInterval(() => void loadRequest(), 3000)
     return () => clearInterval(interval)
@@ -110,6 +112,21 @@ export default function ResearchProgressPage() {
     } catch (e) {
       setGenerateError(e instanceof Error ? e.message : 'Could not start report generation.')
       setGeneratePhase('idle')
+    }
+  }
+
+  async function handleStartEvidenceReview() {
+    if (!request || evidencePhase !== 'idle') return
+    setEvidencePhase('starting')
+    setEvidenceError(null)
+    try {
+      await api<{ status: string }>(`/research-requests/${request.id}/evidence-gate`, {
+        method: 'POST',
+      })
+      setRequest({ ...request, status: 'running' })
+    } catch (e) {
+      setEvidenceError(e instanceof Error ? e.message : 'Could not start evidence review.')
+      setEvidencePhase('idle')
     }
   }
 
@@ -200,12 +217,20 @@ export default function ResearchProgressPage() {
             Identity verified
           </span>
           <h2 className="mt-4 font-display text-xl font-semibold text-ink">
-            Ready for evidence review
+            {request.status === 'pending'
+              ? 'Ready for evidence review'
+              : request.status === 'running'
+                ? 'Reviewing evidence'
+                : request.evidence_gate_state === 'ready_for_deeper_research'
+                  ? 'Evidence accepted'
+                  : 'Evidence needs review'}
           </h2>
           <p className="mt-2 max-w-2xl text-sm leading-relaxed text-ink-soft">
-            SalesLens saved the verified company and the research scope. The next
-            milestone decides whether enough evidence exists to begin deeper research;
-            no generic report has been started.
+            {request.status === 'pending'
+              ? 'SalesLens saved the verified company and research scope. Start a bounded evidence review when you are ready.'
+              : request.status === 'running'
+                ? 'SalesLens is collecting target-scoped public sources and excluding anything it cannot link to this business.'
+                : request.evidence_gate_reason}
           </p>
           {(goal || offering) && (
             <dl className="mt-5 grid gap-4 border-t border-line-soft pt-4 sm:grid-cols-2">
@@ -224,10 +249,28 @@ export default function ResearchProgressPage() {
             </dl>
           )}
           <div className="mt-5">
-            <Button variant="secondary" onClick={() => navigate('/research')}>
-              Research another company
-            </Button>
+            {request.status === 'pending' ? (
+              <Button onClick={handleStartEvidenceReview} disabled={evidencePhase !== 'idle'}>
+                {evidencePhase === 'starting' ? (
+                  <>
+                    <Loader2 size={15} className="animate-spin" />
+                    Starting review...
+                  </>
+                ) : (
+                  'Review evidence'
+                )}
+              </Button>
+            ) : (
+              <Button variant="secondary" onClick={() => navigate('/research')}>
+                Research another company
+              </Button>
+            )}
           </div>
+          {evidenceError && (
+            <div className="mt-3">
+              <Notice kind="error">{evidenceError}</Notice>
+            </div>
+          )}
         </section>
       </main>
     )
@@ -287,7 +330,16 @@ export default function ResearchProgressPage() {
         )}
       </section>
 
-      {completed && (
+      {completed && request.evidence_gate_state !== 'ready_for_deeper_research' && (
+        <section className="mt-6 rounded-card border border-line-soft bg-card p-5">
+          <h2 className="label-caps text-ink-soft">Evidence review required</h2>
+          <p className="mt-2 text-sm leading-relaxed text-ink-soft">
+            {request.evidence_gate_reason ?? 'Evidence has not passed the target-match gate.'}
+          </p>
+        </section>
+      )}
+
+      {completed && request.evidence_gate_state === 'ready_for_deeper_research' && (
         <>
           <section className="mt-6 rounded-card border border-line-soft bg-card p-5">
             <div className="flex flex-wrap items-center justify-between gap-3">
@@ -336,6 +388,7 @@ export default function ResearchProgressPage() {
                     <span className="min-w-0 flex-1 truncate font-narrative text-sm text-ink">
                       {source.title ?? domainOf(source.url)}
                     </span>
+                    <span className="label-caps text-ink-faint">{source.admission_state}</span>
                     <a
                       href={source.url}
                       target="_blank"

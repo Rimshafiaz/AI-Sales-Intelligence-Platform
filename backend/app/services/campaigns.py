@@ -13,6 +13,8 @@ from app.schemas.campaign import (
     CampaignCandidateSelectionCreate,
     CampaignCandidateSelectionResponse,
     CampaignCreate,
+    CampaignRecommendedBatchCreate,
+    CampaignRecommendedBatchResponse,
     CampaignResponse,
     CampaignRunCreate,
     CampaignRunResponse,
@@ -103,66 +105,125 @@ def create_candidate_selection_and_research_request(
     current_user: User,
     selection_data: CampaignCandidateSelectionCreate,
 ) -> tuple[CampaignCandidateSelection, ResearchRequest]:
-    candidate = selection_data.candidate_input.candidate
-    source_identity_key = f"{candidate.source_provider}:{candidate.source_record_id}"
+    selections = create_candidate_selections_and_research_requests(
+        db,
+        campaign_run,
+        current_user,
+        [selection_data],
+    )
+    return selections[0]
 
-    existing_selection = db.scalar(
-        select(CampaignCandidateSelection).where(
-            CampaignCandidateSelection.campaign_run_id == campaign_run.id,
-            CampaignCandidateSelection.source_identity_key == source_identity_key,
+
+def create_recommended_research_batch(
+    db: Session,
+    campaign_run: CampaignRun,
+    current_user: User,
+    batch_data: CampaignRecommendedBatchCreate,
+) -> list[tuple[CampaignCandidateSelection, ResearchRequest]]:
+    selected_model_ids = set(campaign_run.model_selection_snapshot.get("model_ids", []))
+    selection_data = []
+    for opportunity in batch_data.opportunities:
+        queue_model_ids = {reason.model_id for reason in opportunity.queue_entry.reasons}
+        if not queue_model_ids <= selected_model_ids:
+            raise CampaignWorkflowError(
+                "The recommended candidate does not match this campaign's Opportunity Models."
+            )
+        selection_data.append(
+            CampaignCandidateSelectionCreate(
+                candidate_input=opportunity.candidate_input,
+                shortlist_entry=opportunity.shortlist_entry,
+            )
         )
+    return create_candidate_selections_and_research_requests(
+        db,
+        campaign_run,
+        current_user,
+        selection_data,
     )
-    if existing_selection is not None:
-        raise CampaignWorkflowError("This candidate has already been selected in this run.")
 
-    existing_company = db.scalar(
-        select(Company).where(
-            Company.user_id == current_user.id,
-            Company.identity_key == source_identity_key,
+
+def create_candidate_selections_and_research_requests(
+    db: Session,
+    campaign_run: CampaignRun,
+    current_user: User,
+    selections_data: list[CampaignCandidateSelectionCreate],
+) -> list[tuple[CampaignCandidateSelection, ResearchRequest]]:
+    source_identity_keys = [
+        f"{selection_data.candidate_input.candidate.source_provider}:"
+        f"{selection_data.candidate_input.candidate.source_record_id}"
+        for selection_data in selections_data
+    ]
+    if len(source_identity_keys) != len(set(source_identity_keys)):
+        raise CampaignWorkflowError("This candidate appears more than once in the batch.")
+
+    for source_identity_key in source_identity_keys:
+        existing_selection = db.scalar(
+            select(CampaignCandidateSelection).where(
+                CampaignCandidateSelection.campaign_run_id == campaign_run.id,
+                CampaignCandidateSelection.source_identity_key == source_identity_key,
+            )
         )
-    )
-    company = existing_company or Company(
-        id=uuid.uuid4(),
-        user_id=current_user.id,
-        name=candidate.company_name,
-        website=str(candidate.website).rstrip("/") if candidate.website else None,
-        identity_key=source_identity_key,
-    )
+        if existing_selection is not None:
+            raise CampaignWorkflowError("This candidate has already been selected in this run.")
 
-    selection = CampaignCandidateSelection(
-        id=uuid.uuid4(),
-        campaign_run_id=campaign_run.id,
-        company_id=company.id,
-        source_identity_key=source_identity_key,
-        candidate_snapshot=candidate.model_dump(mode="json"),
-        shortlist_snapshot=selection_data.shortlist_entry.model_dump(mode="json"),
-        evidence_snapshot=[
-            signal.model_dump(mode="json")
-            for signal in selection_data.candidate_input.evidence_signals
-        ],
-    )
-    research_request = ResearchRequest(
-        id=uuid.uuid4(),
-        company_id=company.id,
-        user_id=current_user.id,
-        campaign_candidate_selection_id=selection.id,
-        status=ResearchStatus.PENDING,
-        objective=_campaign_research_objective(campaign_run, selection, candidate.company_name),
-    )
-
+    created: list[tuple[CampaignCandidateSelection, ResearchRequest]] = []
     try:
-        if existing_company is None:
-            db.add(company)
-        db.add(selection)
-        db.add(research_request)
+        for selection_data, source_identity_key in zip(
+            selections_data,
+            source_identity_keys,
+            strict=True,
+        ):
+            candidate = selection_data.candidate_input.candidate
+            existing_company = db.scalar(
+                select(Company).where(
+                    Company.user_id == current_user.id,
+                    Company.identity_key == source_identity_key,
+                )
+            )
+            company = existing_company or Company(
+                id=uuid.uuid4(),
+                user_id=current_user.id,
+                name=candidate.company_name,
+                website=str(candidate.website).rstrip("/") if candidate.website else None,
+                identity_key=source_identity_key,
+            )
+            selection = CampaignCandidateSelection(
+                id=uuid.uuid4(),
+                campaign_run_id=campaign_run.id,
+                company_id=company.id,
+                source_identity_key=source_identity_key,
+                candidate_snapshot=candidate.model_dump(mode="json"),
+                shortlist_snapshot=selection_data.shortlist_entry.model_dump(mode="json"),
+                evidence_snapshot=[
+                    signal.model_dump(mode="json")
+                    for signal in selection_data.candidate_input.evidence_signals
+                ],
+            )
+            research_request = ResearchRequest(
+                id=uuid.uuid4(),
+                company_id=company.id,
+                user_id=current_user.id,
+                campaign_candidate_selection_id=selection.id,
+                status=ResearchStatus.PENDING,
+                objective=_campaign_research_objective(
+                    campaign_run,
+                    selection,
+                    candidate.company_name,
+                ),
+            )
+            if existing_company is None:
+                db.add(company)
+            db.add(selection)
+            db.add(research_request)
+            created.append((selection, research_request))
         db.commit()
-        db.refresh(selection)
-        db.refresh(research_request)
+        for selection, research_request in created:
+            db.refresh(selection)
+            db.refresh(research_request)
     except Exception:
         db.rollback()
         raise
-
-    return selection, research_request
+    return created
 
 
 def list_campaign_selections_for_user(
@@ -225,6 +286,17 @@ def campaign_candidate_selection_response(
         research_request_id=research_request.id,
         source_identity_key=selection.source_identity_key,
         created_at=selection.created_at,
+    )
+
+
+def campaign_recommended_batch_response(
+    selections: list[tuple[CampaignCandidateSelection, ResearchRequest]],
+) -> CampaignRecommendedBatchResponse:
+    return CampaignRecommendedBatchResponse(
+        selections=[
+            campaign_candidate_selection_response(selection, research_request)
+            for selection, research_request in selections
+        ]
     )
 
 

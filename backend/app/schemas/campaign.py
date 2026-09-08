@@ -8,6 +8,7 @@ from app.schemas.company_discovery import CompanyDiscoveryRequest
 from app.schemas.discovery_shortlist import (
     CandidateShortlistInput,
     CandidateShortlistEntry,
+    PreparedDiscoveryOpportunity,
     DiscoveryShortlistState,
 )
 from app.schemas.opportunity_models import OpportunityModelSelection
@@ -76,6 +77,43 @@ class CampaignCandidateSelectionCreate(BaseModel):
         return self
 
 
+class CampaignRecommendedBatchCreate(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    opportunities: list[PreparedDiscoveryOpportunity] = Field(min_length=1, max_length=3)
+
+    @model_validator(mode="after")
+    def require_unique_actionable_candidates(self) -> Self:
+        source_identity_keys = [
+            (
+                opportunity.candidate_input.candidate.source_provider,
+                opportunity.candidate_input.candidate.source_record_id,
+            )
+            for opportunity in self.opportunities
+        ]
+        if len(source_identity_keys) != len(set(source_identity_keys)):
+            raise ValueError("A recommended research batch cannot contain the same candidate twice.")
+        for opportunity in self.opportunities:
+            if (
+                opportunity.queue_entry.company_name
+                != opportunity.candidate_input.candidate.company_name
+                or opportunity.shortlist_entry.company_name
+                != opportunity.candidate_input.candidate.company_name
+            ):
+                raise ValueError("Each queue entry must belong to its selected candidate.")
+            if (
+                opportunity.queue_entry.candidate_index
+                != opportunity.shortlist_entry.candidate_index
+            ):
+                raise ValueError("Each queue entry must match its shortlist candidate index.")
+            if (
+                opportunity.shortlist_entry.state
+                is not DiscoveryShortlistState.ELIGIBLE_FOR_DEEPER_RESEARCH
+            ):
+                raise ValueError("Only actionable queue candidates can enter a research batch.")
+        return self
+
+
 class CampaignResponse(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
@@ -110,3 +148,7 @@ class CampaignCandidateSelectionResponse(BaseModel):
     research_request_id: UUID
     source_identity_key: str
     created_at: datetime
+
+
+class CampaignRecommendedBatchResponse(BaseModel):
+    selections: list[CampaignCandidateSelectionResponse] = Field(min_length=1, max_length=3)

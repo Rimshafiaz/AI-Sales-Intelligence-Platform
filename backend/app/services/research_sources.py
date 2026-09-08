@@ -7,6 +7,7 @@ from app.integrations.search_provider import CollectedSource, TavilySearchProvid
 from app.integrations.website_metadata import WebsiteMetadata
 from app.models.research_source import ResearchSource
 from app.models.user import User
+from app.schemas.evidence_gate import SourceAdmissionState
 from app.repositories.research_sources import (
     list_research_sources_for_user as list_research_sources_for_user_repository,
 )
@@ -15,16 +16,17 @@ from app.repositories.research_sources import (
 def collect_company_search_sources(
     company_name: str,
     search_provider: TavilySearchProvider,
+    location: str | None = None,
 ) -> list[CollectedSource]:
     clean_name = company_name.strip()
     if not clean_name:
         raise ValueError("Company name cannot be blank.")
 
+    clean_location = location.strip() if location else ""
+    target = " ".join(part for part in (f'"{clean_name}"', clean_location) if part)
     queries = [
-        f'"{clean_name}" company overview',
-        f'"{clean_name}" products services',
-        f'"{clean_name}" technology engineering',
-        f'"{clean_name}" recent news expansion hiring funding',
+        f"{target} official website",
+        f"{target} services contact",
     ]
     sources: list[CollectedSource] = []
 
@@ -87,10 +89,12 @@ def list_research_sources_for_user(
     request_id: UUID,
     current_user: User,
     limit: int,
+    admission_state: SourceAdmissionState | None = None,
 ) -> list[ResearchSource]:
     return list_research_sources_for_user_repository(
         db=db,
         research_request_id=request_id,
         user_id=current_user.id,
         limit=limit,
+        admission_state=admission_state,
     )

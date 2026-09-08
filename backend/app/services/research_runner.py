@@ -4,15 +4,18 @@ from app.core.config import settings
 from app.db.session import SessionLocal
 from app.integrations.search_provider import create_tavily_search_provider
 from app.integrations.website_metadata import WebsiteMetadataCollector
+from app.models.campaign_candidate_selection import CampaignCandidateSelection
 from app.repositories.companies import get_company_by_id, update_company_website
 from app.repositories.research_requests import (
     get_research_request_by_id,
     mark_research_request_complete,
     mark_research_request_failed,
     mark_research_request_running,
+    save_evidence_gate_result,
 )
 from app.repositories.research_sources import create_research_sources
 from app.services.company_resolution import CompanyWebsiteResolver
+from app.services.evidence_gate import review_sources, target_from_research_request
 from app.services.research_sources import (
     collect_company_search_sources,
     deduplicate_sources,
@@ -48,6 +51,7 @@ def run_research(request_id: UUID) -> None:
 
         search_provider = create_tavily_search_provider(settings.tavily_api_key)
         website = company.website
+        resolved_company = None
 
         if website is None:
             resolver = CompanyWebsiteResolver(search_provider)
@@ -64,28 +68,50 @@ def run_research(request_id: UUID) -> None:
 
                 website = updated_company.website
 
+        if resolved_company is not None and resolved_company.is_confident:
+            objective = dict(research_request.objective or {})
+            objective["resolved_target"] = {
+                "business_name": resolved_company.company_name,
+                "website": resolved_company.website,
+                "identity_state": resolved_company.identity_state.value,
+                "source": (
+                    resolved_company.source.model_dump(mode="json")
+                    if resolved_company.source is not None
+                    else None
+                ),
+            }
+            research_request.objective = objective
+            db.commit()
+            db.refresh(research_request)
+
         website_source = None
         if website is not None:
             metadata = WebsiteMetadataCollector().collect(website)
             if metadata is not None:
                 website_source = website_metadata_to_source(metadata)
 
-        sources = collect_company_search_sources(
-            company.name,
-            search_provider,
+        selection = (
+            db.get(
+                CampaignCandidateSelection,
+                research_request.campaign_candidate_selection_id,
+            )
+            if research_request.campaign_candidate_selection_id is not None
+            else None
         )
+        target = target_from_research_request(research_request, company, selection)
+        sources = collect_company_search_sources(company.name, search_provider, target.location)
         if website_source is not None:
             sources.insert(0, website_source)
 
         unique_sources = deduplicate_sources(sources)
-        if not unique_sources:
-            raise RuntimeError("No unique research sources were collected.")
+        admissions, gate_result = review_sources(target, unique_sources)
 
         create_research_sources(
             db=db,
             research_request_id=research_request.id,
-            sources=unique_sources,
+            sources=admissions,
         )
+        save_evidence_gate_result(db, request_id, gate_result)
         mark_research_request_complete(db, request_id)
 
     except Exception:

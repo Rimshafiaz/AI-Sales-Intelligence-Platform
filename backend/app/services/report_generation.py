@@ -17,7 +17,9 @@ from app.repositories.research_reports import (
 from app.repositories.research_requests import get_research_request_for_user
 from app.repositories.research_sources import list_research_sources_for_user
 from app.schemas.company_discovery import DiscoveryObjective
+from app.schemas.evidence_gate import EvidenceGateState, SourceAdmissionState
 from app.services.company_discovery import build_objective_context
+from app.services.evidence_gate import requires_deep_qualification
 
 logger = get_logger(__name__)
 
@@ -77,6 +79,18 @@ def run_generation_background(request_id: UUID, user_id: UUID) -> None:
                 "Background generation skipped: request %s is not completed.", request_id
             )
             return
+        if research_request.evidence_gate_state is not EvidenceGateState.READY_FOR_DEEPER_RESEARCH:
+            logger.warning(
+                "Background generation skipped: request %s has not passed the evidence gate.",
+                request_id,
+            )
+            return
+        if requires_deep_qualification(research_request):
+            logger.warning(
+                "Background generation skipped: request %s needs deep qualification.",
+                request_id,
+            )
+            return
 
         existing_report = get_research_report_for_user(
             db=db,
@@ -104,6 +118,7 @@ def run_generation_background(request_id: UUID, user_id: UUID) -> None:
             research_request_id=research_request.id,
             user_id=user_id,
             limit=MAX_EVIDENCE_SOURCES,
+            admission_state=SourceAdmissionState.ACCEPTED,
         )
         if not sources:
             logger.error("Background generation failed: no sources for request %s.", request_id)
@@ -171,6 +186,28 @@ def run_regeneration_background(
             logger.warning("Background regeneration skipped: report %s not found.", report_id)
             return
 
+        research_request = get_research_request_for_user(
+            db=db,
+            request_id=existing_report.research_request_id,
+            user_id=user_id,
+        )
+        if (
+            research_request is None
+            or research_request.evidence_gate_state
+            is not EvidenceGateState.READY_FOR_DEEPER_RESEARCH
+        ):
+            logger.warning(
+                "Background regeneration skipped: report %s has not passed the evidence gate.",
+                report_id,
+            )
+            return
+        if requires_deep_qualification(research_request):
+            logger.warning(
+                "Background regeneration skipped: report %s needs deep qualification.",
+                report_id,
+            )
+            return
+
         company = get_company_by_id(
             db=db,
             company_id=existing_report.company_id,
@@ -185,6 +222,7 @@ def run_regeneration_background(
             research_request_id=existing_report.research_request_id,
             user_id=user_id,
             limit=MAX_EVIDENCE_SOURCES,
+            admission_state=SourceAdmissionState.ACCEPTED,
         )
         if not sources:
             logger.error("Background regeneration failed: no sources for report %s.", report_id)
@@ -192,16 +230,7 @@ def run_regeneration_background(
 
         try:
             evidence_context = build_research_evidence_context(sources)
-            research_request = get_research_request_for_user(
-                db=db,
-                request_id=existing_report.research_request_id,
-                user_id=user_id,
-            )
-            objective_context = (
-                _objective_context_from_request(research_request)
-                if research_request is not None
-                else None
-            )
+            objective_context = _objective_context_from_request(research_request)
             report = run_sales_intelligence_crew(
                 company_name=company.name,
                 evidence_context=evidence_context,

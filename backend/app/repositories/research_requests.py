@@ -6,6 +6,7 @@ from sqlalchemy.orm import Session
 from datetime import datetime, timezone
 
 from app.models.research_request import ResearchRequest, ResearchStatus
+from app.schemas.evidence_gate import EvidenceGateResponse
 
 
 def create_research_request(
@@ -67,6 +68,22 @@ def mark_research_request_complete(
         return None
     request.status = ResearchStatus.COMPLETED
     request.finished_at = datetime.now(timezone.utc)
+    db.commit()
+    db.refresh(request)
+    return request
+
+
+def save_evidence_gate_result(
+    db: Session,
+    request_id: UUID,
+    result: EvidenceGateResponse,
+) -> ResearchRequest | None:
+    request = get_research_request_by_id(db, request_id)
+    if request is None:
+        return None
+    request.evidence_gate_state = result.state
+    request.evidence_gate_reason = result.reason
+    request.evidence_gated_at = result.evaluated_at
     db.commit()
     db.refresh(request)
     return request

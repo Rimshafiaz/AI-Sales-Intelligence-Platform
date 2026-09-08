@@ -1,3 +1,4 @@
+from datetime import datetime
 from enum import Enum
 from typing import Self
 
@@ -9,6 +10,7 @@ from app.schemas.company_discovery import (
 )
 from app.schemas.opportunity_models import (
     EvidenceSignal,
+    EvidenceSource,
     EvidenceSignalType,
     OpportunityModelId,
     OpportunityModelSelection,
@@ -62,6 +64,20 @@ class DiscoveryShortlistRequest(BaseModel):
         return self
 
 
+class DiscoveryOpportunityPreparationRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    criteria: CompanyDiscoveryRequest
+    model_selection: OpportunityModelSelection
+    candidates: list[DiscoveredCompanyCandidate] = Field(min_length=1, max_length=100)
+
+    @model_validator(mode="after")
+    def require_user_confirmed_model_selection(self) -> Self:
+        if not self.model_selection.confirmed_by_user:
+            raise ValueError("Confirm the Opportunity Model selection before preparing the queue.")
+        return self
+
+
 class OpportunityModelShortlistEvaluation(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
@@ -88,3 +104,45 @@ class CandidateShortlistEntry(BaseModel):
 
 class DiscoveryShortlistResponse(BaseModel):
     candidates: list[CandidateShortlistEntry] = Field(max_length=100)
+
+
+class DiscoveryOpportunityReason(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    model_id: OpportunityModelId
+    signal_type: EvidenceSignalType
+    supporting_value: str = Field(min_length=1, max_length=1_000)
+    source: EvidenceSource
+    captured_at: datetime
+
+
+class DiscoveryOpportunityQueueEntry(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    candidate_index: int = Field(ge=0)
+    company_name: str = Field(min_length=1, max_length=255)
+    reasons: list[DiscoveryOpportunityReason] = Field(min_length=1, max_length=3)
+
+
+class DiscoveryOpportunityQueueResponse(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    candidates: list[DiscoveryOpportunityQueueEntry] = Field(max_length=100)
+    needs_verification_count: int = Field(ge=0)
+    not_surfaced_count: int = Field(ge=0)
+
+
+class PreparedDiscoveryOpportunity(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    queue_entry: DiscoveryOpportunityQueueEntry
+    candidate_input: CandidateShortlistInput
+    shortlist_entry: CandidateShortlistEntry
+
+
+class DiscoveryOpportunityPreparationResponse(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    candidates: list[PreparedDiscoveryOpportunity] = Field(max_length=100)
+    needs_verification_count: int = Field(ge=0)
+    not_surfaced_count: int = Field(ge=0)

@@ -6,6 +6,7 @@ from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.db.base import Base
+from app.schemas.evidence_gate import SourceAdmissionState
 
 
 if TYPE_CHECKING:
@@ -48,6 +49,14 @@ class ResearchSource(Base):
         server_default=func.now(),
         nullable=False,
     )
+    admission_state: Mapped[SourceAdmissionState] = mapped_column(
+        String(30),
+        default=SourceAdmissionState.PENDING,
+        server_default=SourceAdmissionState.PENDING.value,
+        nullable=False,
+        index=True,
+    )
+    admission_reason: Mapped[str | None] = mapped_column(String(1000), nullable=True)
 
     research_request: Mapped["ResearchRequest"] = relationship(
         "ResearchRequest",

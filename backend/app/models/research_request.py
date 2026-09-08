@@ -8,6 +8,7 @@ from sqlalchemy.dialects.postgresql import JSONB, UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.db.base import Base
+from app.schemas.evidence_gate import EvidenceGateState
 
 if TYPE_CHECKING:
     from app.models.campaign_candidate_selection import CampaignCandidateSelection
@@ -81,6 +82,22 @@ class ResearchRequest(Base):
     )
     objective:Mapped[dict | None] = mapped_column(
         JSONB,
+        nullable=True,
+    )
+    evidence_gate_state: Mapped[EvidenceGateState] = mapped_column(
+        SAEnum(
+            EvidenceGateState,
+            name="evidence_gate_state",
+            values_callable=lambda enum_class: [item.value for item in enum_class],
+        ),
+        default=EvidenceGateState.NOT_RUN,
+        server_default=EvidenceGateState.NOT_RUN.value,
+        nullable=False,
+        index=True,
+    )
+    evidence_gate_reason: Mapped[str | None] = mapped_column(String(1000), nullable=True)
+    evidence_gated_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True),
         nullable=True,
     )
     company:Mapped["Company"] = relationship(

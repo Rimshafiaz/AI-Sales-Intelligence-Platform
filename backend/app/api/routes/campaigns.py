@@ -10,6 +10,8 @@ from app.schemas.campaign import (
     CampaignCandidateSelectionCreate,
     CampaignCandidateSelectionResponse,
     CampaignCreate,
+    CampaignRecommendedBatchCreate,
+    CampaignRecommendedBatchResponse,
     CampaignResponse,
     CampaignRunCreate,
     CampaignRunResponse,
@@ -17,9 +19,11 @@ from app.schemas.campaign import (
 from app.services.campaigns import (
     CampaignWorkflowError,
     campaign_candidate_selection_response,
+    campaign_recommended_batch_response,
     campaign_response,
     campaign_run_response,
     create_campaign,
+    create_recommended_research_batch,
     create_campaign_run,
     create_candidate_selection_and_research_request,
     get_campaign_for_user,
@@ -108,6 +112,35 @@ def select_campaign_candidate_endpoint(
             detail=str(error),
         ) from error
     return campaign_candidate_selection_response(selection, research_request)
+
+
+@router.post(
+    "/runs/{campaign_run_id}/recommended-batch",
+    response_model=CampaignRecommendedBatchResponse,
+    status_code=status.HTTP_201_CREATED,
+)
+def create_recommended_research_batch_endpoint(
+    campaign_run_id: uuid.UUID,
+    request: CampaignRecommendedBatchCreate,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    campaign_run = get_campaign_run_for_user(db, campaign_run_id, current_user.id)
+    if campaign_run is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Campaign run not found")
+    try:
+        selections = create_recommended_research_batch(
+            db,
+            campaign_run,
+            current_user,
+            request,
+        )
+    except CampaignWorkflowError as error:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail=str(error),
+        ) from error
+    return campaign_recommended_batch_response(selections)
 
 
 @router.get(

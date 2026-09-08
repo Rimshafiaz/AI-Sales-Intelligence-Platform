@@ -11,6 +11,7 @@ from app.models.user import User
 from app.schemas.campaign import (
     CampaignCandidateSelectionCreate,
     CampaignCreate,
+    CampaignRecommendedBatchCreate,
     CampaignRunCreate,
 )
 from app.schemas.company_discovery import (
@@ -20,6 +21,9 @@ from app.schemas.company_discovery import (
 from app.schemas.discovery_shortlist import (
     CandidateShortlistInput,
     CandidateShortlistEntry,
+    DiscoveryOpportunityQueueEntry,
+    DiscoveryOpportunityReason,
+    PreparedDiscoveryOpportunity,
     DiscoveryShortlistState,
     NextEvidenceAction,
     OpportunityModelShortlistEvaluation,
@@ -34,6 +38,7 @@ from app.schemas.opportunity_models import (
 from app.services.campaigns import (
     CampaignWorkflowError,
     create_candidate_selection_and_research_request,
+    create_recommended_research_batch,
 )
 
 
@@ -135,6 +140,53 @@ def selection_data() -> CampaignCandidateSelectionCreate:
     )
 
 
+def prepared_opportunity(name: str = "Glow Salon"):
+    candidate_input = CandidateShortlistInput(
+        candidate=candidate().model_copy(
+            update={
+                "company_name": name,
+                "source_record_id": f"overture:{name.casefold().replace(' ', '-')}",
+            }
+        ),
+        evidence_signals=[
+            EvidenceSignal(
+                signal_type=EvidenceSignalType.BUSINESS_IDENTITY_CONFIRMED,
+                evidence_type=EvidenceType.OBSERVED,
+                supporting_value="A stable local source identifies this business.",
+                source=EvidenceSource(
+                    provider="open_places",
+                    provider_record_id=f"overture:{name.casefold().replace(' ', '-')}",
+                    retrieved_at=NOW,
+                ),
+                captured_at=NOW,
+            )
+        ],
+    )
+    shortlist = shortlist_entry().model_copy(update={"company_name": name})
+    queue_entry = DiscoveryOpportunityQueueEntry(
+        candidate_index=0,
+        company_name=name,
+        reasons=[
+            DiscoveryOpportunityReason(
+                model_id="web_conversion.no_verified_web_presence",
+                signal_type=EvidenceSignalType.NO_LISTED_OFFICIAL_WEBSITE,
+                supporting_value="The discovery record did not list an official website.",
+                source=EvidenceSource(
+                    provider="open_places",
+                    provider_record_id=f"overture:{name.casefold().replace(' ', '-')}",
+                    retrieved_at=NOW,
+                ),
+                captured_at=NOW,
+            )
+        ],
+    )
+    return PreparedDiscoveryOpportunity(
+        queue_entry=queue_entry,
+        candidate_input=candidate_input,
+        shortlist_entry=shortlist,
+    )
+
+
 def campaign_run() -> CampaignRun:
     campaign_id = uuid.uuid4()
     return CampaignRun(
@@ -230,3 +282,28 @@ class TestCampaignSelectionHandoff:
             )
 
         assert db.rolled_back is True
+
+    def test_recommended_batch_creates_multiple_pending_requests_in_one_commit(self):
+        db = FakeSession(scalar_results=[None, None, None, None])
+        user = User(id=uuid.uuid4(), email="owner@example.com")
+        batch = CampaignRecommendedBatchCreate(
+            opportunities=[prepared_opportunity("Glow Salon"), prepared_opportunity("Lumen Salon")]
+        )
+
+        selections = create_recommended_research_batch(db, campaign_run(), user, batch)
+
+        assert len(selections) == 2
+        assert db.committed is True
+        assert all(request.status is ResearchStatus.PENDING for _, request in selections)
+
+    def test_recommended_batch_rejects_an_opportunity_outside_the_campaign_models(self):
+        db = FakeSession()
+        user = User(id=uuid.uuid4(), email="owner@example.com")
+        opportunity = prepared_opportunity()
+        opportunity.queue_entry.reasons[0].model_id = "web_conversion.mobile_performance"
+        batch = CampaignRecommendedBatchCreate(opportunities=[opportunity])
+
+        with pytest.raises(CampaignWorkflowError, match="does not match"):
+            create_recommended_research_batch(db, campaign_run(), user, batch)
+
+        assert db.added == []

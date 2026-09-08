@@ -18,6 +18,7 @@ from app.models.research_request import ResearchRequest
 from app.models.research_source import ResearchSource
 from app.models.user import User
 from app.repositories.research_sources import create_research_sources
+from app.schemas.evidence_gate import EvidenceGateState, SourceAdmissionState
 
 
 def make_valid_report_data(score: int = 72) -> dict:
@@ -159,6 +160,7 @@ def owned_completed_request(test_user, owned_company, db):
         status="completed",
         started_at=datetime.now(timezone.utc),
         finished_at=datetime.now(timezone.utc),
+        evidence_gate_state=EvidenceGateState.READY_FOR_DEEPER_RESEARCH,
     )
     db.add(request)
     db.commit()
@@ -168,7 +170,7 @@ def owned_completed_request(test_user, owned_company, db):
 
 @pytest.fixture
 def owned_report(test_user, owned_company, owned_completed_request, db):
-    create_research_sources(
+    sources = create_research_sources(
         db=db,
         research_request_id=owned_completed_request.id,
         sources=[
@@ -179,6 +181,9 @@ def owned_report(test_user, owned_company, owned_completed_request, db):
             )
         ],
     )
+    for source in sources:
+        source.admission_state = SourceAdmissionState.ACCEPTED
+    db.commit()
     report = ResearchReport(
         research_request_id=owned_completed_request.id,
         company_id=owned_company.id,

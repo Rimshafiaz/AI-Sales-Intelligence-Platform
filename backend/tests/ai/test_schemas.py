@@ -6,6 +6,7 @@ from pydantic import ValidationError
 from app.ai.config_loader import get_task_config, render_task_config
 from app.ai.context import MAX_EVIDENCE_EXCERPT_LENGTH, build_research_evidence_context
 from app.models.research_source import ResearchSource
+from app.schemas.evidence_gate import SourceAdmissionState
 from app.schemas.company_discovery import (
     CompanyDiscoveryRequest,
     DiscoveryObjective,
@@ -56,6 +57,7 @@ class TestEvidenceContext:
             title="Example",
             source_type="web_search",
             excerpt=excerpt,
+            admission_state=SourceAdmissionState.ACCEPTED,
         )
 
     def test_context_contains_urls(self):
@@ -65,6 +67,12 @@ class TestEvidenceContext:
     def test_empty_sources_rejected(self):
         with pytest.raises(ValueError):
             build_research_evidence_context([])
+
+    def test_unaccepted_sources_are_rejected(self):
+        source = self._source()
+        source.admission_state = SourceAdmissionState.NEEDS_REVIEW
+        with pytest.raises(ValueError, match="only accepted"):
+            build_research_evidence_context([source])
 
     def test_excerpts_bounded(self):
         source = self._source(excerpt="x" * 5000)

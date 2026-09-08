@@ -3,6 +3,9 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from app.api.dependencies.current_user import get_current_user
 from app.core.config import settings
 from app.schemas.discovery_shortlist import (
+    DiscoveryOpportunityPreparationRequest,
+    DiscoveryOpportunityPreparationResponse,
+    DiscoveryOpportunityQueueResponse,
     DiscoveryShortlistRequest,
     DiscoveryShortlistResponse,
 )
@@ -37,6 +40,8 @@ from app.services.discovery_shortlist import (
     DiscoveryShortlistError,
     shortlist_discovery_candidates,
 )
+from app.services.discovery_opportunity_queue import build_discovery_opportunity_queue
+from app.services.discovery_queue_preparation import prepare_discovery_opportunity_queue
 
 
 router = APIRouter(tags=["Company Discovery"])
@@ -161,6 +166,50 @@ def shortlist_discovery_candidates_endpoint(
 ):
     try:
         return shortlist_discovery_candidates(request)
+    except (DiscoveryShortlistError, LocalBusinessDiscoveryError) as error:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
+            detail=str(error),
+        ) from error
+
+
+@router.post(
+    "/company-discovery/opportunity-queue",
+    response_model=DiscoveryOpportunityQueueResponse,
+    status_code=status.HTTP_200_OK,
+    summary="Surface evidence-backed discovery opportunities (stateless)",
+    responses={
+        422: {"description": "Invalid model selection or candidate snapshot"},
+    },
+)
+def build_discovery_opportunity_queue_endpoint(
+    request: DiscoveryShortlistRequest,
+    current_user: User = Depends(get_current_user),
+):
+    try:
+        return build_discovery_opportunity_queue(request)
+    except (DiscoveryShortlistError, LocalBusinessDiscoveryError) as error:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
+            detail=str(error),
+        ) from error
+
+
+@router.post(
+    "/company-discovery/prepare-opportunity-queue",
+    response_model=DiscoveryOpportunityPreparationResponse,
+    status_code=status.HTTP_200_OK,
+    summary="Prepare only evidence-backed discovery opportunities for user review",
+    responses={
+        422: {"description": "Invalid model selection or candidate snapshot"},
+    },
+)
+def prepare_discovery_opportunity_queue_endpoint(
+    request: DiscoveryOpportunityPreparationRequest,
+    current_user: User = Depends(get_current_user),
+):
+    try:
+        return prepare_discovery_opportunity_queue(request)
     except (DiscoveryShortlistError, LocalBusinessDiscoveryError) as error:
         raise HTTPException(
             status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,

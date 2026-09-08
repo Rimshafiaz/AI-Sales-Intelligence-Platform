@@ -9,6 +9,7 @@ from app.schemas.company_discovery import (
     DiscoveryObjective,
 )
 from app.schemas.opportunity_models import EvidenceSource, IdentityState
+from app.schemas.evidence_gate import EvidenceGateState
 
 
 class KnownProspectResearchRequest(BaseModel):
@@ -81,5 +82,8 @@ class ResearchRequestResponse(BaseModel):
     finished_at: datetime | None = None
     error_message: str | None = None
     objective: dict | None = None
+    evidence_gate_state: EvidenceGateState
+    evidence_gate_reason: str | None = None
+    evidence_gated_at: datetime | None = None
 
     model_config = ConfigDict(from_attributes=True)

@@ -7,6 +7,7 @@ from app.integrations.search_provider import CollectedSource
 from app.models.research_report import ResearchReport
 from app.models.research_request import ResearchRequest
 from app.repositories.research_sources import create_research_sources
+from app.schemas.evidence_gate import EvidenceGateState, SourceAdmissionState
 from app.schemas.sales_intelligence_report import SalesIntelligenceReport
 from tests.conftest import make_valid_report_data
 
@@ -89,7 +90,7 @@ class TestReportGeneration:
         mocked_crew,
         db,
     ):
-        create_research_sources(
+        sources = create_research_sources(
             db=db,
             research_request_id=owned_completed_request.id,
             sources=[
@@ -100,6 +101,9 @@ class TestReportGeneration:
                 )
             ],
         )
+        for source in sources:
+            source.admission_state = SourceAdmissionState.ACCEPTED
+        db.commit()
         resp = auth_client.post(
             f"/research-requests/{owned_completed_request.id}/reports"
         )
@@ -139,6 +143,18 @@ class TestReportGeneration:
             )
         ).all()
         assert reports == []
+
+    def test_generate_is_blocked_until_the_evidence_gate_passes(
+        self, auth_client, owned_completed_request, db
+    ):
+        owned_completed_request.evidence_gate_state = EvidenceGateState.NEEDS_REVIEW
+        db.commit()
+
+        resp = auth_client.post(
+            f"/research-requests/{owned_completed_request.id}/reports"
+        )
+
+        assert resp.status_code == 409
 
 
 class TestReportReview:

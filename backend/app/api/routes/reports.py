@@ -9,6 +9,8 @@ from app.db.session import get_db
 from app.models.research_report import ReportReviewStatus
 from app.models.research_request import ResearchStatus
 from app.models.user import User
+from app.schemas.evidence_gate import EvidenceGateState
+from app.services.evidence_gate import requires_deep_qualification
 from app.repositories.research_reports import (
     get_research_report_by_id_for_user,
     get_research_report_for_user,
@@ -107,6 +109,16 @@ def create_report_endpoint(
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
             detail="Research request is not completed yet.",
+        )
+    if research_request.evidence_gate_state is not EvidenceGateState.READY_FOR_DEEPER_RESEARCH:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Accepted evidence is required before report generation.",
+        )
+    if requires_deep_qualification(research_request):
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Deep qualification must finish before a prospect report can be generated.",
         )
     existing_report = get_research_report_for_user(
         db=db,
@@ -245,6 +257,24 @@ def regenerate_report_endpoint(
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Report not found",
+        )
+    research_request = get_research_request_for_user(
+        db=db,
+        request_id=existing_report.research_request_id,
+        user_id=current_user.id,
+    )
+    if (
+        research_request is None
+        or research_request.evidence_gate_state is not EvidenceGateState.READY_FOR_DEEPER_RESEARCH
+    ):
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Accepted evidence is required before report regeneration.",
+        )
+    if requires_deep_qualification(research_request):
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Deep qualification must finish before a prospect report can be regenerated.",
         )
 
     background_tasks.add_task(

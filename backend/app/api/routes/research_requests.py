@@ -5,6 +5,7 @@ from sqlalchemy.orm import Session
 
 from app.api.dependencies.current_user import get_current_user
 from app.db.session import get_db
+from app.models.research_request import ResearchStatus
 from app.models.user import User
 from app.schemas.research_request import (
     KnownProspectResearchRequest,
@@ -149,6 +150,41 @@ async def get_research_request_endpoint(
         )
 
     return research_request
+
+
+@router.post(
+    "/research-requests/{request_id}/evidence-gate",
+    status_code=status.HTTP_202_ACCEPTED,
+    summary="Collect and filter evidence for a pending research request",
+    responses={
+        404: {"description": "Request unknown or owned by another user"},
+        409: {"description": "Request is already being reviewed or has finished"},
+    },
+)
+def start_evidence_gate_endpoint(
+    request_id: UUID,
+    background_tasks: BackgroundTasks,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    research_request = get_research_request_for_user(
+        db=db,
+        request_id=request_id,
+        current_user=current_user,
+    )
+    if research_request is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Research request not found",
+        )
+    if research_request.status is not ResearchStatus.PENDING:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Evidence review has already started or finished.",
+        )
+
+    background_tasks.add_task(run_research, research_request.id)
+    return {"status": "evidence_review_started"}
 
 
 @router.get(
