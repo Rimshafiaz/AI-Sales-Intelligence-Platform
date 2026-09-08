@@ -58,18 +58,25 @@ def discover_local_businesses(
     criteria: CompanyDiscoveryRequest,
     provider: BusinessDiscoveryProvider,
 ) -> CompanyDiscoveryResponse:
-    request = LocalBusinessDiscoveryRequest(
-        industry=resolve_industry(criteria.industry),
-        area=resolve_area(criteria),
-        max_results=criteria.max_results,
-    )
-    businesses = provider.discover(request)
+    businesses = collect_local_businesses(criteria, provider)
     return CompanyDiscoveryResponse(
         candidates=[
             business_to_candidate(criteria, business)
             for business in businesses
         ]
     )
+
+
+def collect_local_businesses(
+    criteria: CompanyDiscoveryRequest,
+    provider: BusinessDiscoveryProvider,
+) -> list[DiscoveredBusiness]:
+    request = LocalBusinessDiscoveryRequest(
+        industry=resolve_industry(criteria.industry),
+        area=resolve_area(criteria),
+        max_results=criteria.max_results,
+    )
+    return provider.discover(request)
 
 
 def resolve_industry(value: str) -> IndustryOverlayId:

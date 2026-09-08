@@ -7,6 +7,7 @@ from urllib.parse import urlparse
 import httpx
 
 from app.integrations.business_discovery import (
+    DiscoverySourceType,
     DiscoveredBusiness,
     LocalBusinessDiscoveryRequest,
 )
@@ -240,6 +241,7 @@ class OpenPlacesProvider:
             ),
             source_data_release=data_release,
             retrieved_at=retrieved_at,
+            source_type=DiscoverySourceType.LOCAL_PLACES,
         )
 
     @staticmethod

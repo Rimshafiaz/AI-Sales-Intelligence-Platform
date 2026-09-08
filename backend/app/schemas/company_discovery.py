@@ -246,6 +246,11 @@ class DiscoveredCompanyCandidate(BaseModel):
     business_status: str | None = Field(default=None, max_length=100)
     phone_number: str | None = Field(default=None, max_length=100)
     website_verification_state: Literal["listed_unverified"] | None = None
+    identity_state: Literal["needs_review"] = "needs_review"
+    discovery_source_types: list[
+        Literal["local_places", "web_search", "social_search"]
+    ] = Field(default_factory=list, max_length=3)
+    social_profile_urls: list[HttpUrl] = Field(default_factory=list, max_length=5)
 
     @field_serializer("website")
     def serialize_website(self, value: HttpUrl | None) -> str | None:
@@ -253,6 +258,10 @@ class DiscoveredCompanyCandidate(BaseModel):
 
     @field_serializer("supporting_source_urls")
     def serialize_supporting_source_urls(self, value: list[HttpUrl]) -> list[str]:
+        return [str(url).rstrip("/") for url in value]
+
+    @field_serializer("social_profile_urls")
+    def serialize_social_profile_urls(self, value: list[HttpUrl]) -> list[str]:
         return [str(url).rstrip("/") for url in value]
 
     @field_validator(

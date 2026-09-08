@@ -30,6 +30,10 @@ class Settings(BaseSettings):
         default=None,
         validation_alias=AliasChoices("OPEN_PLACES_API_KEY", "Open_Places_API_KEY"),
     )
+    serper_api_key: str | None = Field(
+        default=None,
+        validation_alias=AliasChoices("SERPER_API_KEY", "Serper_API_KEY"),
+    )
     groq_api_key: str | None = None
     gemini_api_key: str | None = None
     llm_provider: Literal["groq", "gemini"] = "groq"

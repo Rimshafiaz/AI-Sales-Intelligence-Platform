@@ -4,6 +4,7 @@ import pytest
 
 from app.integrations.business_discovery import (
     DiscoveredBusiness,
+    DiscoverySourceType,
     LocalBusinessDiscoveryRequest,
 )
 from app.schemas.company_discovery import CompanyDiscoveryRequest
@@ -53,6 +54,7 @@ def business() -> DiscoveredBusiness:
         business_status="operational",
         source_data_release="2026-08-19.0",
         retrieved_at=datetime(2026, 9, 7, tzinfo=UTC),
+        source_type=DiscoverySourceType.LOCAL_PLACES,
     )
 
 

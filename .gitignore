@@ -4,6 +4,11 @@ Plan.md
 # Local documentation draft (intentionally not versioned for now)
 docs/
 
+# Legacy Google Places discovery draft (reference only; not part of the product path)
+backend/app/integrations/google_places.py
+backend/tests/integrations/test_google_places.py
+backend/tests/services/test_google_places_discovery.py
+
 # Environment variables and secrets
 .env
 .env.*

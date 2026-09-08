@@ -1,5 +1,6 @@
 from dataclasses import dataclass
 from datetime import datetime
+from enum import Enum
 from typing import Protocol
 
 from app.schemas.opportunity_models import IndustryOverlayId
@@ -11,6 +12,12 @@ class LocalDiscoveryArea:
     latitude: float
     longitude: float
     radius_miles: float
+
+
+class DiscoverySourceType(str, Enum):
+    LOCAL_PLACES = "local_places"
+    WEB_SEARCH = "web_search"
+    SOCIAL_SEARCH = "social_search"
 
 
 @dataclass(frozen=True)
@@ -36,6 +43,9 @@ class DiscoveredBusiness:
     business_status: str | None
     source_data_release: str | None
     retrieved_at: datetime
+    source_type: DiscoverySourceType
+    source_url: str | None = None
+    social_profile_url: str | None = None
 
 
 class BusinessDiscoveryProvider(Protocol):

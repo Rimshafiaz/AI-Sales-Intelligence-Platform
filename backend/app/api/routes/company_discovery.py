@@ -2,6 +2,7 @@ from fastapi import APIRouter, Depends, HTTPException, status
 
 from app.api.dependencies.current_user import get_current_user
 from app.integrations.open_places import OpenPlacesProviderError
+from app.integrations.serper import SerperProviderError
 from app.models.user import User
 from app.services.local_business_discovery import LocalBusinessDiscoveryError
 from app.schemas.company_discovery import (
@@ -80,6 +81,7 @@ def discover_companies_endpoint(
         ) from error
     except (
         OpenPlacesProviderError,
+        SerperProviderError,
         RuntimeError,
         ValueError,
     ) as error:

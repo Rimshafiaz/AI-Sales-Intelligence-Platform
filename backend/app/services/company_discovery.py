@@ -15,6 +15,7 @@ from app.ai.tasks.qualification_task import (
 )
 from app.core.config import settings
 from app.integrations.open_places import create_open_places_provider
+from app.integrations.serper import create_serper_search_provider
 from app.integrations.search_provider import (
     CollectedSource,
     TavilySearchProvider,
@@ -31,7 +32,9 @@ from app.schemas.company_discovery import (
     QualificationTaskOutput,
     company_discovery_response_from_task_output,
 )
-from app.services.local_business_discovery import discover_local_businesses
+from app.services.candidate_pool import merge_candidate_pool
+from app.services.local_business_discovery import collect_local_businesses
+from app.services.web_candidate_discovery import discover_web_and_social_candidates
 
 
 def check_supported_objective(
@@ -332,5 +335,8 @@ def qualify_candidates(
 def discover_companies(
     criteria: CompanyDiscoveryRequest,
 ) -> CompanyDiscoveryResponse:
-    provider = create_open_places_provider(settings.open_places_api_key)
-    return discover_local_businesses(criteria, provider)
+    local_provider = create_open_places_provider(settings.open_places_api_key)
+    web_provider = create_serper_search_provider(settings.serper_api_key)
+    local_candidates = collect_local_businesses(criteria, local_provider)
+    web_candidates = discover_web_and_social_candidates(criteria, web_provider)
+    return merge_candidate_pool(criteria, [*local_candidates, *web_candidates])
