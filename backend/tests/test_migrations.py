@@ -10,6 +10,7 @@ EXPECTED_TABLES = {
     "companies",
     "research_requests",
     "research_sources",
+    "research_evidence",
     "research_reports",
     "campaigns",
     "campaign_runs",

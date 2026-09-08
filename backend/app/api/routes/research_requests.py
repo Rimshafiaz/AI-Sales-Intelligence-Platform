@@ -14,6 +14,7 @@ from app.schemas.research_request import (
     ResearchRequestStartRequest,
 )
 from app.schemas.research_source import ResearchSourceResponse
+from app.schemas.research_evidence import ResearchEvidenceResponse
 from app.services.research_runner import run_research
 from app.services.research_requests import (
     KnownProspectResolutionError,
@@ -23,6 +24,10 @@ from app.services.research_requests import (
     resolve_known_prospect,
 )
 from app.services.research_sources import list_research_sources_for_user
+from app.repositories.research_evidence import list_research_evidence_for_user
+from app.models.campaign_candidate_selection import CampaignCandidateSelection
+from app.repositories.companies import get_company_by_id
+from app.services.website_audit import WebsiteAuditError, audit_research_website
 from app.core.config import settings
 from app.integrations.search_provider import SearchProviderError, create_tavily_search_provider
 from app.services.company_resolution import CompanyWebsiteResolver, ResolvedCompany
@@ -187,6 +192,57 @@ def start_evidence_gate_endpoint(
     return {"status": "evidence_review_started"}
 
 
+@router.post(
+    "/research-requests/{request_id}/website-audit",
+    response_model=ResearchRequestResponse,
+    status_code=status.HTTP_200_OK,
+    summary="Measure verified website mobile performance",
+    responses={
+        404: {"description": "Request unknown or owned by another user"},
+        409: {"description": "Accepted evidence is required before auditing"},
+    },
+)
+def audit_website_endpoint(
+    request_id: UUID,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    research_request = get_research_request_for_user(
+        db=db,
+        request_id=request_id,
+        current_user=current_user,
+    )
+    if research_request is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Research request not found",
+        )
+
+    company = get_company_by_id(
+        db=db,
+        company_id=research_request.company_id,
+        user_id=current_user.id,
+    )
+    if company is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Company not found",
+        )
+
+    selection = (
+        db.get(CampaignCandidateSelection, research_request.campaign_candidate_selection_id)
+        if research_request.campaign_candidate_selection_id is not None
+        else None
+    )
+    try:
+        return audit_research_website(db, research_request, company, selection)
+    except WebsiteAuditError as error:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail=str(error),
+        ) from error
+
+
 @router.get(
     "/research-requests/{request_id}/sources",
     response_model=list[ResearchSourceResponse],
@@ -217,3 +273,28 @@ async def list_research_sources_endpoint(
         current_user=current_user,
         limit=limit,
     )
+
+
+@router.get(
+    "/research-requests/{request_id}/evidence",
+    response_model=list[ResearchEvidenceResponse],
+    status_code=status.HTTP_200_OK,
+    summary="List structured evidence saved for a research request",
+    responses={404: {"description": "Request unknown or owned by another user"}},
+)
+def list_research_evidence_endpoint(
+    request_id: UUID,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    research_request = get_research_request_for_user(
+        db=db,
+        request_id=request_id,
+        current_user=current_user,
+    )
+    if research_request is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Research request not found",
+        )
+    return list_research_evidence_for_user(db, request_id, current_user.id)

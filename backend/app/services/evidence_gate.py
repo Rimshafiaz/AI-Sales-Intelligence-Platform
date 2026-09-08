@@ -14,6 +14,7 @@ class EvidenceGateTarget:
     company_name: str
     location: str | None
     official_origin: str | None
+    official_website: str | None
     identity_verified: bool
     trusted_source_urls: frozenset[str]
 
@@ -40,6 +41,7 @@ def target_from_research_request(
             company_name=_text(resolved_target.get("business_name")) or company.name,
             location=_text(objective.get("location")),
             official_origin=_origin(official_website),
+            official_website=_normalized_url(official_website),
             identity_verified=resolved_target.get("identity_state") == "verified",
             trusted_source_urls=frozenset(
                 value for value in (_normalized_url(source_url),) if value is not None
@@ -53,6 +55,7 @@ def target_from_research_request(
             company_name=_text(candidate.get("company_name")) or company.name,
             location=_text(objective.get("location")) or _text(candidate.get("formatted_address")),
             official_origin=None,
+            official_website=None,
             identity_verified=_selection_confirms_identity(selection),
             trusted_source_urls=frozenset(trusted_urls),
         )
@@ -61,6 +64,7 @@ def target_from_research_request(
         company_name=company.name,
         location=_text(objective.get("location")) or _text(objective.get("region")),
         official_origin=None,
+        official_website=None,
         identity_verified=False,
         trusted_source_urls=frozenset(),
     )

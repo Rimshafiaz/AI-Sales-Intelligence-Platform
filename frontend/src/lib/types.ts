@@ -155,6 +155,23 @@ export interface ResearchRequest {
   evidence_gate_state: 'not_run' | 'ready_for_deeper_research' | 'needs_review'
   evidence_gate_reason: string | null
   evidence_gated_at: string | null
+  website_audit_state: 'not_run' | 'completed' | 'unavailable'
+  website_audit_reason: string | null
+  website_audited_at: string | null
+}
+
+export interface ResearchEvidence {
+  id: string
+  research_request_id: string
+  signal_type: string
+  evidence_type: 'observed' | 'inference'
+  supporting_value: string
+  numeric_value: number | null
+  source_provider: string
+  source_record_id: string | null
+  source_url: string
+  retrieved_at: string
+  captured_at: string
 }
 
 export interface KnownProspectResolution {

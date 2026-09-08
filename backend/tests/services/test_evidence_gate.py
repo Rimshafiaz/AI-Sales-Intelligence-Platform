@@ -10,6 +10,7 @@ def target() -> EvidenceGateTarget:
         company_name="Aleezay Hair Beauty Care Salon",
         location="Lahore",
         official_origin="https://aleezay.example",
+        official_website="https://aleezay.example/",
         identity_verified=True,
         trusted_source_urls=frozenset({"https://aleezay.example/"}),
     )
@@ -101,6 +102,7 @@ class TestEvidenceGate:
             company_name="Glow Salon",
             location="Lahore",
             official_origin=None,
+            official_website=None,
             identity_verified=False,
             trusted_source_urls=frozenset({"https://directory.example/glow"}),
         )

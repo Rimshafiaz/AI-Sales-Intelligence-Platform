@@ -2,7 +2,13 @@ import { useCallback, useEffect, useState } from 'react'
 import { Link, useNavigate, useParams } from 'react-router-dom'
 import { Check, ExternalLink, Loader2, XCircle } from 'lucide-react'
 import { api } from '../lib/api'
-import type { Company, ReportListResponse, ResearchRequest, ResearchSource } from '../lib/types'
+import type {
+  Company,
+  ReportListResponse,
+  ResearchEvidence,
+  ResearchRequest,
+  ResearchSource,
+} from '../lib/types'
 import { Button, Notice } from '../components/ui'
 
 type StageState = 'done' | 'active' | 'pending'
@@ -49,6 +55,78 @@ function StageRow({
   )
 }
 
+function WebsiteAuditPanel({
+  request,
+  evidence,
+  phase,
+  error,
+  onAudit,
+}: {
+  request: ResearchRequest
+  evidence: ResearchEvidence[] | null
+  phase: 'idle' | 'running'
+  error: string | null
+  onAudit: () => void
+}) {
+  const measurement = evidence?.find(
+    (item) => item.signal_type === 'website_mobile_performance_measured',
+  )
+
+  return (
+    <section className="mt-6 rounded-card border border-line-soft bg-card p-5">
+      <div className="flex flex-wrap items-start justify-between gap-4">
+        <div>
+          <h2 className="label-caps text-ink-soft">Website evidence</h2>
+          {request.website_audit_state === 'completed' && measurement ? (
+            <>
+              <p className="mt-2 font-display text-2xl font-semibold text-ink">
+                Mobile performance {measurement.numeric_value?.toFixed(1)}/100
+              </p>
+              <p className="mt-1 text-sm leading-relaxed text-ink-soft">
+                A factual PageSpeed measurement. It is not a service recommendation.
+              </p>
+            </>
+          ) : (
+            <p className="mt-2 max-w-xl text-sm leading-relaxed text-ink-soft">
+              {request.website_audit_reason ??
+                'Measure the verified official website before SalesLens assesses a web opportunity.'}
+            </p>
+          )}
+        </div>
+        <Button onClick={onAudit} disabled={phase !== 'idle'}>
+          {phase === 'running' ? (
+            <>
+              <Loader2 size={15} className="animate-spin" />
+              Measuring...
+            </>
+          ) : request.website_audit_state === 'completed' ? (
+            'Measure again'
+          ) : (
+            'Measure mobile performance'
+          )}
+        </Button>
+      </div>
+      {measurement && (
+        <a
+          href={measurement.source_url}
+          target="_blank"
+          rel="noreferrer"
+          className="mt-4 inline-flex items-center gap-1 font-mono text-[11px] text-ink-soft hover:text-action"
+        >
+          Audited {domainOf(measurement.source_url)}
+          <ExternalLink size={11} />
+        </a>
+      )}
+      {request.website_audit_state === 'unavailable' && (
+        <p className="mt-3 text-sm text-ink-soft">
+          No performance conclusion was made.
+        </p>
+      )}
+      {error && <div className="mt-3"><Notice kind="error">{error}</Notice></div>}
+    </section>
+  )
+}
+
 export default function ResearchProgressPage() {
   const { requestId } = useParams<{ requestId: string }>()
   const navigate = useNavigate()
@@ -57,15 +135,25 @@ export default function ResearchProgressPage() {
   const [loadError, setLoadError] = useState<string | null>(null)
   const [company, setCompany] = useState<Company | null>(null)
   const [sources, setSources] = useState<ResearchSource[] | null>(null)
+  const [auditEvidence, setAuditEvidence] = useState<ResearchEvidence[] | null>(null)
   const [generatePhase, setGeneratePhase] = useState<'idle' | 'starting' | 'polling'>('idle')
   const [generateError, setGenerateError] = useState<string | null>(null)
   const [evidencePhase, setEvidencePhase] = useState<'idle' | 'starting'>('idle')
   const [evidenceError, setEvidenceError] = useState<string | null>(null)
+  const [auditPhase, setAuditPhase] = useState<'idle' | 'running'>('idle')
+  const [auditError, setAuditError] = useState<string | null>(null)
   const loadRequest = useCallback(async () => {
     if (!requestId) return null
     try {
       const data = await api<ResearchRequest>(`/research-requests/${requestId}`)
       setRequest(data)
+      if (data.website_audit_state === 'completed') {
+        api<ResearchEvidence[]>(`/research-requests/${data.id}/evidence`)
+          .then(setAuditEvidence)
+          .catch(() => setAuditEvidence([]))
+      } else {
+        setAuditEvidence(null)
+      }
       setLoadError(null)
       return data
     } catch (e) {
@@ -130,6 +218,28 @@ export default function ResearchProgressPage() {
     }
   }
 
+  async function handleWebsiteAudit() {
+    if (!request || auditPhase !== 'idle') return
+    setAuditPhase('running')
+    setAuditError(null)
+    try {
+      const updated = await api<ResearchRequest>(`/research-requests/${request.id}/website-audit`, {
+        method: 'POST',
+      })
+      setRequest(updated)
+      if (updated.website_audit_state === 'completed') {
+        const storedEvidence = await api<ResearchEvidence[]>(
+          `/research-requests/${request.id}/evidence`,
+        )
+        setAuditEvidence(storedEvidence)
+      }
+    } catch (e) {
+      setAuditError(e instanceof Error ? e.message : 'Could not measure this website.')
+    } finally {
+      setAuditPhase('idle')
+    }
+  }
+
   useEffect(() => {
     if (generatePhase !== 'polling' || !request) return
     const requestIdLocal = request.id
@@ -170,6 +280,7 @@ export default function ResearchProgressPage() {
       )
       setRequest(null)
       setSources(null)
+      setAuditEvidence(null)
       navigate(`/research/${fresh.id}`)
     } catch (e) {
       setLoadError(e instanceof Error ? e.message : 'Could not start a new request.')
@@ -272,6 +383,15 @@ export default function ResearchProgressPage() {
             </div>
           )}
         </section>
+        {completed && request.evidence_gate_state === 'ready_for_deeper_research' && (
+          <WebsiteAuditPanel
+            request={request}
+            evidence={auditEvidence}
+            phase={auditPhase}
+            error={auditError}
+            onAudit={handleWebsiteAudit}
+          />
+        )}
       </main>
     )
   }
@@ -341,6 +461,13 @@ export default function ResearchProgressPage() {
 
       {completed && request.evidence_gate_state === 'ready_for_deeper_research' && (
         <>
+          <WebsiteAuditPanel
+            request={request}
+            evidence={auditEvidence}
+            phase={auditPhase}
+            error={auditError}
+            onAudit={handleWebsiteAudit}
+          />
           <section className="mt-6 rounded-card border border-line-soft bg-card p-5">
             <div className="flex flex-wrap items-center justify-between gap-3">
               <h2 className="label-caps text-ink-soft">

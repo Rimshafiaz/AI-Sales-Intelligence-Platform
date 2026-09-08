@@ -2,6 +2,7 @@ from app.models.company import Company
 from app.models.research_report import ResearchReport
 from app.models.research_request import ResearchRequest
 from app.models.research_source import ResearchSource
+from app.models.research_evidence import ResearchEvidence
 from app.models.user import User
 
 __all__ = [
@@ -12,6 +13,7 @@ __all__ = [
     "ResearchReport",
     "ResearchRequest",
     "ResearchSource",
+    "ResearchEvidence",
     "User",
 ]
 from app.models.campaign import Campaign

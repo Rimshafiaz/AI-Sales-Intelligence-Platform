@@ -16,6 +16,7 @@ from app.models.campaign_run import CampaignRun
 from app.models.research_report import ResearchReport
 from app.models.research_request import ResearchRequest
 from app.models.research_source import ResearchSource
+from app.models.research_evidence import ResearchEvidence
 from app.models.user import User
 from app.repositories.research_sources import create_research_sources
 from app.schemas.evidence_gate import EvidenceGateState, SourceAdmissionState
@@ -96,6 +97,11 @@ def _delete_user_data(user_id: uuid.UUID) -> None:
         session.execute(
             delete(ResearchSource).where(
                 ResearchSource.research_request_id.in_(request_ids)
+            )
+        )
+        session.execute(
+            delete(ResearchEvidence).where(
+                ResearchEvidence.research_request_id.in_(request_ids)
             )
         )
         session.execute(

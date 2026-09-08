@@ -10,6 +10,7 @@ from app.schemas.company_discovery import (
 )
 from app.schemas.opportunity_models import EvidenceSource, IdentityState
 from app.schemas.evidence_gate import EvidenceGateState
+from app.schemas.website_audit import WebsiteAuditState
 
 
 class KnownProspectResearchRequest(BaseModel):
@@ -85,5 +86,8 @@ class ResearchRequestResponse(BaseModel):
     evidence_gate_state: EvidenceGateState
     evidence_gate_reason: str | None = None
     evidence_gated_at: datetime | None = None
+    website_audit_state: WebsiteAuditState
+    website_audit_reason: str | None = None
+    website_audited_at: datetime | None = None
 
     model_config = ConfigDict(from_attributes=True)

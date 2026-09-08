@@ -34,6 +34,10 @@ class Settings(BaseSettings):
         default=None,
         validation_alias=AliasChoices("SERPER_API_KEY", "Serper_API_KEY"),
     )
+    pagespeed_api_key: str | None = Field(
+        default=None,
+        validation_alias=AliasChoices("PAGESPEED_API_KEY", "PageSpeed_API_KEY"),
+    )
     apify_token: str | None = Field(
         default=None,
         validation_alias=AliasChoices("APIFY_TOKEN", "Apify_Token"),
