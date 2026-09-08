@@ -92,6 +92,7 @@ export default function ResearchProgressPage() {
 
   useEffect(() => {
     if (loadError) return
+    if (request?.objective?.mode === 'known_prospect') return
     if (request && (request.status === 'completed' || request.status === 'failed')) return
     const interval = setInterval(() => void loadRequest(), 3000)
     return () => clearInterval(interval)
@@ -183,6 +184,54 @@ export default function ResearchProgressPage() {
   const failed = request.status === 'failed'
   const completed = request.status === 'completed'
   const running = request.status === 'running'
+  const isKnownProspect = request.objective?.mode === 'known_prospect'
+
+  if (isKnownProspect) {
+    const goal = typeof request.objective?.goal === 'string' ? request.objective.goal : null
+    const offering =
+      typeof request.objective?.offering === 'string' ? request.objective.offering : null
+
+    return (
+      <main className="mx-auto max-w-4xl px-4 py-8 sm:px-6">
+        <p className="label-caps text-ink-faint">Known prospect confirmed</p>
+        <h1 className="mt-1 font-display text-3xl font-semibold text-ink">{companyTitle}</h1>
+        <section className="mt-6 rounded-card border border-line-soft bg-card p-5">
+          <span className="rounded-control bg-good-wash px-2.5 py-1 font-mono text-[11px] uppercase text-good-ink">
+            Identity verified
+          </span>
+          <h2 className="mt-4 font-display text-xl font-semibold text-ink">
+            Ready for evidence review
+          </h2>
+          <p className="mt-2 max-w-2xl text-sm leading-relaxed text-ink-soft">
+            SalesLens saved the verified company and the research scope. The next
+            milestone decides whether enough evidence exists to begin deeper research;
+            no generic report has been started.
+          </p>
+          {(goal || offering) && (
+            <dl className="mt-5 grid gap-4 border-t border-line-soft pt-4 sm:grid-cols-2">
+              {offering && (
+                <div>
+                  <dt className="label-caps text-ink-faint">Offering</dt>
+                  <dd className="mt-1 text-sm text-ink">{offering}</dd>
+                </div>
+              )}
+              {goal && (
+                <div>
+                  <dt className="label-caps text-ink-faint">Goal</dt>
+                  <dd className="mt-1 text-sm text-ink">{goal}</dd>
+                </div>
+              )}
+            </dl>
+          )}
+          <div className="mt-5">
+            <Button variant="secondary" onClick={() => navigate('/research')}>
+              Research another company
+            </Button>
+          </div>
+        </section>
+      </main>
+    )
+  }
 
   const stages: { label: string; state: StageState; timestamp: string | null }[] = [
     { label: 'Request accepted', state: 'done', timestamp: request.created_at },

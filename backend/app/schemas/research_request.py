@@ -8,25 +8,38 @@ from app.schemas.company_discovery import (
     UNSUPPORTED_GOAL_MESSAGE,
     DiscoveryObjective,
 )
+from app.schemas.opportunity_models import EvidenceSource, IdentityState
 
 
 class KnownProspectResearchRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     business_name: str = Field(min_length=1, max_length=255)
+    goal: str = Field(min_length=3, max_length=2_000)
     offering: str = Field(min_length=3, max_length=300)
     desired_outcome: str = Field(min_length=3, max_length=300)
     location: str | None = Field(default=None, max_length=100)
     website: HttpUrl | None = None
 
     @field_validator(
-        "business_name", "offering", "desired_outcome", "location", mode="before"
+        "business_name", "goal", "offering", "desired_outcome", "location", mode="before"
     )
     @classmethod
     def normalize_text(cls, value: object) -> object:
         if isinstance(value, str):
             return value.strip() or None
         return value
+
+
+class KnownProspectResolutionResponse(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    business_name: str = Field(min_length=1, max_length=255)
+    location: str | None = Field(default=None, max_length=100)
+    website: HttpUrl | None = None
+    identity_state: IdentityState
+    source: EvidenceSource | None = None
+    reason: str = Field(min_length=1, max_length=1_000)
 
 
 class ResearchRequestStartRequest(BaseModel):

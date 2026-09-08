@@ -7,19 +7,82 @@ from app.api.dependencies.current_user import get_current_user
 from app.db.session import get_db
 from app.models.user import User
 from app.schemas.research_request import (
+    KnownProspectResearchRequest,
+    KnownProspectResolutionResponse,
     ResearchRequestResponse,
     ResearchRequestStartRequest,
 )
 from app.schemas.research_source import ResearchSourceResponse
 from app.services.research_runner import run_research
 from app.services.research_requests import (
+    KnownProspectResolutionError,
+    confirm_known_prospect,
     create_research_request_for_company,
     get_research_request_for_user,
+    resolve_known_prospect,
 )
 from app.services.research_sources import list_research_sources_for_user
+from app.core.config import settings
+from app.integrations.search_provider import SearchProviderError, create_tavily_search_provider
+from app.services.company_resolution import CompanyWebsiteResolver, ResolvedCompany
 
 
 router = APIRouter(tags=["Research Requests"])
+
+
+@router.post(
+    "/known-prospects/resolve",
+    response_model=KnownProspectResolutionResponse,
+    summary="Resolve a known prospect before creating research",
+    responses={422: {"description": "Invalid target or ambiguous identity"}},
+)
+def resolve_known_prospect_endpoint(
+    payload: KnownProspectResearchRequest,
+    _current_user: User = Depends(get_current_user),
+):
+    try:
+        resolver = CompanyWebsiteResolver(
+            create_tavily_search_provider(settings.tavily_api_key)
+        )
+        resolution: ResolvedCompany = resolve_known_prospect(resolver, payload)
+        return KnownProspectResolutionResponse(
+            business_name=resolution.company_name,
+            location=resolution.location,
+            website=resolution.website,
+            identity_state=resolution.identity_state,
+            source=resolution.source,
+            reason=resolution.reason,
+        )
+    except (SearchProviderError, ValueError) as error:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
+            detail=str(error),
+        ) from error
+
+
+@router.post(
+    "/known-prospects/confirm",
+    response_model=ResearchRequestResponse,
+    status_code=status.HTTP_201_CREATED,
+    summary="Confirm a resolved known prospect for evidence review",
+    responses={422: {"description": "Business identity needs review"}},
+)
+def confirm_known_prospect_endpoint(
+    payload: KnownProspectResearchRequest,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    try:
+        resolver = CompanyWebsiteResolver(
+            create_tavily_search_provider(settings.tavily_api_key)
+        )
+        resolution = resolve_known_prospect(resolver, payload)
+        return confirm_known_prospect(db, current_user, payload, resolution)
+    except (SearchProviderError, KnownProspectResolutionError, ValueError) as error:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
+            detail=str(error),
+        ) from error
 
 
 @router.post(

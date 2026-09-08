@@ -50,6 +50,21 @@ export interface ResearchRequest {
   started_at: string | null
   finished_at: string | null
   error_message: string | null
+  objective: Record<string, unknown> | null
+}
+
+export interface KnownProspectResolution {
+  business_name: string
+  location: string | null
+  website: string | null
+  identity_state: 'verified' | 'needs_review' | 'rejected'
+  source: {
+    provider: string
+    provider_record_id: string | null
+    source_url: string | null
+    retrieved_at: string
+  } | null
+  reason: string
 }
 
 export interface ResearchSource {

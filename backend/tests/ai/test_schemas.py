@@ -138,6 +138,7 @@ class TestDiscoverySchemas:
     def test_known_prospect_requires_scope_and_validates_website(self):
         request = KnownProspectResearchRequest(
             business_name="  Aleezay Hair Beauty Care Salon  ",
+            goal="Decide whether the salon is worth pitching for a better booking website.",
             offering="Website design and online booking setup",
             desired_outcome="Decide whether this salon is worth pitching.",
             location="Lahore",
@@ -148,6 +149,7 @@ class TestDiscoverySchemas:
         with pytest.raises(ValidationError):
             KnownProspectResearchRequest(
                 business_name="Aleezay Hair Beauty Care Salon",
+                goal="Decide whether this salon is worth pitching.",
                 offering="",
                 desired_outcome="Decide whether this salon is worth pitching.",
             )

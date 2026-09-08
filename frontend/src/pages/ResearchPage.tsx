@@ -1,8 +1,8 @@
 import { useEffect, useState, type FormEvent } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { ExternalLink, Loader2, Search } from 'lucide-react'
+import { Check, ExternalLink, Loader2, Search } from 'lucide-react'
 import { api } from '../lib/api'
-import type { Company } from '../lib/types'
+import type { Company, KnownProspectResolution } from '../lib/types'
 import { Button, Notice, TextField } from '../components/ui'
 
 function isValidWebsite(value: string): boolean {
@@ -23,8 +23,9 @@ export default function ResearchPage() {
   const [region, setRegion] = useState('')
   const [companies, setCompanies] = useState<Company[] | null>(null)
   const [companiesError, setCompaniesError] = useState<string | null>(null)
-  const [submitting, setSubmitting] = useState(false)
-  const [busyCompanyId, setBusyCompanyId] = useState<string | null>(null)
+  const [resolving, setResolving] = useState(false)
+  const [confirming, setConfirming] = useState(false)
+  const [resolution, setResolution] = useState<KnownProspectResolution | null>(null)
   const [error, setError] = useState<string | null>(null)
 
   useEffect(() => {
@@ -35,94 +36,97 @@ export default function ResearchPage() {
       )
   }, [])
 
-  function scopeFields() {
+  function clearResolution() {
+    setResolution(null)
+    setError(null)
+  }
+
+  function payload() {
+    const cleanName = name.trim()
+    const cleanWebsite = website.trim()
     const cleanOffering = offering.trim()
     const cleanGoal = goal.trim()
     const cleanRegion = region.trim()
-    return { cleanOffering, cleanGoal, cleanRegion }
+    return {
+      business_name: cleanName,
+      goal: cleanGoal,
+      offering: cleanOffering,
+      desired_outcome: 'Decide whether this prospect merits evidence review before outreach.',
+      ...(cleanRegion ? { location: cleanRegion } : {}),
+      ...(cleanWebsite ? { website: cleanWebsite } : {}),
+    }
   }
 
-  async function startRequest(companyId: string) {
-    const { cleanOffering, cleanGoal, cleanRegion } = scopeFields()
-    const request = await api<{ id: string }>(
-      `/companies/${companyId}/research-requests`,
-      {
-        method: 'POST',
-        body: {
-          goal: cleanGoal,
-          offering: cleanOffering,
-          ...(cleanRegion ? { region: cleanRegion } : {}),
-        },
-      },
-    )
-    navigate(`/research/${request.id}`)
+  function validate() {
+    const request = payload()
+    if (!request.business_name) return 'Company name is required.'
+    if (!request.offering) return 'Say what you are offering so the research can be scoped.'
+    if (!request.goal) {
+      return 'State the research goal, e.g. decide whether this business is worth pitching.'
+    }
+    if (website.trim() && !isValidWebsite(website.trim())) {
+      return 'Website must be a valid http(s) URL.'
+    }
+    return null
   }
 
   async function handleSubmit(event: FormEvent) {
     event.preventDefault()
-    if (submitting) return
+    if (resolving || confirming) return
 
-    const cleanName = name.trim()
-    const cleanWebsite = website.trim()
-    const { cleanOffering, cleanGoal } = scopeFields()
-    if (!cleanName) {
-      setError('Company name is required.')
-      return
-    }
-    if (!cleanOffering) {
-      setError('Say what you are offering so the research can be scoped.')
-      return
-    }
-    if (!cleanGoal) {
-      setError('State the research goal, e.g. decide whether this business is worth pitching.')
-      return
-    }
-    if (cleanWebsite && !isValidWebsite(cleanWebsite)) {
-      setError('Website must be a valid http(s) URL.')
+    const validationError = validate()
+    if (validationError) {
+      setError(validationError)
       return
     }
 
-    setSubmitting(true)
+    setResolving(true)
     setError(null)
     try {
-      const company = await api<Company>('/companies', {
+      const resolved = await api<KnownProspectResolution>('/known-prospects/resolve', {
         method: 'POST',
-        body: { name: cleanName, ...(cleanWebsite ? { website: cleanWebsite } : {}) },
+        body: payload(),
       })
-      await startRequest(company.id)
+      setResolution(resolved)
     } catch (e) {
-      setError(e instanceof Error ? e.message : 'Could not start research.')
-      setSubmitting(false)
+      setError(e instanceof Error ? e.message : 'Could not resolve this business identity.')
+    } finally {
+      setResolving(false)
     }
   }
 
-  async function handleQuickPick(company: Company) {
-    if (busyCompanyId || submitting) return
-    const { cleanOffering, cleanGoal } = scopeFields()
-    if (!cleanOffering || !cleanGoal) {
-      setError('Fill in what you offer and the research goal above first.')
-      return
-    }
-    setBusyCompanyId(company.id)
+  async function handleConfirm() {
+    if (!resolution || resolution.identity_state !== 'verified' || confirming) return
+
+    setConfirming(true)
     setError(null)
     try {
-      await startRequest(company.id)
+      const request = await api<{ id: string }>('/known-prospects/confirm', {
+        method: 'POST',
+        body: payload(),
+      })
+      navigate(`/research/${request.id}`)
     } catch (e) {
-      setError(e instanceof Error ? e.message : 'Could not start research.')
-      setBusyCompanyId(null)
+      setError(e instanceof Error ? e.message : 'Could not confirm this prospect.')
+      setConfirming(false)
     }
   }
+
+  function selectCompany(company: Company) {
+    setName(company.name)
+    setWebsite(company.website ?? '')
+    clearResolution()
+  }
+
+  const isVerified = resolution?.identity_state === 'verified'
 
   return (
     <main className="mx-auto max-w-4xl px-4 py-8 sm:px-6">
-      <p className="label-caps text-ink-faint">Research a company</p>
-      <h1 className="mt-1 font-display text-3xl font-semibold text-ink">
-        Research a company
-      </h1>
+      <p className="label-caps text-ink-faint">Known prospect research</p>
+      <h1 className="mt-1 font-display text-3xl font-semibold text-ink">Research a company</h1>
       <p className="mt-2 max-w-2xl text-sm text-ink-soft">
-        Name a business, say what you are offering and what you want to decide.
-        The system resolves its identity, collects evidence, and tells you
-        whether it is worth pursuing for your offer.
+        Define what you offer and what you need to decide. SalesLens verifies the
+        business identity before it creates an evidence-review request.
       </p>
 
       <form
@@ -135,67 +139,144 @@ export default function ResearchPage() {
             hint="Required"
             placeholder="e.g. Aleezay Hair Beauty Care Salon"
             value={name}
-            onChange={(event) => setName(event.target.value)}
+            onChange={(event) => {
+              setName(event.target.value)
+              clearResolution()
+            }}
           />
           <TextField
             label="Website"
             hint="Optional"
             placeholder="https://example.com"
             value={website}
-            onChange={(event) => setWebsite(event.target.value)}
+            onChange={(event) => {
+              setWebsite(event.target.value)
+              clearResolution()
+            }}
           />
           <TextField
             label="What are you offering?"
             hint="Required"
             placeholder="e.g. Website design and online booking setup"
             value={offering}
-            onChange={(event) => setOffering(event.target.value)}
+            onChange={(event) => {
+              setOffering(event.target.value)
+              clearResolution()
+            }}
           />
           <TextField
             label="Research goal"
             hint="Required"
             placeholder="e.g. Decide whether this business is worth pitching"
             value={goal}
-            onChange={(event) => setGoal(event.target.value)}
+            onChange={(event) => {
+              setGoal(event.target.value)
+              clearResolution()
+            }}
           />
           <TextField
             label="City or region"
             hint="Optional, recommended"
             placeholder="e.g. Lahore"
             value={region}
-            onChange={(event) => setRegion(event.target.value)}
+            onChange={(event) => {
+              setRegion(event.target.value)
+              clearResolution()
+            }}
           />
         </div>
         {error && (
-          <div className="mt-4">
+          <div className="mt-4" aria-live="polite">
             <Notice kind="error">{error}</Notice>
           </div>
         )}
         <div className="mt-4 flex justify-end">
-          <Button type="submit" disabled={submitting}>
-            {submitting ? (
+          <Button type="submit" disabled={resolving || confirming}>
+            {resolving ? (
               <>
                 <Loader2 size={15} className="animate-spin" />
-                Starting...
+                Resolving identity...
               </>
             ) : (
               <>
                 <Search size={15} />
-                Start research
+                Resolve business
               </>
             )}
           </Button>
         </div>
       </form>
 
+      {resolution && (
+        <section className="mt-5 rounded-card border border-line-soft bg-card p-5" aria-live="polite">
+          <div className="flex flex-wrap items-start justify-between gap-3">
+            <div>
+              <p className="label-caps text-ink-faint">Identity check</p>
+              <h2 className="mt-1 font-display text-xl font-semibold text-ink">
+                {resolution.business_name}
+              </h2>
+              <p className="mt-1 text-sm text-ink-soft">{resolution.reason}</p>
+            </div>
+            <span
+              className={
+                'rounded-control px-2.5 py-1 font-mono text-[11px] uppercase ' +
+                (isVerified ? 'bg-good-wash text-good-ink' : 'bg-warn-wash text-warn-ink')
+              }
+            >
+              {isVerified ? 'Verified' : 'Needs review'}
+            </span>
+          </div>
+          {resolution.website && (
+            <a
+              href={resolution.website}
+              target="_blank"
+              rel="noreferrer"
+              className="mt-4 inline-flex items-center gap-1 font-mono text-xs text-action hover:underline"
+            >
+              {resolution.website.replace(/^https?:\/\//, '')}
+              <ExternalLink size={12} />
+            </a>
+          )}
+          {resolution.source?.source_url && (
+            <p className="mt-3 font-mono text-[11px] text-ink-faint">
+              Source: {resolution.source.provider}
+            </p>
+          )}
+          {isVerified ? (
+            <div className="mt-5 flex flex-wrap items-center justify-between gap-3 border-t border-line-soft pt-4">
+              <p className="max-w-xl text-sm text-ink-soft">
+                Confirming creates a pending evidence-review request. It does not start a
+                report or send outreach.
+              </p>
+              <Button onClick={handleConfirm} disabled={confirming}>
+                {confirming ? (
+                  <>
+                    <Loader2 size={15} className="animate-spin" />
+                    Confirming...
+                  </>
+                ) : (
+                  <>
+                    <Check size={15} />
+                    Confirm prospect
+                  </>
+                )}
+              </Button>
+            </div>
+          ) : (
+            <div className="mt-4">
+              <Notice kind="info">
+                Adjust the company details or website and resolve again. SalesLens will
+                not create research for an ambiguous identity.
+              </Notice>
+            </div>
+          )}
+        </section>
+      )}
+
       <section className="mt-10">
         <div className="flex items-baseline justify-between">
-          <h2 className="font-display text-lg font-semibold text-ink">
-            Or choose from your companies
-          </h2>
-          <p className="text-xs text-ink-faint">
-            Selecting one starts research immediately.
-          </p>
+          <h2 className="font-display text-lg font-semibold text-ink">Use an existing company</h2>
+          <p className="text-xs text-ink-faint">This fills the form; it does not start research.</p>
         </div>
 
         {companiesError && (
@@ -211,7 +292,7 @@ export default function ResearchPage() {
         {companies && companies.length === 0 && (
           <div className="mt-3 rounded-card border border-line-soft bg-card p-6 text-center">
             <p className="font-narrative text-sm text-ink-soft">
-              You have no companies yet. Create one with the form above.
+              You have no companies yet. Add one with the form above.
             </p>
           </div>
         )}
@@ -242,19 +323,8 @@ export default function ResearchPage() {
                     )}
                   </div>
                 </div>
-                <Button
-                  variant="secondary"
-                  disabled={busyCompanyId !== null || submitting}
-                  onClick={() => handleQuickPick(company)}
-                >
-                  {busyCompanyId === company.id ? (
-                    <>
-                      <Loader2 size={14} className="animate-spin" />
-                      Starting...
-                    </>
-                  ) : (
-                    'Start research'
-                  )}
+                <Button variant="secondary" onClick={() => selectCompany(company)}>
+                  Use details
                 </Button>
               </div>
             ))}
