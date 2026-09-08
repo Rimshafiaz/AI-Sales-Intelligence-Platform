@@ -5,6 +5,8 @@ import { api } from '../lib/api'
 import {
   buildCitationIndex,
   domainOf,
+  isProspectEvidenceBrief,
+  type LegacyReportData,
   type Finding,
   type ReportDetail,
 } from '../lib/report'
@@ -18,6 +20,7 @@ import {
   TextareaField,
 } from '../components/ui'
 import { FindingText } from '../components/report/FindingText'
+import { ProspectEvidenceBriefView } from '../components/report/ProspectEvidenceBriefView'
 
 function SectionHeader({ number, title }: { number: string; title: string }) {
   return (
@@ -122,8 +125,8 @@ export default function ReportReviewPage() {
   }
 
   function startEdit() {
-    if (!detail) return
-    const d = detail.report.report_data
+    if (!detail || isProspectEvidenceBrief(detail.report)) return
+    const d = detail.report.report_data as LegacyReportData
     setEditForm({
       strategy: d.strategy.recommended_strategy.statement,
       sales_angle: d.strategy.recommended_sales_angle.statement,
@@ -249,14 +252,61 @@ export default function ReportReviewPage() {
   }
 
   const { report, sources } = detail
-  const data = report.report_data
   const citationIndex = buildCitationIndex(sources)
   const approved = report.review_status === 'approved'
 
+  if (isProspectEvidenceBrief(report)) {
+    const brief = report.report_data
+    return (
+      <main className="mx-auto max-w-5xl px-4 py-8 sm:px-6">
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <Link to="/history" className="text-xs text-ink-soft hover:text-ink">
+            Back to history
+          </Link>
+          <div className="flex items-center gap-2">
+            <StatusBadge status={report.review_status} />
+            <Button variant="secondary" onClick={handleApprove} disabled={approving}>
+              {approving ? (
+                <>
+                  <Loader2 size={14} className="animate-spin" />
+                  Approving...
+                </>
+              ) : approved ? (
+                <>
+                  <Check size={14} />
+                  Approved
+                </>
+              ) : (
+                'Approve brief'
+              )}
+            </Button>
+          </div>
+        </div>
+        {actionError && (
+          <div className="mt-3">
+            <Notice kind="error">{actionError}</Notice>
+          </div>
+        )}
+        <h1 className="mt-6 font-display text-3xl font-bold tracking-tight text-ink">
+          {brief.prospect.business_name}
+        </h1>
+        <p className="mt-1 font-ui text-xs text-ink-faint">
+          Generated {new Date(report.generated_at).toLocaleString()} | Evidence brief{' '}
+          <span className="font-mono">{report.id.slice(0, 8)}</span>
+        </p>
+        <ProspectEvidenceBriefView brief={brief} />
+      </main>
+    )
+  }
+
+  const data = report.report_data as LegacyReportData
+  const legacyScore = report.opportunity_score ?? 0
+  const legacyRecommendation = report.contact_recommendation ?? 'consider'
+
   const scoreTone =
-    report.opportunity_score >= 70
+    legacyScore >= 70
       ? 'text-ok-ink'
-      : report.opportunity_score >= 40
+      : legacyScore >= 40
         ? 'text-warn-ink'
         : 'text-bad-ink'
 
@@ -464,14 +514,14 @@ export default function ReportReviewPage() {
           <div>
             <p className="label-caps text-ink-faint">Opportunity composite</p>
             <p className={'mt-1 font-display text-5xl font-bold ' + scoreTone}>
-              {report.opportunity_score}
+              {legacyScore}
               <span className="text-base font-medium text-ink-faint"> / 100</span>
             </p>
           </div>
           <div>
             <p className="label-caps text-ink-faint">Recommendation</p>
             <div className="mt-1.5">
-              <RecommendationBadge recommendation={report.contact_recommendation} />
+              <RecommendationBadge recommendation={legacyRecommendation} />
             </div>
           </div>
           <div>
@@ -632,7 +682,7 @@ export default function ReportReviewPage() {
       <section className="mt-8">
         <SectionHeader number="06" title="Contact Recommendation" />
         <div className="mt-3 space-y-2">
-          <RecommendationBadge recommendation={report.contact_recommendation} />
+          <RecommendationBadge recommendation={legacyRecommendation} />
           <FindingText
             finding={data.contact_recommendation.rationale}
             citationIndex={citationIndex}

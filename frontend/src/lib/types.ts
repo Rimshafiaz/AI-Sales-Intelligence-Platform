@@ -226,8 +226,9 @@ export interface ReportListItem {
   research_request_id: string
   company_id: string
   company_name: string
-  opportunity_score: number
-  contact_recommendation: string
+  report_kind: 'sales_intelligence' | 'prospect_evidence_brief'
+  opportunity_score: number | null
+  contact_recommendation: string | null
   review_status: 'draft' | 'approved'
   generated_at: string
 }

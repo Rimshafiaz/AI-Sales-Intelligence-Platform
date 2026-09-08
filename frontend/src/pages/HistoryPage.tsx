@@ -317,8 +317,8 @@ export default function HistoryPage() {
                   <tr className="border-b border-ink">
                     {[
                       'Company name',
-                      'Opportunity score',
-                      'Recommendation',
+                      'Report type',
+                      'Assessment',
                       'Review status',
                       'Generated date',
                       'Actions',
@@ -350,19 +350,32 @@ export default function HistoryPage() {
                         </div>
                       </td>
                       <td className="px-4 py-3">
-                        <span className="font-mono text-sm text-ink">
-                          {item.opportunity_score}
+                        <span className="label-caps text-ink-soft">
+                          {item.report_kind === 'prospect_evidence_brief'
+                            ? 'Evidence brief'
+                            : 'Legacy report'}
                         </span>
-                        <span className="text-xs text-ink-faint">/100</span>
-                        <div className="mt-1 h-1 w-24 rounded-full bg-line-soft">
-                          <div
-                            className="h-1 rounded-full bg-action"
-                            style={{ width: `${item.opportunity_score}%` }}
-                          />
-                        </div>
                       </td>
                       <td className="px-4 py-3">
-                        <RecommendationBadge recommendation={item.contact_recommendation} />
+                        {item.report_kind === 'prospect_evidence_brief' ? (
+                          <span className="text-sm text-ink-soft">Evidence-backed verdict</span>
+                        ) : item.opportunity_score !== null && item.contact_recommendation ? (
+                          <div>
+                            <span className="font-mono text-sm text-ink">{item.opportunity_score}</span>
+                            <span className="text-xs text-ink-faint">/100</span>
+                            <div className="mt-1 flex items-center gap-2">
+                              <div className="h-1 w-16 rounded-full bg-line-soft">
+                                <div
+                                  className="h-1 rounded-full bg-action"
+                                  style={{ width: `${item.opportunity_score}%` }}
+                                />
+                              </div>
+                              <RecommendationBadge recommendation={item.contact_recommendation} />
+                            </div>
+                          </div>
+                        ) : (
+                          <span className="text-sm text-ink-faint">Unavailable</span>
+                        )}
                       </td>
                       <td className="px-4 py-3">
                         <StatusBadge status={item.review_status} />

@@ -128,6 +128,7 @@ export default function DashboardPage() {
     .filter((item) => item.review_status === 'approved')
     .sort((a, b) => b.generated_at.localeCompare(a.generated_at))
   const opportunities = latestPerCompany(items)
+    .filter((item): item is ReportListItem & { opportunity_score: number } => item.opportunity_score !== null)
     .sort((a, b) => b.opportunity_score - a.opportunity_score)
     .slice(0, 5)
   const activity = summary.recent_activity
@@ -152,7 +153,10 @@ export default function DashboardPage() {
     if (drafts.length > 0) {
       const top = drafts[0]
       return {
-        reason: `Highest-scoring draft in your queue at ${top.opportunity_score}/100.`,
+        reason:
+          top.opportunity_score === null
+            ? 'An evidence brief is ready for your review.'
+            : `Highest-scoring draft in your queue at ${top.opportunity_score}/100.`,
         action: `Review ${top.company_name}`,
         to: `/reports/${top.id}`,
         cta: 'Review report',
