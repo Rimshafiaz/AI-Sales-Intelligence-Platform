@@ -2,6 +2,10 @@ from fastapi import APIRouter, Depends, HTTPException, status
 
 from app.api.dependencies.current_user import get_current_user
 from app.core.config import settings
+from app.schemas.discovery_shortlist import (
+    DiscoveryShortlistRequest,
+    DiscoveryShortlistResponse,
+)
 from app.integrations.apify_social import (
     ApifySocialProviderError,
     create_apify_social_enrichment_provider,
@@ -28,6 +32,10 @@ from app.services.company_discovery import (
 from app.services.social_enrichment import (
     SocialEnrichmentError,
     enrich_social_profiles,
+)
+from app.services.discovery_shortlist import (
+    DiscoveryShortlistError,
+    shortlist_discovery_candidates,
 )
 
 
@@ -135,4 +143,26 @@ def enrich_social_profiles_endpoint(
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
             detail="Social enrichment failed. Please try again.",
+        ) from error
+
+
+@router.post(
+    "/company-discovery/shortlist",
+    response_model=DiscoveryShortlistResponse,
+    status_code=status.HTTP_200_OK,
+    summary="Apply deterministic Opportunity Model shortlist rules (stateless)",
+    responses={
+        422: {"description": "Invalid model selection or candidate snapshot"},
+    },
+)
+def shortlist_discovery_candidates_endpoint(
+    request: DiscoveryShortlistRequest,
+    current_user: User = Depends(get_current_user),
+):
+    try:
+        return shortlist_discovery_candidates(request)
+    except (DiscoveryShortlistError, LocalBusinessDiscoveryError) as error:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
+            detail=str(error),
         ) from error
