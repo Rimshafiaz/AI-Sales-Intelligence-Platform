@@ -8,6 +8,7 @@ from datetime import datetime, timezone
 from app.models.research_request import ResearchRequest, ResearchStatus
 from app.schemas.evidence_gate import EvidenceGateResponse
 from app.schemas.website_audit import WebsiteAuditResult
+from app.schemas.social_audit import SocialAuditResult
 
 
 def create_research_request(
@@ -101,6 +102,22 @@ def save_website_audit_result(
     request.website_audit_state = result.state
     request.website_audit_reason = result.reason
     request.website_audited_at = result.audited_at
+    db.commit()
+    db.refresh(request)
+    return request
+
+
+def save_social_audit_result(
+    db: Session,
+    request_id: UUID,
+    result: SocialAuditResult,
+) -> ResearchRequest | None:
+    request = get_research_request_by_id(db, request_id)
+    if request is None:
+        return None
+    request.social_audit_state = result.state
+    request.social_audit_reason = result.reason
+    request.social_audited_at = result.audited_at
     db.commit()
     db.refresh(request)
     return request

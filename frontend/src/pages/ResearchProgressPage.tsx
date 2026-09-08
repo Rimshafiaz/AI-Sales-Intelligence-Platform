@@ -7,9 +7,10 @@ import type {
   ReportListResponse,
   ResearchEvidence,
   ResearchRequest,
+  ResearchSocialObservation,
   ResearchSource,
 } from '../lib/types'
-import { Button, Notice } from '../components/ui'
+import { Button, Notice, TextField } from '../components/ui'
 
 type StageState = 'done' | 'active' | 'pending'
 
@@ -127,6 +128,96 @@ function WebsiteAuditPanel({
   )
 }
 
+function SocialAuditPanel({
+  request,
+  observations,
+  profileUrl,
+  phase,
+  error,
+  onProfileUrlChange,
+  onAudit,
+}: {
+  request: ResearchRequest
+  observations: ResearchSocialObservation[] | null
+  profileUrl: string
+  phase: 'idle' | 'running'
+  error: string | null
+  onProfileUrlChange: (value: string) => void
+  onAudit: () => void
+}) {
+  return (
+    <section className="mt-6 rounded-card border border-line-soft bg-card p-5">
+      <div className="flex flex-wrap items-start justify-between gap-4">
+        <div>
+          <h2 className="label-caps text-ink-soft">Social evidence</h2>
+          <p className="mt-2 max-w-xl text-sm leading-relaxed text-ink-soft">
+            {request.social_audit_reason ??
+              'Observe public social profiles before SalesLens assesses a social opportunity.'}
+          </p>
+        </div>
+        <Button onClick={onAudit} disabled={phase !== 'idle'}>
+          {phase === 'running' ? (
+            <>
+              <Loader2 size={15} className="animate-spin" />
+              Observing...
+            </>
+          ) : request.social_audit_state === 'completed' ? (
+            'Observe again'
+          ) : (
+            'Observe public profiles'
+          )}
+        </Button>
+      </div>
+      <div className="mt-4 max-w-xl">
+        <TextField
+          label="Public profile URL"
+          hint="Optional"
+          placeholder="https://instagram.com/business"
+          value={profileUrl}
+          onChange={(event) => onProfileUrlChange(event.target.value)}
+        />
+        <p className="mt-1.5 text-xs leading-relaxed text-ink-faint">
+          SalesLens also uses any public profile links discovered with this prospect. Supported:
+          Instagram, Facebook, and TikTok.
+        </p>
+      </div>
+      {request.social_audit_state === 'unavailable' && (
+        <p className="mt-3 text-sm text-ink-soft">No negative social conclusion was made.</p>
+      )}
+      {observations && observations.length > 0 && (
+        <ul className="mt-4 divide-y divide-line-soft">
+          {observations.map((observation) => (
+            <li key={observation.id} className="flex items-center gap-3 py-2.5">
+              <span className="label-caps w-20 shrink-0 text-ink-faint">
+                {observation.platform}
+              </span>
+              <span className="min-w-0 flex-1 font-narrative text-sm text-ink">
+                {observation.display_name ?? observation.handle ?? domainOf(observation.profile_url)}
+                {observation.latest_public_post_at && (
+                  <span className="ml-2 font-mono text-[11px] text-ink-faint">
+                    latest post {new Date(observation.latest_public_post_at).toLocaleDateString()}
+                  </span>
+                )}
+              </span>
+              <span className="label-caps text-ink-faint">{observation.state}</span>
+              <a
+                href={observation.profile_url}
+                target="_blank"
+                rel="noreferrer"
+                className="inline-flex items-center gap-1 font-mono text-[11px] text-ink-soft hover:text-action"
+              >
+                Profile
+                <ExternalLink size={11} />
+              </a>
+            </li>
+          ))}
+        </ul>
+      )}
+      {error && <div className="mt-3"><Notice kind="error">{error}</Notice></div>}
+    </section>
+  )
+}
+
 export default function ResearchProgressPage() {
   const { requestId } = useParams<{ requestId: string }>()
   const navigate = useNavigate()
@@ -136,12 +227,16 @@ export default function ResearchProgressPage() {
   const [company, setCompany] = useState<Company | null>(null)
   const [sources, setSources] = useState<ResearchSource[] | null>(null)
   const [auditEvidence, setAuditEvidence] = useState<ResearchEvidence[] | null>(null)
+  const [socialObservations, setSocialObservations] = useState<ResearchSocialObservation[] | null>(null)
   const [generatePhase, setGeneratePhase] = useState<'idle' | 'starting' | 'polling'>('idle')
   const [generateError, setGenerateError] = useState<string | null>(null)
   const [evidencePhase, setEvidencePhase] = useState<'idle' | 'starting'>('idle')
   const [evidenceError, setEvidenceError] = useState<string | null>(null)
   const [auditPhase, setAuditPhase] = useState<'idle' | 'running'>('idle')
   const [auditError, setAuditError] = useState<string | null>(null)
+  const [socialAuditPhase, setSocialAuditPhase] = useState<'idle' | 'running'>('idle')
+  const [socialAuditError, setSocialAuditError] = useState<string | null>(null)
+  const [socialProfileUrl, setSocialProfileUrl] = useState('')
   const loadRequest = useCallback(async () => {
     if (!requestId) return null
     try {
@@ -153,6 +248,13 @@ export default function ResearchProgressPage() {
           .catch(() => setAuditEvidence([]))
       } else {
         setAuditEvidence(null)
+      }
+      if (data.social_audit_state !== 'not_run') {
+        api<ResearchSocialObservation[]>(`/research-requests/${data.id}/social-observations`)
+          .then(setSocialObservations)
+          .catch(() => setSocialObservations([]))
+      } else {
+        setSocialObservations(null)
       }
       setLoadError(null)
       return data
@@ -240,6 +342,28 @@ export default function ResearchProgressPage() {
     }
   }
 
+  async function handleSocialAudit() {
+    if (!request || socialAuditPhase !== 'idle') return
+    setSocialAuditPhase('running')
+    setSocialAuditError(null)
+    try {
+      const profileUrls = socialProfileUrl.trim() ? [socialProfileUrl.trim()] : []
+      const updated = await api<ResearchRequest>(`/research-requests/${request.id}/social-audit`, {
+        method: 'POST',
+        body: { profile_urls: profileUrls },
+      })
+      setRequest(updated)
+      const storedObservations = await api<ResearchSocialObservation[]>(
+        `/research-requests/${request.id}/social-observations`,
+      )
+      setSocialObservations(storedObservations)
+    } catch (e) {
+      setSocialAuditError(e instanceof Error ? e.message : 'Could not observe public profiles.')
+    } finally {
+      setSocialAuditPhase('idle')
+    }
+  }
+
   useEffect(() => {
     if (generatePhase !== 'polling' || !request) return
     const requestIdLocal = request.id
@@ -281,6 +405,7 @@ export default function ResearchProgressPage() {
       setRequest(null)
       setSources(null)
       setAuditEvidence(null)
+      setSocialObservations(null)
       navigate(`/research/${fresh.id}`)
     } catch (e) {
       setLoadError(e instanceof Error ? e.message : 'Could not start a new request.')
@@ -384,13 +509,24 @@ export default function ResearchProgressPage() {
           )}
         </section>
         {completed && request.evidence_gate_state === 'ready_for_deeper_research' && (
-          <WebsiteAuditPanel
-            request={request}
-            evidence={auditEvidence}
-            phase={auditPhase}
-            error={auditError}
-            onAudit={handleWebsiteAudit}
-          />
+          <>
+            <WebsiteAuditPanel
+              request={request}
+              evidence={auditEvidence}
+              phase={auditPhase}
+              error={auditError}
+              onAudit={handleWebsiteAudit}
+            />
+            <SocialAuditPanel
+              request={request}
+              observations={socialObservations}
+              profileUrl={socialProfileUrl}
+              phase={socialAuditPhase}
+              error={socialAuditError}
+              onProfileUrlChange={setSocialProfileUrl}
+              onAudit={handleSocialAudit}
+            />
+          </>
         )}
       </main>
     )
@@ -467,6 +603,15 @@ export default function ResearchProgressPage() {
             phase={auditPhase}
             error={auditError}
             onAudit={handleWebsiteAudit}
+          />
+          <SocialAuditPanel
+            request={request}
+            observations={socialObservations}
+            profileUrl={socialProfileUrl}
+            phase={socialAuditPhase}
+            error={socialAuditError}
+            onProfileUrlChange={setSocialProfileUrl}
+            onAudit={handleSocialAudit}
           />
           <section className="mt-6 rounded-card border border-line-soft bg-card p-5">
             <div className="flex flex-wrap items-center justify-between gap-3">

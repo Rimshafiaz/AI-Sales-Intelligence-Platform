@@ -13,9 +13,10 @@ from app.models.campaign_candidate_selection import CampaignCandidateSelection
 from app.models.company import Company
 from app.models.research_request import ResearchRequest
 from app.models.research_request import ResearchStatus
-from app.repositories.research_evidence import upsert_mobile_performance_evidence
+from app.repositories.research_evidence import upsert_research_evidence
 from app.repositories.research_requests import save_website_audit_result
 from app.schemas.evidence_gate import EvidenceGateState
+from app.schemas.opportunity_models import EvidenceSignalType, EvidenceSource, EvidenceType
 from app.schemas.website_audit import WebsiteAuditResult, WebsiteAuditState
 from app.services.evidence_gate import target_from_research_request
 
@@ -51,16 +52,22 @@ def audit_research_website(
         return _save_unavailable(db, research_request.id, str(error))
 
     observed_at = datetime.now(UTC)
-    upsert_mobile_performance_evidence(
+    upsert_research_evidence(
         db=db,
         research_request_id=research_request.id,
+        signal_type=EvidenceSignalType.WEBSITE_MOBILE_PERFORMANCE_MEASURED,
+        evidence_type=EvidenceType.OBSERVED,
         supporting_value=(
             "PageSpeed Insights measured a mobile performance score of "
             f"{measurement.score:g}/100 for the verified official website."
         ),
         numeric_value=measurement.score,
-        source_url=measurement.final_url,
-        retrieved_at=measurement.retrieved_at,
+        source=EvidenceSource(
+            provider="pagespeed_insights",
+            source_url=measurement.final_url,
+            retrieved_at=measurement.retrieved_at,
+        ),
+        source_identity_key=f"pagespeed:{measurement.final_url}",
         captured_at=observed_at,
     )
     result = WebsiteAuditResult(

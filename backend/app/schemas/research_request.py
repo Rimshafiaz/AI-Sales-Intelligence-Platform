@@ -11,6 +11,7 @@ from app.schemas.company_discovery import (
 from app.schemas.opportunity_models import EvidenceSource, IdentityState
 from app.schemas.evidence_gate import EvidenceGateState
 from app.schemas.website_audit import WebsiteAuditState
+from app.schemas.social_audit import SocialAuditState
 
 
 class KnownProspectResearchRequest(BaseModel):
@@ -89,5 +90,8 @@ class ResearchRequestResponse(BaseModel):
     website_audit_state: WebsiteAuditState
     website_audit_reason: str | None = None
     website_audited_at: datetime | None = None
+    social_audit_state: SocialAuditState
+    social_audit_reason: str | None = None
+    social_audited_at: datetime | None = None
 
     model_config = ConfigDict(from_attributes=True)

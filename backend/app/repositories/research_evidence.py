@@ -7,43 +7,50 @@ from sqlalchemy.orm import Session
 from app.models.research_evidence import ResearchEvidence
 from app.models.research_request import ResearchRequest
 from app.models.user import User
-from app.schemas.opportunity_models import EvidenceSignalType, EvidenceType
+from app.schemas.opportunity_models import EvidenceSignalType, EvidenceSource, EvidenceType
 
 
-def upsert_mobile_performance_evidence(
+def upsert_research_evidence(
     db: Session,
     research_request_id: UUID,
+    signal_type: EvidenceSignalType,
+    evidence_type: EvidenceType,
     supporting_value: str,
-    numeric_value: float,
-    source_url: str,
-    retrieved_at: datetime,
+    numeric_value: float | None,
+    source: EvidenceSource,
+    source_identity_key: str,
     captured_at: datetime,
 ) -> ResearchEvidence:
     statement = select(ResearchEvidence).where(
         ResearchEvidence.research_request_id == research_request_id,
-        ResearchEvidence.signal_type == EvidenceSignalType.WEBSITE_MOBILE_PERFORMANCE_MEASURED.value,
-        ResearchEvidence.source_provider == "pagespeed_insights",
+        ResearchEvidence.signal_type == signal_type.value,
+        ResearchEvidence.source_identity_key == source_identity_key,
     )
     evidence = db.scalar(statement)
     if evidence is None:
         evidence = ResearchEvidence(
             research_request_id=research_request_id,
-            signal_type=EvidenceSignalType.WEBSITE_MOBILE_PERFORMANCE_MEASURED.value,
-            evidence_type=EvidenceType.OBSERVED.value,
+            signal_type=signal_type.value,
+            evidence_type=evidence_type.value,
             supporting_value=supporting_value,
             numeric_value=numeric_value,
-            source_provider="pagespeed_insights",
-            source_url=source_url,
-            retrieved_at=retrieved_at,
+            source_provider=source.provider,
+            source_identity_key=source_identity_key,
+            source_record_id=source.provider_record_id,
+            source_url=str(source.source_url),
+            retrieved_at=source.retrieved_at,
             captured_at=captured_at,
         )
         db.add(evidence)
         return evidence
 
+    evidence.evidence_type = evidence_type.value
     evidence.supporting_value = supporting_value
     evidence.numeric_value = numeric_value
-    evidence.source_url = source_url
-    evidence.retrieved_at = retrieved_at
+    evidence.source_provider = source.provider
+    evidence.source_record_id = source.provider_record_id
+    evidence.source_url = str(source.source_url)
+    evidence.retrieved_at = source.retrieved_at
     evidence.captured_at = captured_at
     return evidence
 

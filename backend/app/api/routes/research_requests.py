@@ -15,6 +15,12 @@ from app.schemas.research_request import (
 )
 from app.schemas.research_source import ResearchSourceResponse
 from app.schemas.research_evidence import ResearchEvidenceResponse
+from app.schemas.research_social_observation import ResearchSocialObservationResponse
+from app.schemas.social_audit import SocialAuditRequest
+from app.schemas.opportunity_qualification import (
+    OpportunityQualificationResponse,
+    OpportunityQualificationRunRequest,
+)
 from app.services.research_runner import run_research
 from app.services.research_requests import (
     KnownProspectResolutionError,
@@ -28,9 +34,16 @@ from app.repositories.research_evidence import list_research_evidence_for_user
 from app.models.campaign_candidate_selection import CampaignCandidateSelection
 from app.repositories.companies import get_company_by_id
 from app.services.website_audit import WebsiteAuditError, audit_research_website
+from app.services.social_audit import SocialAuditError, audit_research_social_profiles
+from app.repositories.research_social_observations import list_social_observations_for_user
+from app.repositories.opportunity_qualifications import list_opportunity_qualifications_for_user
 from app.core.config import settings
 from app.integrations.search_provider import SearchProviderError, create_tavily_search_provider
 from app.services.company_resolution import CompanyWebsiteResolver, ResolvedCompany
+from app.services.opportunity_qualification import (
+    OpportunityQualificationError,
+    qualify_research_request,
+)
 
 
 router = APIRouter(tags=["Research Requests"])
@@ -243,6 +256,114 @@ def audit_website_endpoint(
         ) from error
 
 
+@router.post(
+    "/research-requests/{request_id}/social-audit",
+    response_model=ResearchRequestResponse,
+    status_code=status.HTTP_200_OK,
+    summary="Observe and verify public social profile evidence",
+    responses={
+        404: {"description": "Request unknown or owned by another user"},
+        409: {"description": "Accepted evidence is required before auditing"},
+    },
+)
+def audit_social_endpoint(
+    request_id: UUID,
+    payload: SocialAuditRequest,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    research_request = get_research_request_for_user(
+        db=db,
+        request_id=request_id,
+        current_user=current_user,
+    )
+    if research_request is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Research request not found",
+        )
+    company = get_company_by_id(
+        db=db,
+        company_id=research_request.company_id,
+        user_id=current_user.id,
+    )
+    if company is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Company not found",
+        )
+    selection = (
+        db.get(CampaignCandidateSelection, research_request.campaign_candidate_selection_id)
+        if research_request.campaign_candidate_selection_id is not None
+        else None
+    )
+    try:
+        return audit_research_social_profiles(
+            db,
+            research_request,
+            company,
+            selection,
+            [str(url) for url in payload.profile_urls],
+        )
+    except SocialAuditError as error:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail=str(error),
+        ) from error
+
+
+@router.post(
+    "/research-requests/{request_id}/qualifications",
+    response_model=list[OpportunityQualificationResponse],
+    status_code=status.HTTP_200_OK,
+    summary="Evaluate evidence against the selected Opportunity Models",
+    responses={
+        404: {"description": "Request unknown or owned by another user"},
+        409: {"description": "Accepted evidence or qualification scope is unavailable"},
+    },
+)
+def qualify_opportunities_endpoint(
+    request_id: UUID,
+    payload: OpportunityQualificationRunRequest,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    research_request = get_research_request_for_user(
+        db=db,
+        request_id=request_id,
+        current_user=current_user,
+    )
+    if research_request is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Research request not found",
+        )
+    company = get_company_by_id(db, research_request.company_id, current_user.id)
+    if company is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Company not found",
+        )
+    selection = (
+        db.get(CampaignCandidateSelection, research_request.campaign_candidate_selection_id)
+        if research_request.campaign_candidate_selection_id is not None
+        else None
+    )
+    try:
+        qualify_research_request(db, research_request, company, selection, payload)
+    except OpportunityQualificationError as error:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail=str(error),
+        ) from error
+    return list_opportunity_qualifications_for_user(
+        db,
+        research_request.id,
+        current_user.id,
+        include_not_eligible=True,
+    )
+
+
 @router.get(
     "/research-requests/{request_id}/sources",
     response_model=list[ResearchSourceResponse],
@@ -298,3 +419,59 @@ def list_research_evidence_endpoint(
             detail="Research request not found",
         )
     return list_research_evidence_for_user(db, request_id, current_user.id)
+
+
+@router.get(
+    "/research-requests/{request_id}/qualifications",
+    response_model=list[OpportunityQualificationResponse],
+    status_code=status.HTTP_200_OK,
+    summary="List saved opportunity qualification decisions",
+    responses={404: {"description": "Request unknown or owned by another user"}},
+)
+def list_opportunity_qualifications_endpoint(
+    request_id: UUID,
+    include_not_eligible: bool = Query(default=False),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    research_request = get_research_request_for_user(
+        db=db,
+        request_id=request_id,
+        current_user=current_user,
+    )
+    if research_request is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Research request not found",
+        )
+    return list_opportunity_qualifications_for_user(
+        db,
+        request_id,
+        current_user.id,
+        include_not_eligible,
+    )
+
+
+@router.get(
+    "/research-requests/{request_id}/social-observations",
+    response_model=list[ResearchSocialObservationResponse],
+    status_code=status.HTTP_200_OK,
+    summary="List public social observations saved for a research request",
+    responses={404: {"description": "Request unknown or owned by another user"}},
+)
+def list_social_observations_endpoint(
+    request_id: UUID,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    research_request = get_research_request_for_user(
+        db=db,
+        request_id=request_id,
+        current_user=current_user,
+    )
+    if research_request is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Research request not found",
+        )
+    return list_social_observations_for_user(db, request_id, current_user.id)

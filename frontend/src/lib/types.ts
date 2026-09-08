@@ -158,6 +158,9 @@ export interface ResearchRequest {
   website_audit_state: 'not_run' | 'completed' | 'unavailable'
   website_audit_reason: string | null
   website_audited_at: string | null
+  social_audit_state: 'not_run' | 'completed' | 'unavailable'
+  social_audit_reason: string | null
+  social_audited_at: string | null
 }
 
 export interface ResearchEvidence {
@@ -172,6 +175,25 @@ export interface ResearchEvidence {
   source_url: string
   retrieved_at: string
   captured_at: string
+}
+
+export interface ResearchSocialObservation {
+  id: string
+  research_request_id: string
+  platform: 'instagram' | 'facebook' | 'tiktok'
+  profile_url: string
+  state: 'observed' | 'unavailable' | 'needs_review'
+  detail: string | null
+  display_name: string | null
+  handle: string | null
+  external_url: string | null
+  is_private: boolean | null
+  latest_public_post_at: string | null
+  recent_public_post_dates: string[]
+  source_provider: string
+  source_record_id: string | null
+  source_url: string
+  retrieved_at: string
 }
 
 export interface KnownProspectResolution {

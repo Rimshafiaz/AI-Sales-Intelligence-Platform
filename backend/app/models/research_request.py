@@ -10,12 +10,15 @@ from sqlalchemy.orm import Mapped, mapped_column, relationship
 from app.db.base import Base
 from app.schemas.evidence_gate import EvidenceGateState
 from app.schemas.website_audit import WebsiteAuditState
+from app.schemas.social_audit import SocialAuditState
 
 if TYPE_CHECKING:
     from app.models.campaign_candidate_selection import CampaignCandidateSelection
     from app.models.company import Company
     from app.models.research_source import ResearchSource
     from app.models.research_evidence import ResearchEvidence
+    from app.models.opportunity_qualification import OpportunityQualification
+    from app.models.research_social_observation import ResearchSocialObservation
     from app.models.user import User
 
 
@@ -117,6 +120,21 @@ class ResearchRequest(Base):
         DateTime(timezone=True),
         nullable=True,
     )
+    social_audit_state: Mapped[SocialAuditState] = mapped_column(
+        SAEnum(
+            SocialAuditState,
+            name="social_audit_state",
+            values_callable=lambda enum_class: [item.value for item in enum_class],
+        ),
+        default=SocialAuditState.NOT_RUN,
+        server_default=SocialAuditState.NOT_RUN.value,
+        nullable=False,
+    )
+    social_audit_reason: Mapped[str | None] = mapped_column(String(1000), nullable=True)
+    social_audited_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True),
+        nullable=True,
+    )
     company:Mapped["Company"] = relationship(
         "Company",
         back_populates="research_requests",
@@ -138,6 +156,14 @@ class ResearchRequest(Base):
     )
     evidence: Mapped[list["ResearchEvidence"]] = relationship(
         "ResearchEvidence",
+        back_populates="research_request",
+    )
+    opportunity_qualifications: Mapped[list["OpportunityQualification"]] = relationship(
+        "OpportunityQualification",
+        back_populates="research_request",
+    )
+    social_observations: Mapped[list["ResearchSocialObservation"]] = relationship(
+        "ResearchSocialObservation",
         back_populates="research_request",
     )
     campaign_candidate_selection: Mapped["CampaignCandidateSelection | None"] = (

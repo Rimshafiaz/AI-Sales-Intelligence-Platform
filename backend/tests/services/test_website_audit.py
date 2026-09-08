@@ -95,6 +95,7 @@ class TestWebsiteAudit:
         assert evidence.evidence_type == "observed"
         assert evidence.numeric_value == 43.0
         assert evidence.source_provider == "pagespeed_insights"
+        assert evidence.source_identity_key == "pagespeed:https://glow.example/"
         assert evidence.source_url == "https://glow.example/"
         assert "43/100" in evidence.supporting_value
 

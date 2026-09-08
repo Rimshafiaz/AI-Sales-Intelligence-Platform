@@ -14,6 +14,7 @@ class ResearchEvidenceResponse(BaseModel):
     supporting_value: str
     numeric_value: float | None = None
     source_provider: str
+    source_identity_key: str
     source_record_id: str | None = None
     source_url: str
     retrieved_at: datetime

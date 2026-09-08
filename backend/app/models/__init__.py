@@ -3,6 +3,8 @@ from app.models.research_report import ResearchReport
 from app.models.research_request import ResearchRequest
 from app.models.research_source import ResearchSource
 from app.models.research_evidence import ResearchEvidence
+from app.models.research_social_observation import ResearchSocialObservation
+from app.models.opportunity_qualification import OpportunityQualification
 from app.models.user import User
 
 __all__ = [
@@ -14,6 +16,8 @@ __all__ = [
     "ResearchRequest",
     "ResearchSource",
     "ResearchEvidence",
+    "ResearchSocialObservation",
+    "OpportunityQualification",
     "User",
 ]
 from app.models.campaign import Campaign

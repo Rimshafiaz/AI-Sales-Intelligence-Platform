@@ -11,6 +11,8 @@ EXPECTED_TABLES = {
     "research_requests",
     "research_sources",
     "research_evidence",
+    "research_social_observations",
+    "opportunity_qualifications",
     "research_reports",
     "campaigns",
     "campaign_runs",
