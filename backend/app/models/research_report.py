@@ -20,6 +20,11 @@ class ReportReviewStatus(str, Enum):
     APPROVED = "approved"
 
 
+class ReportKind(str, Enum):
+    LEGACY_SALES_INTELLIGENCE = "sales_intelligence"
+    PROSPECT_EVIDENCE_BRIEF = "prospect_evidence_brief"
+
+
 class ResearchReport(Base):
     __tablename__ = "research_reports"
 
@@ -59,14 +64,25 @@ class ResearchReport(Base):
         JSONB,
         nullable=False,
     )
-    opportunity_score: Mapped[int] = mapped_column(
-        Integer,
+    report_kind: Mapped[ReportKind] = mapped_column(
+        SAEnum(
+            ReportKind,
+            name="report_kind",
+            values_callable=lambda enum_class: [item.value for item in enum_class],
+        ),
+        default=ReportKind.LEGACY_SALES_INTELLIGENCE,
+        server_default=ReportKind.LEGACY_SALES_INTELLIGENCE.value,
         nullable=False,
         index=True,
     )
-    contact_recommendation: Mapped[str] = mapped_column(
+    opportunity_score: Mapped[int | None] = mapped_column(
+        Integer,
+        nullable=True,
+        index=True,
+    )
+    contact_recommendation: Mapped[str | None] = mapped_column(
         String,
-        nullable=False,
+        nullable=True,
     )
     review_status: Mapped[ReportReviewStatus] = mapped_column(
         SAEnum(

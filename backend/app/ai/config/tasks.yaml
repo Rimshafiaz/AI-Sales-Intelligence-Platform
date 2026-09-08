@@ -207,3 +207,97 @@ goal_parser_task:
     short phrases in target_sectors, target_geographies, triggers,
     signals_to_look_for and decision_makers; 2 to 5 search_queries; a two to
     three sentence fit_rubric; and a one sentence desired_outcome.
+
+brief_business_context_task:
+  description: >
+    Review this bounded handoff for one Prospect Evidence Brief. Produce at most
+    two concise, goal-relevant findings. Each finding must use only evidence_keys
+    present in the handoff. Do not restate generic company profile information.
+    Do not research, change identity, or infer buying intent, budget, revenue, or
+    internal conditions. Use observed, derived_metric, or inference accurately.
+
+    Handoff:
+    {handoff}
+  expected_output: >
+    Data matching BriefFindingsOutput: findings with statement, claim_kind, and
+    supplied evidence_keys; plus concise caveats. Return empty findings when no
+    useful goal-relevant context is supported.
+
+brief_digital_presence_task:
+  description: >
+    Review only the supplied digital-evidence handoff. Produce at most three
+    concrete findings relevant to the exact user offering. Each finding must cite
+    only evidence_keys present in the handoff. Preserve supplied audit values
+    exactly. Do not claim the business needs a service, is losing customers, or
+    has an internal problem.
+
+    Handoff:
+    {handoff}
+  expected_output: >
+    Data matching BriefFindingsOutput. Return empty findings when the supplied
+    evidence does not support a useful digital observation.
+
+brief_public_traction_task:
+  description: >
+    Review only this public-activity handoff. Produce at most two findings that
+    matter to the exact user goal and have supplied evidence_keys. Do not treat
+    missing public data as a business weakness. Do not infer customer demand,
+    revenue, budget, or internal operations.
+
+    Handoff:
+    {handoff}
+  expected_output: >
+    Data matching BriefFindingsOutput. Return empty findings when no supported,
+    goal-relevant public activity context exists.
+
+brief_opportunity_diagnosis_task:
+  description: >
+    Interpret the fixed qualification results and supplied evidence for this
+    specific offering. Produce at most two cautious findings. Qualification state,
+    evidence values, and identity are fixed inputs: do not alter them. Do not say
+    the business needs the service, has budget, wants a freelancer, or will gain
+    revenue. Every finding must cite supplied evidence_keys.
+
+    Handoff:
+    {handoff}
+  expected_output: >
+    Data matching BriefFindingsOutput. Use inference only where the statement is
+    explicitly cautious and grounded in the supplied evidence.
+
+brief_strategy_outreach_task:
+  description: >
+    Create a concise pitch angle and optional email and LinkedIn drafts for this
+    exact user offering. Use only supplied evidence keys and contact paths. If no
+    qualification state is likely, return pitch_angle=null and outreach_drafts=[].
+    Never claim the prospect needs a service, is losing customers, has budget,
+    wants a freelancer, has internal problems, or will gain revenue. Drafts are
+    for human review and must not imply automatic sending.
+
+    Strategy handoff:
+    {handoff}
+
+    Prior evidence findings:
+    {prior_findings}
+  expected_output: >
+    Data matching BriefStrategyOutput. The pitch angle and each outreach grounding
+    must use only supplied evidence_keys. Draft offering must exactly match the
+    objective offering.
+
+brief_evidence_quality_review_task:
+  description: >
+    Review the proposed Prospect Evidence Brief against the bounded original
+    handoff. Reject it if it changes objective, identity, evidence, source,
+    contact paths, qualification, measurements, or if any material claim lacks
+    supplied evidence keys. Reject generic or commercial claims about need,
+    budget, revenue, lost customers, buying intent, or internal problems. Do not
+    research new information or rewrite content.
+
+    Original handoff:
+    {handoff}
+
+    Proposed brief:
+    {proposed_brief}
+  expected_output: >
+    Data matching BriefReviewerOutput. Return approved=true with issues=[] only
+    when the proposed brief is objective-specific and fully grounded; otherwise
+    return approved=false with concise issues.

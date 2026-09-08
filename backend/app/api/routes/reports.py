@@ -16,6 +16,7 @@ from app.repositories.research_reports import (
     get_research_report_for_user,
 )
 from app.repositories.research_requests import get_research_request_for_user
+from app.repositories.opportunity_qualifications import list_opportunity_qualifications_for_user
 from app.schemas.report_list import ReportListResponse
 from app.schemas.research_report import (
     RegenerateReportRequest,
@@ -115,10 +116,15 @@ def create_report_endpoint(
             status_code=status.HTTP_409_CONFLICT,
             detail="Accepted evidence is required before report generation.",
         )
-    if requires_deep_qualification(research_request):
+    if requires_deep_qualification(research_request) and not list_opportunity_qualifications_for_user(
+        db,
+        research_request.id,
+        current_user.id,
+        include_not_eligible=True,
+    ):
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
-            detail="Deep qualification must finish before a prospect report can be generated.",
+            detail="Opportunity qualification must finish before a Prospect Evidence Brief can be generated.",
         )
     existing_report = get_research_report_for_user(
         db=db,
@@ -271,10 +277,15 @@ def regenerate_report_endpoint(
             status_code=status.HTTP_409_CONFLICT,
             detail="Accepted evidence is required before report regeneration.",
         )
-    if requires_deep_qualification(research_request):
+    if requires_deep_qualification(research_request) and not list_opportunity_qualifications_for_user(
+        db,
+        research_request.id,
+        current_user.id,
+        include_not_eligible=True,
+    ):
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
-            detail="Deep qualification must finish before a prospect report can be regenerated.",
+            detail="Opportunity qualification must finish before a Prospect Evidence Brief can be regenerated.",
         )
 
     background_tasks.add_task(

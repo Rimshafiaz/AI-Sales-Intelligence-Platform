@@ -15,6 +15,11 @@ from app.schemas.sales_intelligence_report import (
     SalesStrategy,
     TechnologyFinding,
 )
+from app.schemas.prospect_evidence_brief import (
+    BriefFinding,
+    GroundedOutreachDraft,
+    PitchAngle,
+)
 
 
 def _normalize_text_items(values: list[str], field_name: str) -> list[str]:
@@ -74,4 +79,41 @@ class ReviewerOutput(BaseModel):
         if not self.approved and not self.issues:
             raise ValueError("Reviewer must provide at least one issue when rejecting a report.")
 
+        return self
+
+
+class BriefFindingsOutput(BaseModel):
+    findings: list[BriefFinding] = Field(default_factory=list, max_length=4)
+    caveats: list[str] = Field(default_factory=list, max_length=3)
+
+    @field_validator("caveats")
+    @classmethod
+    def validate_caveats(cls, values: list[str]) -> list[str]:
+        return _normalize_text_items(values, "caveats")
+
+
+class BriefStrategyOutput(BaseModel):
+    pitch_angle: PitchAngle | None = None
+    outreach_drafts: list[GroundedOutreachDraft] = Field(default_factory=list, max_length=2)
+    caveats: list[str] = Field(default_factory=list, max_length=3)
+
+    @field_validator("caveats")
+    @classmethod
+    def validate_caveats(cls, values: list[str]) -> list[str]:
+        return _normalize_text_items(values, "caveats")
+
+
+class BriefReviewerOutput(BaseModel):
+    approved: bool
+    issues: list[str] = Field(default_factory=list, max_length=10)
+
+    @field_validator("issues")
+    @classmethod
+    def validate_issues(cls, values: list[str]) -> list[str]:
+        return _normalize_text_items(values, "issues")
+
+    @model_validator(mode="after")
+    def require_issues_when_rejected(self) -> Self:
+        if not self.approved and not self.issues:
+            raise ValueError("Reviewer must provide issues when rejecting a Prospect Evidence Brief.")
         return self

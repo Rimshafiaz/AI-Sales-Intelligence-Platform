@@ -12,13 +12,27 @@ from app.schemas.evidence_gate import EvidenceGateState
 from app.schemas.opportunity_models import EvidenceSignalType
 from app.schemas.opportunity_qualification import OpportunityQualificationState
 from app.schemas.prospect_evidence_brief import (
+    BusinessContextHandoff,
     BriefClaimKind,
     BriefEvidence,
     BriefObjective,
     BriefProspect,
     BriefQualification,
+    DigitalPresenceHandoff,
+    EvidenceQualityReviewHandoff,
+    OpportunityDiagnosisHandoff,
     PitchAngle,
     ProspectEvidenceBrief,
+    ProspectEvidenceBriefContext,
+    ProspectEvidenceBriefHandoffs,
+    PublicTractionHandoff,
+    StrategyOutreachHandoff,
+)
+from app.schemas.agent_outputs import BriefFindingsOutput, BriefReviewerOutput, BriefStrategyOutput
+from app.ai.crew import assemble_prospect_evidence_brief
+from app.services.prospect_evidence_brief_review import (
+    ProspectEvidenceBriefReviewError,
+    require_approved_prospect_evidence_brief,
 )
 from app.services import prospect_evidence_brief
 from app.services.prospect_evidence_brief import build_prospect_evidence_brief_handoffs
@@ -75,6 +89,51 @@ def brief_payload():
         "evidence": [evidence],
         "sources": [],
     }
+
+
+def brief_handoffs():
+    payload = brief_payload()
+    context = ProspectEvidenceBriefContext(
+        objective=payload["objective"],
+        prospect=payload["prospect"],
+        qualifications=[payload["verdict"]],
+        evidence=payload["evidence"],
+        sources=[],
+        contacts=[],
+    )
+    return ProspectEvidenceBriefHandoffs(
+        business_context=BusinessContextHandoff(
+            objective=context.objective,
+            prospect=context.prospect,
+            evidence=context.evidence,
+            sources=context.sources,
+        ),
+        digital_presence=DigitalPresenceHandoff(
+            objective=context.objective,
+            prospect=context.prospect,
+            evidence=context.evidence,
+        ),
+        public_traction=PublicTractionHandoff(
+            objective=context.objective,
+            prospect=context.prospect,
+            sources=context.sources,
+            evidence=context.evidence,
+        ),
+        opportunity_diagnosis=OpportunityDiagnosisHandoff(
+            objective=context.objective,
+            prospect=context.prospect,
+            qualifications=context.qualifications,
+            evidence=context.evidence,
+        ),
+        strategy_outreach=StrategyOutreachHandoff(
+            objective=context.objective,
+            prospect=context.prospect,
+            qualifications=context.qualifications,
+            evidence=context.evidence,
+            contacts=context.contacts,
+        ),
+        evidence_quality_review=EvidenceQualityReviewHandoff(context=context),
+    )
 
 
 class TestProspectEvidenceBriefSchema:
@@ -218,3 +277,78 @@ class TestProspectEvidenceBriefHandoffs:
         assert handoffs.strategy_outreach.objective.offering == "Website redesign and booking setup"
         assert handoffs.opportunity_diagnosis.qualifications[0].state is OpportunityQualificationState.LIKELY
         assert handoffs.digital_presence.evidence[0].signal_type is EvidenceSignalType.WEBSITE_MOBILE_PERFORMANCE_MEASURED
+
+
+class TestProspectEvidenceBriefAssemblyAndReview:
+    def test_assembles_fixed_context_with_goal_specific_strategy(self):
+        handoffs = brief_handoffs()
+        findings = [
+            BriefFindingsOutput(
+                findings=[
+                    {
+                        "statement": "Mobile performance was measured at 31/100.",
+                        "claim_kind": "derived_metric",
+                        "evidence_keys": ["research_evidence:mobile-score"],
+                    }
+                ]
+            )
+        ]
+        strategy = BriefStrategyOutput(
+            pitch_angle={
+                "statement": "A mobile-focused booking improvement may be relevant.",
+                "offering": "Website redesign and booking setup",
+                "evidence_keys": ["research_evidence:mobile-score"],
+            },
+            outreach_drafts=[
+                {
+                    "channel": "email",
+                    "subject": "A quick mobile booking idea",
+                    "message": "I noticed your mobile score was measured at 31/100.",
+                    "offering": "Website redesign and booking setup",
+                    "grounding": [
+                        {
+                            "claim": "Mobile performance was measured at 31/100.",
+                            "evidence_keys": ["research_evidence:mobile-score"],
+                        }
+                    ],
+                }
+            ],
+        )
+
+        brief = assemble_prospect_evidence_brief(handoffs, findings, strategy)
+
+        assert brief.objective == handoffs.business_context.objective
+        assert brief.prospect == handoffs.business_context.prospect
+        assert brief.verdict == handoffs.opportunity_diagnosis.qualifications[0]
+        assert brief.pitch_angle is not None
+        assert brief.outreach_drafts[0].offering == brief.objective.offering
+
+    def test_reviewer_rejection_blocks_the_brief(self):
+        handoffs = brief_handoffs()
+        brief = ProspectEvidenceBrief(**brief_payload())
+
+        with pytest.raises(ProspectEvidenceBriefReviewError, match="reviewer rejected"):
+            require_approved_prospect_evidence_brief(
+                handoffs,
+                brief,
+                BriefReviewerOutput(approved=False, issues=["The finding is generic."]),
+            )
+
+    def test_commercial_claim_blocks_even_when_reviewer_approves(self):
+        handoffs = brief_handoffs()
+        payload = brief_payload()
+        payload["findings"] = [
+            {
+                "statement": "The business needs a website redesign.",
+                "claim_kind": "inference",
+                "evidence_keys": ["research_evidence:mobile-score"],
+            }
+        ]
+        brief = ProspectEvidenceBrief(**payload)
+
+        with pytest.raises(ProspectEvidenceBriefReviewError, match="unsupported commercial claim"):
+            require_approved_prospect_evidence_brief(
+                handoffs,
+                brief,
+                BriefReviewerOutput(approved=True),
+            )

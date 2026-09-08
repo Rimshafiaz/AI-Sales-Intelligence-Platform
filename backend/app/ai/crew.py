@@ -6,7 +6,17 @@ from app.ai.tasks.research_task import create_research_task
 from app.ai.tasks.reviewer_task import create_reviewer_task
 from app.ai.tasks.strategy_task import create_strategy_task
 from app.ai.tasks.technology_task import create_technology_task
+from app.ai.tasks.prospect_evidence_brief_tasks import (
+    create_brief_business_context_task,
+    create_brief_digital_presence_task,
+    create_brief_evidence_quality_review_task,
+    create_brief_opportunity_diagnosis_task,
+    create_brief_public_traction_task,
+    create_brief_strategy_outreach_task,
+)
 from app.schemas.agent_outputs import (
+    BriefFindingsOutput,
+    BriefStrategyOutput,
     NewsAgentOutput,
     PainPointAgentOutput,
     ResearchAgentOutput,
@@ -14,7 +24,16 @@ from app.schemas.agent_outputs import (
     StrategyAgentOutput,
     TechnologyAgentOutput,
 )
+from app.schemas.opportunity_qualification import OpportunityQualificationState
+from app.schemas.prospect_evidence_brief import (
+    BriefEvidenceQuality,
+    BriefFinding,
+    BriefQualification,
+    ProspectEvidenceBrief,
+    ProspectEvidenceBriefHandoffs,
+)
 from app.schemas.sales_intelligence_report import SalesIntelligenceReport
+from app.services.prospect_evidence_brief_review import require_approved_prospect_evidence_brief
 
 
 def _extract_pydantic(task, phase_label: str):
@@ -178,3 +197,128 @@ def run_sales_intelligence_crew(
         )
 
     return _assemble_report(research, technology, news, pain_point, strategy)
+
+
+def run_prospect_evidence_brief_crew(
+    handoffs: ProspectEvidenceBriefHandoffs,
+) -> ProspectEvidenceBrief:
+    business_context = _run_single_agent_crew(
+        create_brief_business_context_task(handoffs.business_context),
+        "Brief business context",
+    )
+    digital_presence = _run_single_agent_crew(
+        create_brief_digital_presence_task(handoffs.digital_presence),
+        "Brief digital presence",
+    )
+    public_traction = _run_single_agent_crew(
+        create_brief_public_traction_task(handoffs.public_traction),
+        "Brief public traction",
+    )
+    opportunity_diagnosis = _run_single_agent_crew(
+        create_brief_opportunity_diagnosis_task(handoffs.opportunity_diagnosis),
+        "Brief opportunity diagnosis",
+    )
+    finding_outputs = [
+        business_context,
+        digital_presence,
+        public_traction,
+        opportunity_diagnosis,
+    ]
+    strategy = _run_single_agent_crew(
+        create_brief_strategy_outreach_task(
+            handoffs.strategy_outreach,
+            finding_outputs,
+        ),
+        "Brief strategy and outreach",
+    )
+    brief = assemble_prospect_evidence_brief(
+        handoffs,
+        finding_outputs,
+        strategy,
+    )
+    reviewer = _run_single_agent_crew(
+        create_brief_evidence_quality_review_task(
+            handoffs.evidence_quality_review,
+            brief,
+        ),
+        "Brief evidence quality review",
+    )
+    return require_approved_prospect_evidence_brief(handoffs, brief, reviewer)
+
+
+def assemble_prospect_evidence_brief(
+    handoffs: ProspectEvidenceBriefHandoffs,
+    finding_outputs: list[BriefFindingsOutput],
+    strategy: BriefStrategyOutput,
+) -> ProspectEvidenceBrief:
+    context = handoffs.evidence_quality_review.context
+    verdict = _select_brief_verdict(context.qualifications)
+    findings = _unique_findings(finding_outputs)
+    caveats = _unique_caveats(finding_outputs, strategy)
+    is_likely = verdict.state is OpportunityQualificationState.LIKELY
+    return ProspectEvidenceBrief(
+        objective=context.objective,
+        prospect=context.prospect,
+        verdict=verdict,
+        evidence_quality=_brief_evidence_quality(verdict),
+        findings=findings,
+        contacts=context.contacts,
+        pitch_angle=strategy.pitch_angle if is_likely else None,
+        outreach_drafts=strategy.outreach_drafts if is_likely else [],
+        caveats=caveats,
+        evidence=context.evidence,
+        sources=context.sources,
+    )
+
+
+def _select_brief_verdict(
+    qualifications: list[BriefQualification],
+) -> BriefQualification:
+    priorities = {
+        OpportunityQualificationState.LIKELY: 0,
+        OpportunityQualificationState.INSUFFICIENT_EVIDENCE: 1,
+        OpportunityQualificationState.NOT_ELIGIBLE: 2,
+    }
+    return min(
+        qualifications,
+        key=lambda item: (priorities[item.state], item.opportunity_model_id),
+    )
+
+
+def _brief_evidence_quality(verdict: BriefQualification) -> BriefEvidenceQuality:
+    if verdict.state is OpportunityQualificationState.LIKELY:
+        if len(verdict.supporting_evidence_keys) >= 2:
+            return BriefEvidenceQuality.HIGH
+        return BriefEvidenceQuality.MEDIUM
+    return BriefEvidenceQuality.NEEDS_REVIEW
+
+
+def _unique_findings(
+    outputs: list[BriefFindingsOutput],
+) -> list[BriefFinding]:
+    findings = []
+    seen = set()
+    for output in outputs:
+        for finding in output.findings:
+            key = finding.statement.casefold()
+            if key not in seen:
+                findings.append(finding)
+                seen.add(key)
+    return findings[:12]
+
+
+def _unique_caveats(
+    outputs: list[BriefFindingsOutput],
+    strategy: BriefStrategyOutput,
+) -> list[str]:
+    caveats = []
+    seen = set()
+    for caveat in [
+        *(value for output in outputs for value in output.caveats),
+        *strategy.caveats,
+    ]:
+        normalized = caveat.strip()
+        if normalized and normalized.casefold() not in seen:
+            caveats.append(normalized)
+            seen.add(normalized.casefold())
+    return caveats[:10]

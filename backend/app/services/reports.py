@@ -5,7 +5,7 @@ from uuid import UUID
 from pydantic import ValidationError
 from sqlalchemy.orm import Session
 
-from app.models.research_report import ReportReviewStatus, ResearchReport
+from app.models.research_report import ReportKind, ReportReviewStatus, ResearchReport
 from app.models.user import User
 from app.repositories.research_reports import (
     approve_research_report,
@@ -42,7 +42,6 @@ def get_report_detail_for_user(
     )
     if report is None:
         return None
-
     sources = list_research_sources_for_user(
         db=db,
         research_request_id=report.research_request_id,
@@ -131,6 +130,8 @@ def edit_report_for_user(
     )
     if report is None:
         return None
+    if report.report_kind is ReportKind.PROSPECT_EVIDENCE_BRIEF:
+        raise ValueError("Prospect Evidence Brief editing will be available with its dedicated workspace.")
 
     merged_report_data = copy.deepcopy(report.report_data)
     _apply_edits(merged_report_data, edits)
@@ -213,6 +214,7 @@ def list_report_history_for_user(
             research_request_id=report.research_request_id,
             company_id=report.company_id,
             company_name=company_name,
+            report_kind=report.report_kind.value,
             opportunity_score=report.opportunity_score,
             contact_recommendation=report.contact_recommendation,
             review_status=report.review_status.value,

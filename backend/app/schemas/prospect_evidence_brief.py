@@ -189,6 +189,7 @@ class BusinessContextHandoff(BaseModel):
 
     objective: BriefObjective
     prospect: BriefProspect
+    evidence: list[BriefEvidence] = Field(min_length=1, max_length=30)
     sources: list[BriefSource] = Field(default_factory=list, max_length=15)
 
 

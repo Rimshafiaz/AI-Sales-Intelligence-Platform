@@ -9,8 +9,9 @@ class ReportSummary(BaseModel):
     research_request_id: UUID
     company_id: UUID
     company_name: str
-    opportunity_score: int
-    contact_recommendation: str
+    report_kind: str
+    opportunity_score: int | None = None
+    contact_recommendation: str | None = None
     review_status: str
     generated_at: datetime
 

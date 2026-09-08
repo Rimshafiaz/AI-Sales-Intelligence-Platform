@@ -77,6 +77,7 @@ def build_prospect_evidence_brief_handoffs(
         business_context=BusinessContextHandoff(
             objective=context.objective,
             prospect=context.prospect,
+            evidence=context.evidence,
             sources=context.sources,
         ),
         digital_presence=DigitalPresenceHandoff(

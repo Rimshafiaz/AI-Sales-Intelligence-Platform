@@ -108,8 +108,9 @@ class ResearchReportResponse(BaseModel):
     id: UUID
     research_request_id: UUID
     company_id: UUID
-    opportunity_score: int
-    contact_recommendation: str
+    report_kind: str
+    opportunity_score: int | None = None
+    contact_recommendation: str | None = None
     review_status: str
     approved_at: datetime | None = None
     review_note: str | None = None

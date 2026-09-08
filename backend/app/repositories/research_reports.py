@@ -4,7 +4,7 @@ from uuid import UUID
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 from app.models.company import Company
-from app.models.research_report import ReportReviewStatus, ResearchReport
+from app.models.research_report import ReportKind, ReportReviewStatus, ResearchReport
 
 
 def create_research_report(
@@ -16,12 +16,14 @@ def create_research_report(
     opportunity_score: int | None,
     contact_recommendation: str | None,
     generated_at: datetime,
+    report_kind: ReportKind = ReportKind.LEGACY_SALES_INTELLIGENCE,
 ) -> ResearchReport:
     report = ResearchReport(
         research_request_id=research_request_id,
         company_id=company_id,
         user_id=user_id,
         report_data=report_data,
+        report_kind=report_kind,
         opportunity_score=opportunity_score,
         contact_recommendation=contact_recommendation,
         generated_at=generated_at,
