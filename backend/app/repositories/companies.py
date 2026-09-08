@@ -3,6 +3,7 @@ from app.models.company import Company
 import uuid
 from sqlalchemy import select
 from uuid import UUID
+from app.models.campaign_candidate_selection import CampaignCandidateSelection
 
 def create_company(db: Session,user_id:uuid.UUID,name:str,website:str | None = None) -> Company:
     company = Company(user_id=user_id,name=name,website=website)
@@ -32,6 +33,12 @@ def get_company_by_id(
         Company.user_id == user_id,
     )
     return db.scalar(statement)
+
+def company_has_campaign_selections(db: Session, company_id: UUID) -> bool:
+    statement = select(CampaignCandidateSelection.id).where(
+        CampaignCandidateSelection.company_id == company_id,
+    )
+    return db.scalar(statement) is not None
 def update_company_website(db: Session, company_id: UUID, website: str) -> Company | None:
     statement = select(Company).where(
         Company.id == company_id,
@@ -49,4 +56,3 @@ def update_company_website(db: Session, company_id: UUID, website: str) -> Compa
 def delete_company(db: Session,company: Company):
     db.delete(company)
     db.commit()
-

@@ -10,6 +10,7 @@ from sqlalchemy.orm import Mapped, mapped_column, relationship
 from app.db.base import Base
 
 if TYPE_CHECKING:
+    from app.models.campaign_candidate_selection import CampaignCandidateSelection
     from app.models.company import Company
     from app.models.research_source import ResearchSource
     from app.models.user import User
@@ -90,7 +91,20 @@ class ResearchRequest(Base):
         "User",
         back_populates="research_requests",
     )
+    campaign_candidate_selection_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("campaign_candidate_selections.id"),
+        nullable=True,
+        unique=True,
+        index=True,
+    )
     sources: Mapped[list["ResearchSource"]] = relationship(
         "ResearchSource",
         back_populates="research_request",
+    )
+    campaign_candidate_selection: Mapped["CampaignCandidateSelection | None"] = (
+        relationship(
+            "CampaignCandidateSelection",
+            back_populates="research_request",
+        )
     )

@@ -6,8 +6,14 @@ from app.models.user import User
 
 __all__ = [
     "Company",
+    "Campaign",
+    "CampaignCandidateSelection",
+    "CampaignRun",
     "ResearchReport",
     "ResearchRequest",
     "ResearchSource",
     "User",
 ]
+from app.models.campaign import Campaign
+from app.models.campaign_candidate_selection import CampaignCandidateSelection
+from app.models.campaign_run import CampaignRun

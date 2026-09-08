@@ -10,6 +10,9 @@ from app.db.session import SessionLocal
 from app.integrations.search_provider import CollectedSource
 from app.main import app
 from app.models.company import Company
+from app.models.campaign import Campaign
+from app.models.campaign_candidate_selection import CampaignCandidateSelection
+from app.models.campaign_run import CampaignRun
 from app.models.research_report import ResearchReport
 from app.models.research_request import ResearchRequest
 from app.models.research_source import ResearchSource
@@ -100,6 +103,18 @@ def _delete_user_data(user_id: uuid.UUID) -> None:
         session.execute(
             delete(ResearchRequest).where(ResearchRequest.user_id == user_id)
         )
+        campaign_ids = select(Campaign.id).where(Campaign.user_id == user_id)
+        session.execute(
+            delete(CampaignCandidateSelection).where(
+                CampaignCandidateSelection.campaign_run_id.in_(
+                    select(CampaignRun.id).where(CampaignRun.campaign_id.in_(campaign_ids))
+                )
+            )
+        )
+        session.execute(
+            delete(CampaignRun).where(CampaignRun.campaign_id.in_(campaign_ids))
+        )
+        session.execute(delete(Campaign).where(Campaign.id.in_(campaign_ids)))
         session.execute(delete(Company).where(Company.user_id == user_id))
         session.execute(delete(User).where(User.id == user_id))
         session.commit()

@@ -10,6 +10,9 @@ from app.models.company import Company
 from app.models.research_request import ResearchRequest
 from app.models.research_report import ResearchReport
 from app.models.research_source import ResearchSource
+from app.models.campaign import Campaign
+from app.models.campaign_run import CampaignRun
+from app.models.campaign_candidate_selection import CampaignCandidateSelection
 # Alembic Config object
 config = context.config
 
