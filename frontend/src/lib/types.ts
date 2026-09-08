@@ -5,9 +5,6 @@ export interface DiscoveryCandidate {
   short_description: string | null
   match_explanation: string
   supporting_source_urls: string[]
-  fit_score: number | null
-  fit_tier: 'high' | 'medium' | 'low' | null
-  fit_reason: string | null
 }
 
 export interface DiscoveryResponse {

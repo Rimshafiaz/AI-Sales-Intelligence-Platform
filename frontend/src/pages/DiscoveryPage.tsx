@@ -32,8 +32,6 @@ const EMPTY_FORM: GoalForm = { goal: '', region: '', company_size: '' }
 const OBJECTIVE_CHIPS: { value: string; label: string }[] = [
   { value: 'service_pitch', label: 'Pitch a service' },
   { value: 'client_prospecting', label: 'Find clients' },
-  { value: 'investment', label: 'Investment' },
-  { value: 'hiring', label: 'Hiring' },
 ]
 
 const GOAL_TYPE_LABELS: Record<string, string> = {
@@ -47,9 +45,9 @@ const GOAL_TYPE_LABELS: Record<string, string> = {
 
 const SEARCH_STAGES = [
   'Interpreting your goal...',
-  'Searching the web for evidence...',
-  'Verifying candidates...',
-  'Scoring fit against your goal...',
+  'Finding local, web, and social candidates...',
+  'Merging matching source records...',
+  'Preparing candidates for evidence review...',
 ]
 
 function domainOf(url: string): string {
@@ -206,9 +204,9 @@ export default function DiscoveryPage() {
           </h1>
           <p className="max-w-2xl text-body-md text-on-surface-variant">
             Tell SalesLens what you are trying to sell and who you are looking
-            for. It discovers potential companies, verifies them against your
-            goal, and ranks the strongest opportunities. Candidates are not
-            saved until research is initiated.
+            for. It finds potential companies from local, web, and social
+            sources. Candidates remain unqualified until their evidence is
+            reviewed, and are not saved until research is initiated.
           </p>
         </div>
       </div>
@@ -491,7 +489,8 @@ export default function DiscoveryPage() {
               </span>
             </div>
             <p className="text-body-sm text-on-surface-variant">
-              Ranked by how closely each company fits your goal.
+              Discovered from configured sources. These candidates still need
+              evidence review before deeper research or outreach.
             </p>
           </div>
 
@@ -534,47 +533,15 @@ export default function DiscoveryPage() {
                     </div>
 
                     <div className="space-y-1.5 rounded-lg bg-surface-container-low p-4">
-                      {candidate.fit_score !== null && candidate.fit_score !== undefined ? (
-                        <>
-                          <div className="flex items-baseline gap-2">
-                            <span className="text-body-lg font-semibold text-on-surface">
-                              Fit {candidate.fit_score}
-                              <span className="text-body-sm font-medium text-outline">
-                                /100
-                              </span>
-                            </span>
-                            {candidate.fit_tier && (
-                              <span
-                                className={
-                                  'text-label-sm font-medium uppercase tracking-wide ' +
-                                  (candidate.fit_tier === 'high'
-                                    ? 'text-secondary'
-                                    : candidate.fit_tier === 'medium'
-                                      ? 'text-on-surface-variant'
-                                      : 'text-outline')
-                                }
-                              >
-                                {candidate.fit_tier} fit
-                              </span>
-                            )}
-                          </div>
-                          <p className="text-body-md leading-relaxed text-on-surface">
-                            {candidate.fit_reason || candidate.match_explanation}
-                          </p>
-                        </>
-                      ) : (
-                        <>
-                          <div className="flex items-center gap-1 text-secondary">
-                            <Sparkles size={18} />
-                            <span className="text-label-sm font-semibold uppercase tracking-wider">
-                              Why this is a good prospect
-                            </span>
-                          </div>
-                          <p className="text-body-md leading-relaxed text-on-surface">
-                            {candidate.match_explanation}
-                          </p>
-                        </>
-                      )}
+                      <div className="flex items-center gap-1 text-secondary">
+                        <Sparkles size={18} />
+                        <span className="text-label-sm font-semibold uppercase tracking-wider">
+                          Why this appeared in discovery
+                        </span>
+                      </div>
+                      <p className="text-body-md leading-relaxed text-on-surface">
+                        {candidate.match_explanation}
+                      </p>
                     </div>
 
                     {candidate.supporting_source_urls.length > 0 && (

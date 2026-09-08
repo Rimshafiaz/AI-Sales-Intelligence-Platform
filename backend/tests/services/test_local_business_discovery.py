@@ -75,7 +75,6 @@ class TestLocalBusinessDiscovery:
         assert candidate.source_record_id == "overture:fitlab"
         assert candidate.source_data_release == "2026-08-19.0"
         assert candidate.website_verification_state == "listed_unverified"
-        assert candidate.fit_score is None
         assert "not been qualified" in candidate.match_explanation
 
     def test_caller_coordinates_enable_an_unconfigured_location(self):

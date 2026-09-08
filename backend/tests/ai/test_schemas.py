@@ -8,10 +8,7 @@ from app.ai.context import MAX_EVIDENCE_EXCERPT_LENGTH, build_research_evidence_
 from app.models.research_source import ResearchSource
 from app.schemas.company_discovery import (
     CompanyDiscoveryRequest,
-    CompanyDiscoveryTaskOutput,
     DiscoveryObjective,
-    DiscoveredCompanyCandidateOutput,
-    company_discovery_response_from_task_output,
 )
 from app.schemas.research_request import (
     KnownProspectResearchRequest,
@@ -162,21 +159,3 @@ class TestDiscoverySchemas:
                 offering="Website redesign services",
                 objective=self._objective("investment"),
             )
-
-    def test_invalid_candidate_dropped_valid_kept(self):
-        output = CompanyDiscoveryTaskOutput(
-            candidates=[
-                DiscoveredCompanyCandidateOutput(
-                    company_name="GoodCo",
-                    match_explanation="Matches fintech.",
-                    supporting_source_urls=["https://goodco.com"],
-                ),
-                DiscoveredCompanyCandidateOutput(
-                    company_name="BadCo",
-                    match_explanation="Matches nothing.",
-                    supporting_source_urls=["not-a-url"],
-                ),
-            ]
-        )
-        response = company_discovery_response_from_task_output(output)
-        assert [c.company_name for c in response.candidates] == ["GoodCo"]

@@ -11,6 +11,9 @@ EXPECTED_TABLES = {
     "research_requests",
     "research_sources",
     "research_reports",
+    "campaigns",
+    "campaign_runs",
+    "campaign_candidate_selections",
     "alembic_version",
 }
 
