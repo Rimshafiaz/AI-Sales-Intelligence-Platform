@@ -34,6 +34,13 @@ class Settings(BaseSettings):
         default=None,
         validation_alias=AliasChoices("SERPER_API_KEY", "Serper_API_KEY"),
     )
+    apify_token: str | None = Field(
+        default=None,
+        validation_alias=AliasChoices("APIFY_TOKEN", "Apify_Token"),
+    )
+    apify_instagram_actor_id: str = "apify/instagram-profile-scraper"
+    apify_facebook_actor_id: str = "apify/facebook-pages-scraper"
+    apify_tiktok_actor_id: str = "coregent/tiktok-profile-scraper"
     groq_api_key: str | None = None
     gemini_api_key: str | None = None
     llm_provider: Literal["groq", "gemini"] = "groq"

@@ -1,6 +1,11 @@
 from fastapi import APIRouter, Depends, HTTPException, status
 
 from app.api.dependencies.current_user import get_current_user
+from app.core.config import settings
+from app.integrations.apify_social import (
+    ApifySocialProviderError,
+    create_apify_social_enrichment_provider,
+)
 from app.integrations.open_places import OpenPlacesProviderError
 from app.integrations.serper import SerperProviderError
 from app.models.user import User
@@ -11,10 +16,18 @@ from app.schemas.company_discovery import (
     ParseDiscoveryRequest,
     ParseDiscoveryResponse,
 )
+from app.schemas.social_enrichment import (
+    SocialEnrichmentRequest,
+    SocialEnrichmentResponse,
+)
 from app.services.company_discovery import (
     check_supported_objective,
     discover_companies,
     parse_discovery_objective,
+)
+from app.services.social_enrichment import (
+    SocialEnrichmentError,
+    enrich_social_profiles,
 )
 
 
@@ -88,4 +101,38 @@ def discover_companies_endpoint(
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
             detail="Company discovery failed. Please try again.",
+        ) from error
+
+
+@router.post(
+    "/company-discovery/social-enrichment",
+    response_model=SocialEnrichmentResponse,
+    status_code=status.HTTP_200_OK,
+    summary="Retrieve public social-profile observations (stateless)",
+    responses={
+        422: {"description": "Invalid or unsupported social-profile URL"},
+        503: {"description": "Social provider failure"},
+    },
+)
+def enrich_social_profiles_endpoint(
+    request: SocialEnrichmentRequest,
+    current_user: User = Depends(get_current_user),
+):
+    try:
+        provider = create_apify_social_enrichment_provider(
+            api_token=settings.apify_token,
+            instagram_actor_id=settings.apify_instagram_actor_id,
+            facebook_actor_id=settings.apify_facebook_actor_id,
+            tiktok_actor_id=settings.apify_tiktok_actor_id,
+        )
+        return enrich_social_profiles(request, provider)
+    except SocialEnrichmentError as error:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
+            detail=str(error),
+        ) from error
+    except (ApifySocialProviderError, RuntimeError, ValueError) as error:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Social enrichment failed. Please try again.",
         ) from error
