@@ -1,97 +1,172 @@
+from datetime import datetime
 from uuid import UUID
 
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
-from app.models.company import Company
-from app.models.research_report import ResearchReport
-from app.models.research_request import ResearchRequest
-from app.repositories.research_reports import count_research_reports_for_user
-
-_INDUSTRY_EXPRESSION = (
-    ResearchReport.report_data["company_profile"]["industry"]["statement"].astext
+from app.models.campaign import Campaign
+from app.models.campaign_prospect import (
+    CampaignProspect,
+    CampaignProspectNextAction,
+    CampaignProspectState,
 )
+from app.models.outreach_attempt import OutreachAttempt, OutreachOutcome, OutreachStatus
 
 
-def count_distinct_companies_researched(
-    db: Session,
-    user_id: UUID,
-) -> int:
-    statement = select(
-        func.count(func.distinct(ResearchReport.company_id))
-    ).where(ResearchReport.user_id == user_id)
-    return db.scalar(statement)
-
-
-def count_distinct_industries_researched(
-    db: Session,
-    user_id: UUID,
-) -> int:
-    statement = select(
-        func.count(func.distinct(_INDUSTRY_EXPRESSION))
-    ).where(
-        ResearchReport.user_id == user_id,
-        _INDUSTRY_EXPRESSION.is_not(None),
+def pipeline_counts_for_user(db: Session, user_id: UUID) -> tuple[int, int, int, int, int, int]:
+    owner_scope = Campaign.user_id == user_id
+    prospects_saved = (
+        select(func.count(CampaignProspect.id))
+        .select_from(CampaignProspect)
+        .join(Campaign)
+        .where(owner_scope)
+        .scalar_subquery()
     )
-    return db.scalar(statement)
-
-
-def list_most_researched_industries(
-    db: Session,
-    user_id: UUID,
-    limit: int,
-) -> list[tuple[str, int]]:
-    statement = (
-        select(
-            _INDUSTRY_EXPRESSION,
-            func.count(ResearchReport.id),
-        )
+    needs_research = (
+        select(func.count(CampaignProspect.id))
+        .select_from(CampaignProspect)
+        .join(Campaign)
         .where(
-            ResearchReport.user_id == user_id,
-            _INDUSTRY_EXPRESSION.is_not(None),
+            owner_scope,
+            CampaignProspect.next_action.in_(
+                [
+                    CampaignProspectNextAction.RESEARCH_PROSPECT,
+                    CampaignProspectNextAction.COLLECT_EVIDENCE,
+                ]
+            ),
         )
-        .group_by(_INDUSTRY_EXPRESSION)
-        .order_by(func.count(ResearchReport.id).desc())
-        .limit(limit)
+        .scalar_subquery()
     )
-    return db.execute(statement).all()
-
-
-def average_opportunity_score_for_user(
-    db: Session,
-    user_id: UUID,
-) -> float | None:
-    statement = select(func.avg(ResearchReport.opportunity_score)).where(
-        ResearchReport.user_id == user_id
+    ready_for_outreach = (
+        select(func.count(CampaignProspect.id))
+        .select_from(CampaignProspect)
+        .join(Campaign)
+        .where(owner_scope, CampaignProspect.workflow_state == CampaignProspectState.READY_FOR_OUTREACH)
+        .scalar_subquery()
     )
-    return db.scalar(statement)
+    contacted = (
+        select(func.count(func.distinct(OutreachAttempt.campaign_prospect_id)))
+        .where(OutreachAttempt.user_id == user_id, OutreachAttempt.sent_at.is_not(None))
+        .scalar_subquery()
+    )
+    replied = (
+        select(func.count(func.distinct(OutreachAttempt.campaign_prospect_id)))
+        .where(OutreachAttempt.user_id == user_id, OutreachAttempt.replied_at.is_not(None))
+        .scalar_subquery()
+    )
+    interested = (
+        select(func.count(func.distinct(OutreachAttempt.campaign_prospect_id)))
+        .where(
+            OutreachAttempt.user_id == user_id,
+            OutreachAttempt.outcome == OutreachOutcome.INTERESTED,
+        )
+        .scalar_subquery()
+    )
+    row = db.execute(
+        select(
+            prospects_saved,
+            needs_research,
+            ready_for_outreach,
+            contacted,
+            replied,
+            interested,
+        )
+    ).one()
+    return tuple(int(value or 0) for value in row)
 
 
-def list_recent_research_requests_with_company(
+def list_actionable_prospects(
     db: Session,
     user_id: UUID,
     limit: int,
-) -> list[tuple[ResearchRequest, str]]:
+) -> list[tuple[CampaignProspect, str]]:
     statement = (
-        select(ResearchRequest, Company.name)
-        .join(Company, ResearchRequest.company_id == Company.id)
-        .where(ResearchRequest.user_id == user_id)
-        .order_by(ResearchRequest.created_at.desc())
+        select(CampaignProspect, Campaign.title)
+        .join(Campaign)
+        .where(
+            Campaign.user_id == user_id,
+            CampaignProspect.next_action.in_(
+                [
+                    CampaignProspectNextAction.RESEARCH_PROSPECT,
+                    CampaignProspectNextAction.COLLECT_EVIDENCE,
+                    CampaignProspectNextAction.PREPARE_OUTREACH,
+                ]
+            ),
+        )
+        .order_by(CampaignProspect.updated_at.desc())
         .limit(limit)
     )
-    return db.execute(statement).all()
+    return list(db.execute(statement).all())
 
 
-def list_recent_reports_with_company(
+def list_actionable_outreach(
     db: Session,
     user_id: UUID,
     limit: int,
-) -> list[tuple[ResearchReport, str]]:
+) -> list[tuple[OutreachAttempt, CampaignProspect, str]]:
     statement = (
-        select(ResearchReport, Company.name)
-        .join(Company, ResearchReport.company_id == Company.id)
-        .where(ResearchReport.user_id == user_id)
-        .order_by(ResearchReport.generated_at.desc())
+        select(OutreachAttempt, CampaignProspect, Campaign.title)
+        .join(CampaignProspect, OutreachAttempt.campaign_prospect_id == CampaignProspect.id)
+        .join(Campaign, CampaignProspect.campaign_id == Campaign.id)
+        .where(
+            OutreachAttempt.user_id == user_id,
+            OutreachAttempt.status.in_([OutreachStatus.DRAFT, OutreachStatus.APPROVED]),
+        )
+        .order_by(OutreachAttempt.updated_at.desc())
         .limit(limit)
     )
-    return db.execute(statement).all()
+    return list(db.execute(statement).all())
+
+
+def list_follow_ups_due(
+    db: Session,
+    user_id: UUID,
+    sent_before: datetime,
+    limit: int,
+) -> list[tuple[OutreachAttempt, CampaignProspect, str]]:
+    statement = (
+        select(OutreachAttempt, CampaignProspect, Campaign.title)
+        .join(CampaignProspect, OutreachAttempt.campaign_prospect_id == CampaignProspect.id)
+        .join(Campaign, CampaignProspect.campaign_id == Campaign.id)
+        .where(
+            OutreachAttempt.user_id == user_id,
+            OutreachAttempt.status == OutreachStatus.SENT,
+            OutreachAttempt.sent_at <= sent_before,
+            OutreachAttempt.replied_at.is_(None),
+            OutreachAttempt.outcome.is_(None),
+        )
+        .order_by(OutreachAttempt.sent_at.asc())
+        .limit(limit)
+    )
+    return list(db.execute(statement).all())
+
+
+def list_recent_prospects(
+    db: Session,
+    user_id: UUID,
+    limit: int,
+) -> list[tuple[CampaignProspect, str]]:
+    statement = (
+        select(CampaignProspect, Campaign.title)
+        .join(Campaign)
+        .where(Campaign.user_id == user_id)
+        .order_by(CampaignProspect.created_at.desc())
+        .limit(limit)
+    )
+    return list(db.execute(statement).all())
+
+
+def list_recent_outreach(
+    db: Session,
+    user_id: UUID,
+    limit: int,
+) -> list[tuple[OutreachAttempt, CampaignProspect, str]]:
+    statement = (
+        select(OutreachAttempt, CampaignProspect, Campaign.title)
+        .join(CampaignProspect, OutreachAttempt.campaign_prospect_id == CampaignProspect.id)
+        .join(Campaign, CampaignProspect.campaign_id == Campaign.id)
+        .where(OutreachAttempt.user_id == user_id)
+        .order_by(OutreachAttempt.updated_at.desc())
+        .limit(limit)
+    )
+    return list(db.execute(statement).all())

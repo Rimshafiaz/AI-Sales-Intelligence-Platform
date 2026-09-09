@@ -15,10 +15,10 @@ router = APIRouter(tags=["Dashboard"])
     "/dashboard/summary",
     response_model=DashboardSummaryResponse,
     status_code=status.HTTP_200_OK,
-    summary="Show the current user's metrics and recent activity",
+    summary="Show the current user's prospecting actions and pipeline",
 )
 def get_dashboard_summary_endpoint(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
-):
+) -> DashboardSummaryResponse:
     return get_dashboard_summary_for_user(db=db, current_user=current_user)

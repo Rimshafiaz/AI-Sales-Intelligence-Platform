@@ -290,17 +290,37 @@ export interface ReportListResponse {
 }
 
 export interface DashboardActivity {
-  event_type: string
-  company_name: string
-  status: string | null
+  event_type: 'prospect_saved' | 'outreach_draft_created' | 'outreach_approved' | 'outreach_sent' | 'outreach_replied' | 'outreach_closed'
+  campaign_title: string
+  prospect_id: string
+  prospect_name: string
+  channel: 'email' | 'linkedin' | null
   occurred_at: string
 }
 
+export interface DashboardAction {
+  action_type: 'research_prospect' | 'collect_evidence' | 'prepare_outreach' | 'approve_outreach' | 'send_linkedin' | 'awaiting_gmail' | 'follow_up'
+  campaign_id: string
+  campaign_title: string
+  prospect_id: string
+  prospect_name: string
+  outreach_attempt_id: string | null
+  channel: 'email' | 'linkedin' | null
+  reason: string
+  reference_at: string | null
+}
+
 export interface DashboardSummary {
-  reports_generated: number
-  companies_researched: number
-  industries_researched: number
-  most_researched_industries: { industry: string; report_count: number }[]
-  average_opportunity_score: number | null
+  pipeline: {
+    prospects_saved: number
+    needs_research: number
+    ready_for_outreach: number
+    contacted: number
+    replied: number
+    interested: number
+  }
+  needs_attention: DashboardAction[]
+  follow_ups_due: DashboardAction[]
   recent_activity: DashboardActivity[]
+  next_best_action: DashboardAction | null
 }

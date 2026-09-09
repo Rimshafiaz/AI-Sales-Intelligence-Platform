@@ -1,132 +1,223 @@
+from datetime import UTC, datetime, timedelta
+
 from sqlalchemy.orm import Session
 
-from app.models.research_report import ReportReviewStatus
-from app.models.research_request import ResearchStatus
+from app.models.campaign_prospect import CampaignProspect, CampaignProspectNextAction
+from app.models.outreach_attempt import (
+    OutreachAttempt,
+    OutreachChannel,
+    OutreachStatus,
+)
 from app.models.user import User
 from app.repositories.dashboard import (
-    average_opportunity_score_for_user,
-    count_distinct_companies_researched,
-    count_distinct_industries_researched,
-    list_most_researched_industries,
-    list_recent_reports_with_company,
-    list_recent_research_requests_with_company,
+    list_actionable_outreach,
+    list_actionable_prospects,
+    list_follow_ups_due,
+    list_recent_outreach,
+    list_recent_prospects,
+    pipeline_counts_for_user,
 )
-from app.repositories.research_reports import count_research_reports_for_user
-from app.schemas.dashboard import ActivityEvent, DashboardSummaryResponse, IndustrySummary
+from app.schemas.dashboard import (
+    ActivityEvent,
+    DashboardAction,
+    DashboardSummaryResponse,
+    PipelineSummary,
+)
 
 
-MAX_MOST_RESEARCHED_INDUSTRIES = 3
+FOLLOW_UP_AFTER_DAYS = 5
+ACTION_LIMIT = 10
 ACTIVITY_LIMIT = 10
-EVENT_FETCH_LIMIT = 10
+FETCH_LIMIT = 20
 
-
-def _build_activity_events(
-    db: Session,
-    user_id,
-) -> list[ActivityEvent]:
-    research_requests = list_recent_research_requests_with_company(
-        db=db,
-        user_id=user_id,
-        limit=EVENT_FETCH_LIMIT,
-    )
-    reports = list_recent_reports_with_company(
-        db=db,
-        user_id=user_id,
-        limit=EVENT_FETCH_LIMIT,
-    )
-
-    events: list[ActivityEvent] = []
-
-    for request, company_name in research_requests:
-        events.append(
-            ActivityEvent(
-                event_type="research_requested",
-                company_name=company_name,
-                status="pending",
-                occurred_at=request.created_at,
-            )
-        )
-        if request.status == ResearchStatus.COMPLETED and request.finished_at:
-            events.append(
-                ActivityEvent(
-                    event_type="research_completed",
-                    company_name=company_name,
-                    status="completed",
-                    occurred_at=request.finished_at,
-                )
-            )
-        elif request.status == ResearchStatus.FAILED and request.finished_at:
-            events.append(
-                ActivityEvent(
-                    event_type="research_failed",
-                    company_name=company_name,
-                    status="failed",
-                    occurred_at=request.finished_at,
-                )
-            )
-
-    for report, company_name in reports:
-        events.append(
-            ActivityEvent(
-                event_type="report_generated",
-                company_name=company_name,
-                status="draft",
-                occurred_at=report.generated_at,
-            )
-        )
-        if (
-            report.review_status == ReportReviewStatus.APPROVED
-            and report.approved_at
-        ):
-            events.append(
-                ActivityEvent(
-                    event_type="report_approved",
-                    company_name=company_name,
-                    status="approved",
-                    occurred_at=report.approved_at,
-                )
-            )
-
-    events.sort(key=lambda event: event.occurred_at, reverse=True)
-    return events[:ACTIVITY_LIMIT]
+ACTION_PRIORITY = {
+    "research_prospect": 0,
+    "collect_evidence": 1,
+    "prepare_outreach": 2,
+    "approve_outreach": 3,
+    "send_linkedin": 4,
+    "follow_up": 5,
+    "awaiting_gmail": 6,
+}
 
 
 def get_dashboard_summary_for_user(
     db: Session,
     current_user: User,
+    now: datetime | None = None,
 ) -> DashboardSummaryResponse:
-    average_score = average_opportunity_score_for_user(
-        db=db,
-        user_id=current_user.id,
-    )
-    most_researched = list_most_researched_industries(
-        db=db,
-        user_id=current_user.id,
-        limit=MAX_MOST_RESEARCHED_INDUSTRIES,
+    current_time = now or datetime.now(UTC)
+    counts = pipeline_counts_for_user(db, current_user.id)
+    prospect_rows = list_actionable_prospects(db, current_user.id, FETCH_LIMIT)
+    outreach_rows = list_actionable_outreach(db, current_user.id, FETCH_LIMIT)
+    due_rows = list_follow_ups_due(
+        db,
+        current_user.id,
+        current_time - timedelta(days=FOLLOW_UP_AFTER_DAYS),
+        ACTION_LIMIT,
     )
 
-    return DashboardSummaryResponse(
-        reports_generated=count_research_reports_for_user(
-            db=db,
-            user_id=current_user.id,
-        ),
-        companies_researched=count_distinct_companies_researched(
-            db=db,
-            user_id=current_user.id,
-        ),
-        industries_researched=count_distinct_industries_researched(
-            db=db,
-            user_id=current_user.id,
-        ),
-        most_researched_industries=[
-            IndustrySummary(industry=industry, report_count=report_count)
-            for industry, report_count in most_researched
-        ],
-        average_opportunity_score=(
-            round(average_score, 1) if average_score is not None else None
-        ),
-        recent_activity=_build_activity_events(
-            db=db,
-            user_id=current_user.id,
-        ),
+    prospects_with_active_outreach = {attempt.campaign_prospect_id for attempt, _, _ in outreach_rows}
+    prospect_actions = [
+        _prospect_action(prospect, campaign_title)
+        for prospect, campaign_title in prospect_rows
+        if not (
+            prospect.next_action is CampaignProspectNextAction.PREPARE_OUTREACH
+            and prospect.id in prospects_with_active_outreach
+        )
+    ]
+    outreach_actions = [
+        _outreach_action(attempt, prospect, campaign_title)
+        for attempt, prospect, campaign_title in outreach_rows
+    ]
+    needs_attention = sorted(
+        [*prospect_actions, *outreach_actions],
+        key=lambda action: ACTION_PRIORITY[action.action_type],
+    )[:ACTION_LIMIT]
+    follow_ups = [
+        _follow_up_action(attempt, prospect, campaign_title, current_time)
+        for attempt, prospect, campaign_title in due_rows
+    ]
+    next_best_action = min(
+        [*needs_attention, *follow_ups],
+        key=lambda action: ACTION_PRIORITY[action.action_type],
+        default=None,
     )
+
+    recent_activity = _recent_activity(db, current_user)
+    return DashboardSummaryResponse(
+        pipeline=PipelineSummary(
+            prospects_saved=counts[0],
+            needs_research=counts[1],
+            ready_for_outreach=counts[2],
+            contacted=counts[3],
+            replied=counts[4],
+            interested=counts[5],
+        ),
+        needs_attention=needs_attention,
+        follow_ups_due=follow_ups,
+        recent_activity=recent_activity,
+        next_best_action=next_best_action,
+    )
+
+
+def _prospect_action(prospect: CampaignProspect, campaign_title: str) -> DashboardAction:
+    action_type = prospect.next_action.value
+    reasons = {
+        "research_prospect": "This saved prospect is ready for deeper research.",
+        "collect_evidence": "More evidence is required before qualification.",
+        "prepare_outreach": "A likely opportunity is ready for an outreach draft.",
+    }
+    return DashboardAction(
+        action_type=action_type,
+        campaign_id=prospect.campaign_id,
+        campaign_title=campaign_title,
+        prospect_id=prospect.id,
+        prospect_name=_prospect_name(prospect),
+        reason=reasons[action_type],
+        reference_at=prospect.updated_at,
+    )
+
+
+def _outreach_action(
+    attempt: OutreachAttempt,
+    prospect: CampaignProspect,
+    campaign_title: str,
+) -> DashboardAction:
+    if attempt.status is OutreachStatus.DRAFT:
+        action_type = "approve_outreach"
+        reason = f"Review and approve the {attempt.channel.value} draft."
+    elif attempt.channel is OutreachChannel.LINKEDIN:
+        action_type = "send_linkedin"
+        reason = "This approved LinkedIn message is ready for manual sending."
+    else:
+        action_type = "awaiting_gmail"
+        reason = "This approved email is waiting for Gmail connection and sending."
+    return DashboardAction(
+        action_type=action_type,
+        campaign_id=prospect.campaign_id,
+        campaign_title=campaign_title,
+        prospect_id=prospect.id,
+        prospect_name=_prospect_name(prospect),
+        outreach_attempt_id=attempt.id,
+        channel=attempt.channel,
+        reason=reason,
+        reference_at=attempt.updated_at,
+    )
+
+
+def _follow_up_action(
+    attempt: OutreachAttempt,
+    prospect: CampaignProspect,
+    campaign_title: str,
+    now: datetime,
+) -> DashboardAction:
+    days_since_send = max(FOLLOW_UP_AFTER_DAYS, (now - attempt.sent_at).days)
+    return DashboardAction(
+        action_type="follow_up",
+        campaign_id=prospect.campaign_id,
+        campaign_title=campaign_title,
+        prospect_id=prospect.id,
+        prospect_name=_prospect_name(prospect),
+        outreach_attempt_id=attempt.id,
+        channel=attempt.channel,
+        reason=f"No reply has been recorded {days_since_send} days after sending.",
+        reference_at=attempt.sent_at,
+    )
+
+
+def _recent_activity(db: Session, current_user: User) -> list[ActivityEvent]:
+    events = [
+        ActivityEvent(
+            event_type="prospect_saved",
+            campaign_title=campaign_title,
+            prospect_id=prospect.id,
+            prospect_name=_prospect_name(prospect),
+            occurred_at=prospect.created_at,
+        )
+        for prospect, campaign_title in list_recent_prospects(
+            db, current_user.id, ACTIVITY_LIMIT
+        )
+    ]
+    events.extend(
+        _outreach_activity(attempt, prospect, campaign_title)
+        for attempt, prospect, campaign_title in list_recent_outreach(
+            db, current_user.id, ACTIVITY_LIMIT
+        )
+    )
+    return sorted(events, key=lambda event: event.occurred_at, reverse=True)[:ACTIVITY_LIMIT]
+
+
+def _outreach_activity(
+    attempt: OutreachAttempt,
+    prospect: CampaignProspect,
+    campaign_title: str,
+) -> ActivityEvent:
+    if attempt.replied_at is not None:
+        event_type = "outreach_replied"
+        occurred_at = attempt.replied_at
+    elif attempt.status is OutreachStatus.CLOSED and attempt.outcome_recorded_at is not None:
+        event_type = "outreach_closed"
+        occurred_at = attempt.outcome_recorded_at
+    elif attempt.sent_at is not None:
+        event_type = "outreach_sent"
+        occurred_at = attempt.sent_at
+    elif attempt.approved_at is not None:
+        event_type = "outreach_approved"
+        occurred_at = attempt.approved_at
+    else:
+        event_type = "outreach_draft_created"
+        occurred_at = attempt.created_at
+    return ActivityEvent(
+        event_type=event_type,
+        campaign_title=campaign_title,
+        prospect_id=prospect.id,
+        prospect_name=_prospect_name(prospect),
+        channel=attempt.channel,
+        occurred_at=occurred_at,
+    )
+
+
+def _prospect_name(prospect: CampaignProspect) -> str:
+    name = prospect.candidate_snapshot.get("company_name")
+    return name.strip() if isinstance(name, str) and name.strip() else "Unnamed business"

@@ -81,30 +81,27 @@ class TestReportHistory:
 
 
 class TestDashboard:
-    def test_summary_matches_seeded_data(self, auth_client, history_reports):
+    def test_legacy_reports_do_not_create_pipeline_activity(self, auth_client, history_reports):
         resp = auth_client.get("/dashboard/summary")
         assert resp.status_code == 200
         body = resp.json()
-        assert body["reports_generated"] == 2
-        assert body["companies_researched"] == 1
-        assert body["average_opportunity_score"] == 65.0
+        assert body["pipeline"]["prospects_saved"] == 0
+        assert body["needs_attention"] == []
+        assert body["recent_activity"] == []
 
     def test_zero_state_for_new_user(self, foreign_client):
         resp = foreign_client.get("/dashboard/summary")
         assert resp.status_code == 200
         body = resp.json()
-        assert body["reports_generated"] == 0
-        assert body["companies_researched"] == 0
-        assert body["most_researched_industries"] == []
-        assert body["average_opportunity_score"] is None
+        assert body["pipeline"] == {
+            "prospects_saved": 0,
+            "needs_research": 0,
+            "ready_for_outreach": 0,
+            "contacted": 0,
+            "replied": 0,
+            "interested": 0,
+        }
+        assert body["needs_attention"] == []
+        assert body["follow_ups_due"] == []
         assert body["recent_activity"] == []
-
-    def test_activity_feed_lists_events(self, auth_client, history_reports):
-        resp = auth_client.get("/dashboard/summary")
-        events = resp.json()["recent_activity"]
-        event_types = {e["event_type"] for e in events}
-        assert "report_generated" in event_types
-        assert "research_requested" in event_types
-        timestamps = [e["occurred_at"] for e in events]
-        assert timestamps == sorted(timestamps, reverse=True)
-        assert len(events) <= 10
+        assert body["next_best_action"] is None
