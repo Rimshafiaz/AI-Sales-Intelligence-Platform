@@ -149,6 +149,40 @@ export interface CampaignProspect {
   updated_at: string
 }
 
+export interface OutreachDraftOption {
+  research_report_id: string
+  channel: 'email' | 'linkedin'
+  recipient: string
+  subject: string | null
+  body: string
+}
+
+export interface OutreachAttempt {
+  id: string
+  campaign_prospect_id: string
+  research_report_id: string
+  channel: 'email' | 'linkedin'
+  send_method: 'gmail' | 'manual'
+  recipient: string
+  subject: string | null
+  body: string
+  offering: string
+  grounding_evidence_keys: string[]
+  contact_source_keys: string[]
+  edited_by_user: boolean
+  status: 'draft' | 'approved' | 'sending' | 'sent' | 'failed' | 'replied' | 'closed'
+  outcome: 'interested' | 'not_interested' | 'bounced' | 'no_response' | null
+  provider_message_id: string | null
+  provider_thread_id: string | null
+  failure_reason: string | null
+  approved_at: string | null
+  sent_at: string | null
+  replied_at: string | null
+  outcome_recorded_at: string | null
+  created_at: string
+  updated_at: string
+}
+
 export interface Company {
   id: string
   name: string

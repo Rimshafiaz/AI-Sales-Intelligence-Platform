@@ -13,6 +13,7 @@ from app.db.base import Base
 if TYPE_CHECKING:
     from app.models.campaign import Campaign
     from app.models.campaign_run import CampaignRun
+    from app.models.outreach_attempt import OutreachAttempt
 
 
 class CampaignProspectState(str, Enum):
@@ -81,3 +82,7 @@ class CampaignProspect(Base):
 
     campaign: Mapped["Campaign"] = relationship("Campaign", back_populates="prospects")
     campaign_run: Mapped["CampaignRun"] = relationship("CampaignRun")
+    outreach_attempts: Mapped[list["OutreachAttempt"]] = relationship(
+        "OutreachAttempt",
+        back_populates="campaign_prospect",
+    )

@@ -18,6 +18,7 @@ EXPECTED_TABLES = {
     "campaign_runs",
     "campaign_candidate_selections",
     "campaign_prospects",
+    "outreach_attempts",
     "alembic_version",
 }
 

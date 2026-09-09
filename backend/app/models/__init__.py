@@ -7,6 +7,7 @@ from app.models.research_social_observation import ResearchSocialObservation
 from app.models.opportunity_qualification import OpportunityQualification
 from app.models.user import User
 from app.models.campaign_prospect import CampaignProspect
+from app.models.outreach_attempt import OutreachAttempt
 
 __all__ = [
     "Company",
@@ -21,6 +22,7 @@ __all__ = [
     "OpportunityQualification",
     "User",
     "CampaignProspect",
+    "OutreachAttempt",
 ]
 from app.models.campaign import Campaign
 from app.models.campaign_candidate_selection import CampaignCandidateSelection
