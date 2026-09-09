@@ -17,6 +17,7 @@ from app.models.campaign_run import CampaignRun
 from app.models.campaign_candidate_selection import CampaignCandidateSelection
 from app.models.campaign_prospect import CampaignProspect
 from app.models.outreach_attempt import OutreachAttempt
+from app.models.gmail_connection import GmailConnection, GmailOAuthState
 from app.models.opportunity_qualification import OpportunityQualification
 # Alembic Config object
 config = context.config

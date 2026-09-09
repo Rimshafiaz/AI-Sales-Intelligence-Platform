@@ -19,6 +19,8 @@ EXPECTED_TABLES = {
     "campaign_candidate_selections",
     "campaign_prospects",
     "outreach_attempts",
+    "gmail_connections",
+    "gmail_oauth_states",
     "alembic_version",
 }
 

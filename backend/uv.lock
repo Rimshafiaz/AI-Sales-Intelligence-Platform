@@ -199,6 +199,7 @@ source = { virtual = "." }
 dependencies = [
     { name = "alembic" },
     { name = "crewai", extra = ["google-genai"] },
+    { name = "cryptography" },
     { name = "fastapi" },
     { name = "httpx" },
     { name = "litellm" },
@@ -221,6 +222,7 @@ dev = [
 requires-dist = [
     { name = "alembic", specifier = ">=1.18.5" },
     { name = "crewai", extras = ["google-genai"], specifier = ">=1.6.1" },
+    { name = "cryptography", specifier = ">=50.0.0" },
     { name = "fastapi", specifier = ">=0.141.1" },
     { name = "httpx", specifier = ">=0.28.1" },
     { name = "litellm", specifier = ">=1.97.0" },

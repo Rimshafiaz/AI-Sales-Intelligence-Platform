@@ -1,6 +1,6 @@
 from typing import Literal
 
-from pydantic import AliasChoices, Field
+from pydantic import AliasChoices, Field, SecretStr
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -50,6 +50,12 @@ class Settings(BaseSettings):
     llm_provider: Literal["groq", "gemini"] = "groq"
     groq_model: str = "openai/gpt-oss-20b"
     gemini_model: str = "gemini-3.5-flash"
+
+    google_oauth_client_id: str | None = None
+    google_oauth_client_secret: SecretStr | None = None
+    google_oauth_redirect_uri: str = "http://localhost:8000/integrations/gmail/callback"
+    gmail_oauth_frontend_redirect_url: str = "http://localhost:5173/settings"
+    gmail_token_encryption_key: SecretStr | None = None
 
 
 settings = Settings()

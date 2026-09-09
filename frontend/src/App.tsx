@@ -12,6 +12,7 @@ import ResearchProgressPage from './pages/ResearchProgressPage'
 import ReportReviewPage from './pages/ReportReviewPage'
 import NotFoundPage from './pages/NotFoundPage'
 import ProspectsPage from './pages/ProspectsPage'
+import SettingsPage from './pages/SettingsPage'
 
 function IdleWarningBanner() {
   const { idleWarning, staySignedIn } = useAuth()
@@ -77,6 +78,7 @@ export default function App() {
         <Route path="/research/:requestId" element={<ResearchProgressPage />} />
         <Route path="/reports/:reportId" element={<ReportReviewPage />} />
         <Route path="/history" element={<HistoryPage />} />
+        <Route path="/settings" element={<SettingsPage />} />
         <Route path="*" element={<NotFoundPage />} />
       </Route>
     </Routes>

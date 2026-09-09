@@ -183,6 +183,19 @@ export interface OutreachAttempt {
   updated_at: string
 }
 
+export interface GmailConnection {
+  configured: boolean
+  status: 'connected' | 'disconnected' | null
+  email: string | null
+  granted_scopes: string[]
+  connected_at: string | null
+  disconnected_at: string | null
+}
+
+export interface GmailAuthorization {
+  authorization_url: string
+}
+
 export interface Company {
   id: string
   name: string

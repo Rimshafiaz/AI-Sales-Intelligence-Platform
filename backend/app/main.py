@@ -15,6 +15,7 @@ from app.api.routes.company_discovery import router as company_discovery_router
 from app.api.routes.dashboard import router as dashboard_router
 from app.api.routes.campaigns import router as campaigns_router
 from app.api.routes.outreach_attempts import router as outreach_attempts_router
+from app.api.routes.gmail_connections import router as gmail_connections_router
 
 configure_logging()
 logger = get_logger(__name__)
@@ -40,6 +41,7 @@ app.include_router(company_discovery_router)
 app.include_router(dashboard_router)
 app.include_router(campaigns_router)
 app.include_router(outreach_attempts_router)
+app.include_router(gmail_connections_router)
 
 
 @app.middleware("http")

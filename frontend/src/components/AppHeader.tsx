@@ -7,6 +7,7 @@ const NAV_ITEMS = [
   { to: '/dashboard', label: 'Dashboard' },
   { to: '/history', label: 'History' },
   { to: '/prospects', label: 'Prospects' },
+  { to: '/settings', label: 'Settings' },
 ]
 
 export function AppHeader() {
