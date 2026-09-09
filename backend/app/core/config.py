@@ -56,6 +56,7 @@ class Settings(BaseSettings):
     google_oauth_redirect_uri: str = "http://localhost:8000/integrations/gmail/callback"
     gmail_oauth_frontend_redirect_url: str = "http://localhost:5173/settings"
     gmail_token_encryption_key: SecretStr | None = None
+    gmail_send_limit_per_day: int = Field(default=25, ge=1, le=500)
 
 
 settings = Settings()

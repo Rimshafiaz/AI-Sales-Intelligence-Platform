@@ -20,6 +20,7 @@ class CampaignProspectState(str, Enum):
     SAVED = "saved"
     NEEDS_RESEARCH = "needs_research"
     READY_FOR_OUTREACH = "ready_for_outreach"
+    CONTACTED = "contacted"
     CLOSED = "closed"
 
 

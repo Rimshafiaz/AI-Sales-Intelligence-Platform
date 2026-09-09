@@ -25,6 +25,7 @@ from app.services.outreach_attempts import (
     outreach_attempt_response,
     record_manual_linkedin_send,
     record_manual_outcome,
+    send_approved_email,
     update_outreach_draft,
 )
 
@@ -108,6 +109,18 @@ def approve_outreach_attempt_endpoint(
     current_user: User = Depends(get_current_user),
 ) -> OutreachAttemptResponse:
     return _run(attempt_id, current_user, approve_outreach_attempt, db)
+
+
+@router.post(
+    "/outreach-attempts/{attempt_id}/send-email",
+    response_model=OutreachAttemptResponse,
+)
+def send_approved_email_endpoint(
+    attempt_id: UUID,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+) -> OutreachAttemptResponse:
+    return _run(attempt_id, current_user, send_approved_email, db)
 
 
 @router.post(

@@ -86,7 +86,7 @@ def test_connection_uses_hashed_single_use_state_and_encrypted_token(monkeypatch
     key = Fernet.generate_key().decode()
     owner = User(id=uuid.uuid4(), email="owner@example.com")
     db = FakeSession()
-    monkeypatch.setattr(gmail_connections, "_configured_dependencies", lambda: (FakeOAuthClient(), key))
+    monkeypatch.setattr(gmail_connections, "configured_gmail_dependencies", lambda: (FakeOAuthClient(), key))
     monkeypatch.setattr(gmail_connections.secrets, "token_urlsafe", lambda size: "raw-oauth-state-value")
 
     authorization = gmail_connections.start_gmail_connection(db, owner)
@@ -109,7 +109,7 @@ def test_connection_uses_hashed_single_use_state_and_encrypted_token(monkeypatch
 
 def test_expired_or_consumed_state_is_rejected(monkeypatch):
     key = Fernet.generate_key().decode()
-    monkeypatch.setattr(gmail_connections, "_configured_dependencies", lambda: (FakeOAuthClient(), key))
+    monkeypatch.setattr(gmail_connections, "configured_gmail_dependencies", lambda: (FakeOAuthClient(), key))
 
     with pytest.raises(GmailConnectionError, match="invalid or expired"):
         gmail_connections.complete_gmail_connection(
@@ -130,7 +130,7 @@ def test_disconnect_clears_local_token_even_if_google_revocation_fails(monkeypat
         connected_at=NOW - timedelta(days=1),
     )
     db = FakeSession(scalar_results=[connection])
-    monkeypatch.setattr(gmail_connections, "_configured_dependencies", lambda: (FakeOAuthClient(), key))
+    monkeypatch.setattr(gmail_connections, "configured_gmail_dependencies", lambda: (FakeOAuthClient(), key))
 
     result = gmail_connections.disconnect_gmail(db, owner)
 

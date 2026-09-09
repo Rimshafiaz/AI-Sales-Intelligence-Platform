@@ -1,3 +1,5 @@
+import base64
+from email.message import EmailMessage
 from urllib.parse import urlencode
 
 import httpx
@@ -7,11 +9,20 @@ GOOGLE_AUTHORIZATION_URL = "https://accounts.google.com/o/oauth2/v2/auth"
 GOOGLE_TOKEN_URL = "https://oauth2.googleapis.com/token"
 GOOGLE_USERINFO_URL = "https://openidconnect.googleapis.com/v1/userinfo"
 GOOGLE_REVOCATION_URL = "https://oauth2.googleapis.com/revoke"
+GMAIL_SEND_URL = "https://gmail.googleapis.com/gmail/v1/users/me/messages/send"
 GMAIL_SEND_SCOPE = "https://www.googleapis.com/auth/gmail.send"
 GMAIL_OAUTH_SCOPES = ("openid", "email", GMAIL_SEND_SCOPE)
 
 
 class GmailOAuthProviderError(RuntimeError):
+    pass
+
+
+class GmailSendRejectedError(RuntimeError):
+    pass
+
+
+class GmailSendUncertainError(RuntimeError):
     pass
 
 
@@ -90,3 +101,71 @@ class GmailOAuthClient:
             return response.status_code == 200
         except httpx.HTTPError:
             return False
+
+    def refresh_access_token(self, refresh_token: str) -> str:
+        try:
+            response = httpx.post(
+                GOOGLE_TOKEN_URL,
+                data={
+                    "client_id": self.client_id,
+                    "client_secret": self.client_secret,
+                    "refresh_token": refresh_token,
+                    "grant_type": "refresh_token",
+                },
+                timeout=self.timeout_seconds,
+            )
+            response.raise_for_status()
+        except httpx.HTTPError as error:
+            raise GmailOAuthProviderError("Google could not refresh Gmail access.") from error
+        try:
+            access_token = response.json().get("access_token")
+        except ValueError as error:
+            raise GmailOAuthProviderError("Google returned an unreadable token response.") from error
+        if not isinstance(access_token, str):
+            raise GmailOAuthProviderError("Google did not return a Gmail access token.")
+        return access_token
+
+    def send_email(
+        self,
+        access_token: str,
+        sender: str,
+        recipient: str,
+        subject: str,
+        body: str,
+    ) -> tuple[str, str]:
+        message = EmailMessage()
+        try:
+            message["From"] = sender
+            message["To"] = recipient
+            message["Subject"] = subject
+        except ValueError as error:
+            raise GmailSendRejectedError("The saved email headers are invalid.") from error
+        message.set_content(body)
+        raw_message = base64.urlsafe_b64encode(message.as_bytes()).decode()
+        try:
+            response = httpx.post(
+                GMAIL_SEND_URL,
+                headers={"Authorization": f"Bearer {access_token}"},
+                json={"raw": raw_message},
+                timeout=self.timeout_seconds,
+            )
+            response.raise_for_status()
+        except httpx.TransportError as error:
+            raise GmailSendUncertainError(
+                "Gmail delivery could not be confirmed. Do not resend this attempt."
+            ) from error
+        except httpx.HTTPStatusError as error:
+            raise GmailSendRejectedError("Gmail rejected the email.") from error
+        try:
+            payload = response.json()
+        except ValueError as error:
+            raise GmailSendUncertainError(
+                "Gmail accepted the request but returned an unreadable result. Do not resend this attempt."
+            ) from error
+        message_id = payload.get("id")
+        thread_id = payload.get("threadId")
+        if not isinstance(message_id, str) or not isinstance(thread_id, str):
+            raise GmailSendUncertainError(
+                "Gmail accepted the request but did not confirm its identifiers. Do not resend this attempt."
+            )
+        return message_id, thread_id

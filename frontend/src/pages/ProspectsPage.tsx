@@ -188,7 +188,7 @@ function OutreachAttemptCard({
 }) {
   const [subject, setSubject] = useState(attempt.subject ?? '')
   const [body, setBody] = useState(attempt.body)
-  const editable = attempt.status === 'draft' || attempt.status === 'approved'
+  const editable = attempt.status === 'draft' || attempt.status === 'approved' || attempt.status === 'failed'
   const changed = subject !== (attempt.subject ?? '') || body !== attempt.body
 
   async function saveDraft(): Promise<OutreachAttempt> {
@@ -198,7 +198,7 @@ function OutreachAttemptCard({
     })
   }
 
-  async function run(action: 'save' | 'approve' | 'sent') {
+  async function run(action: 'save' | 'approve' | 'sent' | 'send-email') {
     setWorking(true)
     setError(null)
     try {
@@ -209,6 +209,9 @@ function OutreachAttemptCard({
       }
       if (action === 'sent') {
         updated = await api<OutreachAttempt>(`/outreach-attempts/${attempt.id}/manual-linkedin-send`, { method: 'POST' })
+      }
+      if (action === 'send-email') {
+        updated = await api<OutreachAttempt>(`/outreach-attempts/${attempt.id}/send-email`, { method: 'POST' })
       }
       onChanged(updated)
     } catch (requestError) {
@@ -251,7 +254,9 @@ function OutreachAttemptCard({
         </div>
       )}
       {attempt.edited_by_user && <p className="mt-2 text-label-sm text-on-surface-variant">User-edited after evidence-grounded generation.</p>}
-      {attempt.status === 'approved' && attempt.channel === 'email' && !changed && <p className="mt-3 text-label-sm text-on-surface-variant">Approved and waiting for connected Gmail sending in M84.</p>}
+      {attempt.status === 'approved' && attempt.channel === 'email' && !changed && (
+        <button type="button" disabled={working} onClick={() => void run('send-email')} className="mt-3 rounded-control bg-primary px-3 py-1.5 text-label-md font-medium text-on-primary disabled:opacity-60">Send with Gmail</button>
+      )}
       {attempt.status === 'approved' && attempt.channel === 'linkedin' && !changed && (
         <div className="mt-3 flex flex-wrap gap-2">
           <button type="button" disabled={working} onClick={() => void navigator.clipboard.writeText(body)} className="rounded-control border border-secondary px-3 py-1.5 text-label-md font-medium text-secondary disabled:opacity-60">Copy message</button>
@@ -267,6 +272,7 @@ function OutreachAttemptCard({
         </div>
       )}
       {attempt.outcome && <p className="mt-2 text-label-sm text-on-surface-variant">Outcome: {label(attempt.outcome)}</p>}
+      {attempt.failure_reason && <p className="mt-2 text-label-sm text-error">{attempt.failure_reason}</p>}
     </div>
   )
 }

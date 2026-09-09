@@ -1,11 +1,17 @@
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from urllib.parse import urlparse
 from uuid import UUID
 
-from sqlalchemy import select
+from sqlalchemy import func, or_, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
+from app.core.config import settings
+from app.integrations.gmail_oauth import (
+    GmailOAuthProviderError,
+    GmailSendRejectedError,
+    GmailSendUncertainError,
+)
 from app.models.campaign import Campaign
 from app.models.campaign_candidate_selection import CampaignCandidateSelection
 from app.models.campaign_prospect import (
@@ -14,6 +20,7 @@ from app.models.campaign_prospect import (
     CampaignProspectState,
 )
 from app.models.campaign_run import CampaignRun
+from app.models.gmail_connection import GmailConnection, GmailConnectionStatus
 from app.models.outreach_attempt import (
     OutreachAttempt,
     OutreachChannel,
@@ -37,6 +44,8 @@ from app.schemas.prospect_evidence_brief import (
     ContactPathType,
     ProspectEvidenceBrief,
 )
+from app.services.gmail_connections import configured_gmail_dependencies
+from app.services.gmail_token_vault import GmailTokenVaultError, decrypt_refresh_token
 
 
 class OutreachAttemptError(ValueError):
@@ -246,6 +255,101 @@ def approve_outreach_attempt(
         raise OutreachAttemptError("Only a draft outreach attempt can be approved.")
     attempt.status = OutreachStatus.APPROVED
     attempt.approved_at = datetime.now(UTC)
+    db.commit()
+    db.refresh(attempt)
+    return attempt
+
+
+def send_approved_email(
+    db: Session,
+    attempt_id: UUID,
+    current_user: User,
+) -> OutreachAttempt:
+    attempt = db.scalar(
+        select(OutreachAttempt)
+        .where(
+            OutreachAttempt.id == attempt_id,
+            OutreachAttempt.user_id == current_user.id,
+        )
+        .with_for_update()
+    )
+    if attempt is None:
+        raise OutreachAttemptError("Outreach attempt not found.")
+    if attempt.channel is not OutreachChannel.EMAIL or attempt.send_method is not OutreachSendMethod.GMAIL:
+        raise OutreachAttemptError("Only Gmail email attempts can be sent through this endpoint.")
+    if attempt.status is not OutreachStatus.APPROVED:
+        raise OutreachAttemptError("Only an approved email can be sent.")
+    if not attempt.subject or not attempt.body or not attempt.recipient:
+        raise OutreachAttemptError("The approved email is incomplete.")
+
+    connection = db.scalar(
+        select(GmailConnection)
+        .where(
+            GmailConnection.user_id == current_user.id,
+            GmailConnection.status == GmailConnectionStatus.CONNECTED,
+        )
+        .with_for_update()
+    )
+    if connection is None or not connection.encrypted_refresh_token:
+        raise OutreachAttemptError("Connect Gmail before sending this email.")
+    sent_since = datetime.now(UTC) - timedelta(days=1)
+    sent_count = db.scalar(
+        select(func.count(OutreachAttempt.id)).where(
+            OutreachAttempt.user_id == current_user.id,
+            OutreachAttempt.channel == OutreachChannel.EMAIL,
+            or_(
+                OutreachAttempt.sent_at >= sent_since,
+                (
+                    (OutreachAttempt.status == OutreachStatus.SENDING)
+                    & (OutreachAttempt.updated_at >= sent_since)
+                ),
+            ),
+        )
+    )
+    if int(sent_count or 0) >= settings.gmail_send_limit_per_day:
+        raise OutreachAttemptError("The SalesLens Gmail daily send limit has been reached.")
+
+    try:
+        client, encryption_key = configured_gmail_dependencies()
+        refresh_token = decrypt_refresh_token(connection.encrypted_refresh_token, encryption_key)
+    except (GmailTokenVaultError, ValueError) as error:
+        raise OutreachAttemptError("The Gmail connection could not be used securely.") from error
+
+    attempt.status = OutreachStatus.SENDING
+    attempt.failure_reason = None
+    db.commit()
+
+    try:
+        access_token = client.refresh_access_token(refresh_token)
+        message_id, thread_id = client.send_email(
+            access_token,
+            connection.email,
+            attempt.recipient,
+            attempt.subject,
+            attempt.body,
+        )
+    except (GmailOAuthProviderError, GmailSendRejectedError) as error:
+        attempt.status = OutreachStatus.FAILED
+        attempt.failure_reason = str(error)
+        db.commit()
+        db.refresh(attempt)
+        return attempt
+    except GmailSendUncertainError as error:
+        attempt.failure_reason = str(error)
+        db.commit()
+        db.refresh(attempt)
+        return attempt
+
+    now = datetime.now(UTC)
+    attempt.status = OutreachStatus.SENT
+    attempt.provider_message_id = message_id
+    attempt.provider_thread_id = thread_id
+    attempt.sent_at = now
+    attempt.failure_reason = None
+    prospect = db.get(CampaignProspect, attempt.campaign_prospect_id)
+    if prospect is not None:
+        prospect.workflow_state = CampaignProspectState.CONTACTED
+        prospect.next_action = CampaignProspectNextAction.NO_ACTION
     db.commit()
     db.refresh(attempt)
     return attempt

@@ -36,7 +36,7 @@ class GmailConnectionError(ValueError):
 
 
 def start_gmail_connection(db: Session, current_user: User) -> GmailAuthorizationResponse:
-    client, _ = _configured_dependencies()
+    client, _ = configured_gmail_dependencies()
     raw_state = secrets.token_urlsafe(32)
     state = GmailOAuthState(
         user_id=current_user.id,
@@ -56,7 +56,7 @@ def complete_gmail_connection(
     code: str | None,
     provider_error: str | None,
 ) -> GmailConnection:
-    client, encryption_key = _configured_dependencies()
+    client, encryption_key = configured_gmail_dependencies()
     now = datetime.now(UTC)
     state = db.scalar(
         select(GmailOAuthState)
@@ -125,7 +125,7 @@ def get_gmail_connection_status(db: Session, current_user: User) -> GmailConnect
 
 
 def disconnect_gmail(db: Session, current_user: User) -> GmailDisconnectResponse:
-    client, encryption_key = _configured_dependencies()
+    client, encryption_key = configured_gmail_dependencies()
     connection = db.scalar(select(GmailConnection).where(GmailConnection.user_id == current_user.id))
     if connection is None or connection.status is GmailConnectionStatus.DISCONNECTED:
         raise GmailConnectionError("No connected Gmail account was found.")
@@ -147,7 +147,7 @@ def disconnect_gmail(db: Session, current_user: User) -> GmailDisconnectResponse
     )
 
 
-def _configured_dependencies() -> tuple[GmailOAuthClient, str]:
+def configured_gmail_dependencies() -> tuple[GmailOAuthClient, str]:
     if not _is_configured():
         raise GmailConnectionError("Gmail integration is not configured.")
     client_secret = settings.google_oauth_client_secret.get_secret_value()

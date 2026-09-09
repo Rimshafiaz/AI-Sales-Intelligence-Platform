@@ -143,7 +143,7 @@ export interface CampaignProspect {
   candidate_snapshot: Record<string, unknown>
   shortlist_snapshot: Record<string, unknown>
   evidence_snapshot: unknown[]
-  workflow_state: 'saved' | 'needs_research' | 'ready_for_outreach' | 'closed'
+  workflow_state: 'saved' | 'needs_research' | 'ready_for_outreach' | 'contacted' | 'closed'
   next_action: 'research_prospect' | 'collect_evidence' | 'prepare_outreach' | 'no_action'
   created_at: string
   updated_at: string
