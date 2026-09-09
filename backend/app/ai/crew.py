@@ -29,6 +29,8 @@ from app.schemas.prospect_evidence_brief import (
     BriefEvidenceQuality,
     BriefFinding,
     BriefQualification,
+    GroundedOutreachDraft,
+    PitchAngle,
     ProspectEvidenceBrief,
     ProspectEvidenceBriefHandoffs,
 )
@@ -253,9 +255,28 @@ def assemble_prospect_evidence_brief(
 ) -> ProspectEvidenceBrief:
     context = handoffs.evidence_quality_review.context
     verdict = _select_brief_verdict(context.qualifications)
-    findings = _unique_findings(finding_outputs)
+    evidence_keys = {evidence.key for evidence in context.evidence}
+    findings = _unique_findings(finding_outputs, evidence_keys)
     caveats = _unique_caveats(finding_outputs, strategy)
     is_likely = verdict.state is OpportunityQualificationState.LIKELY
+    pitch_angle = (
+        PitchAngle.model_validate(strategy.pitch_angle.model_dump())
+        if is_likely
+        and strategy.pitch_angle is not None
+        and strategy.pitch_angle.offering == context.objective.offering
+        and set(strategy.pitch_angle.evidence_keys) <= evidence_keys
+        else None
+    )
+    outreach_drafts = (
+        [
+            GroundedOutreachDraft.model_validate(draft.model_dump())
+            for draft in strategy.outreach_drafts
+            if draft.offering == context.objective.offering
+            and all(set(grounding.evidence_keys) <= evidence_keys for grounding in draft.grounding)
+        ]
+        if is_likely
+        else []
+    )
     return ProspectEvidenceBrief(
         objective=context.objective,
         prospect=context.prospect,
@@ -263,8 +284,8 @@ def assemble_prospect_evidence_brief(
         evidence_quality=_brief_evidence_quality(verdict),
         findings=findings,
         contacts=context.contacts,
-        pitch_angle=strategy.pitch_angle if is_likely else None,
-        outreach_drafts=strategy.outreach_drafts if is_likely else [],
+        pitch_angle=pitch_angle,
+        outreach_drafts=outreach_drafts,
         caveats=caveats,
         evidence=context.evidence,
         sources=context.sources,
@@ -295,14 +316,17 @@ def _brief_evidence_quality(verdict: BriefQualification) -> BriefEvidenceQuality
 
 def _unique_findings(
     outputs: list[BriefFindingsOutput],
+    evidence_keys: set[str],
 ) -> list[BriefFinding]:
     findings = []
     seen = set()
     for output in outputs:
         for finding in output.findings:
+            if not set(finding.evidence_keys) <= evidence_keys:
+                continue
             key = finding.statement.casefold()
             if key not in seen:
-                findings.append(finding)
+                findings.append(BriefFinding.model_validate(finding.model_dump()))
                 seen.add(key)
     return findings[:12]
 

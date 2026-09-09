@@ -76,6 +76,12 @@ class TestPageSpeedInsightsProvider:
             "key": "key",
         }
 
+    def test_default_allows_one_realistic_audit_window(self):
+        provider = PageSpeedInsightsProvider("key", client=FakeClient([]))
+
+        assert provider.timeout_seconds == 45.0
+        assert provider.retry_attempts == 1
+
     def test_timeout_retries_then_reports_unavailable(self):
         provider = PageSpeedInsightsProvider(
             "key",

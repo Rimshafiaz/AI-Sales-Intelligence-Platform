@@ -1,8 +1,10 @@
 from dataclasses import dataclass
 from datetime import UTC, datetime
+import re
 from urllib.parse import urlparse
 
 from app.integrations.search_provider import CollectedSource, TavilySearchProvider
+from app.integrations.website_metadata import WebsiteIdentityPage, WebsiteMetadataCollector
 from app.schemas.opportunity_models import EvidenceSource, IdentityState
 
 
@@ -40,17 +42,24 @@ class ResolutionMatch:
     website: str
     location_supported: bool
     source: EvidenceSource
+    reason: str
 
 
 class CompanyWebsiteResolver:
-    def __init__(self, search_provider: TavilySearchProvider) -> None:
+    def __init__(
+        self,
+        search_provider: TavilySearchProvider,
+        website_collector: WebsiteMetadataCollector | None = None,
+    ) -> None:
         self.search_provider = search_provider
+        self.website_collector = website_collector or WebsiteMetadataCollector()
 
     def resolve(
         self,
         company_name: str,
         location: str | None = None,
         supplied_website: str | None = None,
+        phone_number: str | None = None,
     ) -> ResolvedCompany:
         clean_name = company_name.strip()
         clean_location = location.strip() if location else None
@@ -60,6 +69,22 @@ class CompanyWebsiteResolver:
         supplied_origin = self._origin(supplied_website) if supplied_website else None
         if supplied_website and supplied_origin is None:
             raise ValueError("Website must be a valid http(s) URL.")
+
+        website_match = self._website_identity_match(
+            clean_name,
+            clean_location,
+            phone_number,
+            supplied_origin,
+        )
+        if website_match is not None:
+            return ResolvedCompany(
+                company_name=clean_name,
+                location=clean_location,
+                website=website_match.website,
+                identity_state=IdentityState.VERIFIED,
+                source=website_match.source,
+                reason=website_match.reason,
+            )
 
         query = " ".join(
             part
@@ -107,7 +132,7 @@ class CompanyWebsiteResolver:
             website=match.website,
             identity_state=IdentityState.VERIFIED,
             source=match.source,
-            reason="One source-backed website matched the requested business identity.",
+            reason=match.reason,
         )
 
     @staticmethod
@@ -129,6 +154,78 @@ class CompanyWebsiteResolver:
                 source_url=source.url,
                 retrieved_at=datetime.now(UTC),
             ),
+            reason="One search source-backed website matched the requested business identity.",
+        )
+
+    def _website_identity_match(
+        self,
+        company_name: str,
+        location: str | None,
+        phone_number: str | None,
+        supplied_origin: str | None,
+    ) -> ResolutionMatch | None:
+        if supplied_origin is None:
+            return None
+        for page in self.website_collector.collect_identity_pages(supplied_origin):
+            if not CompanyWebsiteResolver._identity_page_supports_identity(
+                page,
+                company_name,
+                location,
+                phone_number,
+            ):
+                continue
+            website = CompanyWebsiteResolver._origin(page.url)
+            if website is None:
+                continue
+            return ResolutionMatch(
+                website=website,
+                location_supported=True,
+                source=EvidenceSource(
+                    provider="official_website",
+                    source_url=page.url,
+                    retrieved_at=datetime.now(UTC),
+                ),
+                reason=(
+                    "A traceable page on the supplied website names the business and "
+                    "matches its provided location or phone number."
+                ),
+            )
+        return None
+
+    @staticmethod
+    def _identity_page_supports_identity(
+        page: WebsiteIdentityPage,
+        company_name: str,
+        location: str | None,
+        phone_number: str | None,
+    ) -> bool:
+        text = page.identity_text
+        company_key = CompanyWebsiteResolver._company_key(company_name)
+        if not company_key or company_key not in CompanyWebsiteResolver._company_key(text):
+            return False
+        location_supported = bool(
+            location
+            and CompanyWebsiteResolver._company_key(location)
+            in CompanyWebsiteResolver._company_key(text)
+        )
+        phone_supported = CompanyWebsiteResolver._phone_numbers_match(phone_number, text)
+        return location_supported or phone_supported
+
+    @staticmethod
+    def _phone_numbers_match(phone_number: str | None, text: str) -> bool:
+        if not phone_number:
+            return False
+        expected = "".join(character for character in phone_number if character.isdigit())
+        observed_numbers = [
+            "".join(character for character in match if character.isdigit())
+            for match in re.findall(r"\+?\d[\d\s().-]{7,}\d", text)
+        ]
+        if len(expected) < 9:
+            return False
+        return any(
+            len(observed) >= 9
+            and (expected == observed or expected[-9:] == observed[-9:])
+            for observed in observed_numbers
         )
 
     @staticmethod

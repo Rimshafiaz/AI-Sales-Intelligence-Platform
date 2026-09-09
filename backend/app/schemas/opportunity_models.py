@@ -51,6 +51,7 @@ class EvidenceSignalType(str, Enum):
     SOCIAL_DORMANCY_MEASURED = "social_dormancy_measured"
 
 
+
 class EvidenceSource(BaseModel):
     model_config = ConfigDict(extra="forbid")
 

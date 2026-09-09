@@ -79,6 +79,7 @@ def resolve_known_prospect(
         company_name=request.business_name,
         location=request.location,
         supplied_website=str(request.website) if request.website else None,
+        phone_number=request.phone_number,
     )
 
 

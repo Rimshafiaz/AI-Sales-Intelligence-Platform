@@ -1,6 +1,6 @@
 from typing import Self
 
-from pydantic import BaseModel, Field, field_validator, model_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
 from app.schemas.sales_intelligence_report import (
     BusinessSignal,
@@ -18,6 +18,7 @@ from app.schemas.sales_intelligence_report import (
 from app.schemas.prospect_evidence_brief import (
     BriefFinding,
     GroundedOutreachDraft,
+    OutreachGrounding,
     PitchAngle,
 )
 
@@ -82,8 +83,26 @@ class ReviewerOutput(BaseModel):
         return self
 
 
+class AgentBriefFinding(BriefFinding):
+    model_config = ConfigDict(extra="ignore")
+
+
+class AgentPitchAngle(PitchAngle):
+    model_config = ConfigDict(extra="ignore")
+
+
+class AgentOutreachGrounding(OutreachGrounding):
+    model_config = ConfigDict(extra="ignore")
+
+
+class AgentGroundedOutreachDraft(GroundedOutreachDraft):
+    model_config = ConfigDict(extra="ignore")
+
+    grounding: list[AgentOutreachGrounding] = Field(min_length=1, max_length=5)
+
+
 class BriefFindingsOutput(BaseModel):
-    findings: list[BriefFinding] = Field(default_factory=list, max_length=4)
+    findings: list[AgentBriefFinding] = Field(default_factory=list, max_length=4)
     caveats: list[str] = Field(default_factory=list, max_length=3)
 
     @field_validator("caveats")
@@ -93,8 +112,8 @@ class BriefFindingsOutput(BaseModel):
 
 
 class BriefStrategyOutput(BaseModel):
-    pitch_angle: PitchAngle | None = None
-    outreach_drafts: list[GroundedOutreachDraft] = Field(default_factory=list, max_length=2)
+    pitch_angle: AgentPitchAngle | None = None
+    outreach_drafts: list[AgentGroundedOutreachDraft] = Field(default_factory=list, max_length=2)
     caveats: list[str] = Field(default_factory=list, max_length=3)
 
     @field_validator("caveats")

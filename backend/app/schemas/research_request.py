@@ -23,9 +23,10 @@ class KnownProspectResearchRequest(BaseModel):
     desired_outcome: str = Field(min_length=3, max_length=300)
     location: str | None = Field(default=None, max_length=100)
     website: HttpUrl | None = None
+    phone_number: str | None = Field(default=None, max_length=100)
 
     @field_validator(
-        "business_name", "goal", "offering", "desired_outcome", "location", mode="before"
+        "business_name", "goal", "offering", "desired_outcome", "location", "phone_number", mode="before"
     )
     @classmethod
     def normalize_text(cls, value: object) -> object:

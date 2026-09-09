@@ -116,7 +116,7 @@ def confirm_known_prospect_endpoint(
 async def create_research_request_endpoint(
     company_id: UUID,
     background_tasks: BackgroundTasks,
-    payload: ResearchRequestStartRequest,
+    payload: ResearchRequestStartRequest | None = None,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
@@ -124,11 +124,15 @@ async def create_research_request_endpoint(
         db=db,
         company_id=company_id,
         current_user=current_user,
-        goal=payload.goal,
-        objective=payload.objective.model_dump(mode="json") if payload.objective else None,
-        offering=payload.offering,
-        region=payload.region,
-        website=str(payload.website) if payload.website else None,
+        goal=payload.goal if payload else None,
+        objective=(
+            payload.objective.model_dump(mode="json")
+            if payload and payload.objective
+            else None
+        ),
+        offering=payload.offering if payload else None,
+        region=payload.region if payload else None,
+        website=str(payload.website) if payload and payload.website else None,
     )
     if research_request is None:
         raise HTTPException(

@@ -151,8 +151,10 @@ class TestDiscoverySchemas:
             desired_outcome="Decide whether this salon is worth pitching.",
             location="Lahore",
             website="https://aleezay.example",
+            phone_number="  +92 300 1234567  ",
         )
         assert request.business_name == "Aleezay Hair Beauty Care Salon"
+        assert request.phone_number == "+92 300 1234567"
 
         with pytest.raises(ValidationError):
             KnownProspectResearchRequest(

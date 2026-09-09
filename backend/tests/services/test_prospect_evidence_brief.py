@@ -280,6 +280,26 @@ class TestProspectEvidenceBriefHandoffs:
 
 
 class TestProspectEvidenceBriefAssemblyAndReview:
+    def test_discards_unknown_llm_fields_before_final_brief_assembly(self):
+        output = BriefFindingsOutput.model_validate(
+            {
+                "findings": [
+                    {
+                        "statement": "Mobile performance was measured at 31/100.",
+                        "claim_kind": "derived_metric",
+                        "evidence_keys": ["research_evidence:mobile-score"],
+                        "identity": "Unsupported agent-generated context.",
+                    }
+                ]
+            }
+        )
+
+        assert output.findings[0].model_dump() == {
+            "statement": "Mobile performance was measured at 31/100.",
+            "claim_kind": "derived_metric",
+            "evidence_keys": ["research_evidence:mobile-score"],
+        }
+
     def test_assembles_fixed_context_with_goal_specific_strategy(self):
         handoffs = brief_handoffs()
         findings = [
@@ -322,6 +342,47 @@ class TestProspectEvidenceBriefAssemblyAndReview:
         assert brief.verdict == handoffs.opportunity_diagnosis.qualifications[0]
         assert brief.pitch_angle is not None
         assert brief.outreach_drafts[0].offering == brief.objective.offering
+
+    def test_discards_agent_content_outside_the_brief_evidence(self):
+        handoffs = brief_handoffs()
+        findings = [
+            BriefFindingsOutput(
+                findings=[
+                    {
+                        "statement": "An unavailable measurement suggests a problem.",
+                        "claim_kind": "inference",
+                        "evidence_keys": ["unavailable-evidence"],
+                    }
+                ]
+            )
+        ]
+        strategy = BriefStrategyOutput(
+            pitch_angle={
+                "statement": "Improve an unavailable measurement.",
+                "offering": "Website redesign and booking setup",
+                "evidence_keys": ["unavailable-evidence"],
+            },
+            outreach_drafts=[
+                {
+                    "channel": "email",
+                    "subject": "A quick idea for Glow Salon",
+                    "message": "I noticed an unavailable measurement.",
+                    "offering": "Website redesign and booking setup",
+                    "grounding": [
+                        {
+                            "claim": "An unavailable measurement exists.",
+                            "evidence_keys": ["unavailable-evidence"],
+                        }
+                    ],
+                }
+            ],
+        )
+
+        brief = assemble_prospect_evidence_brief(handoffs, findings, strategy)
+
+        assert brief.findings == []
+        assert brief.pitch_angle is None
+        assert brief.outreach_drafts == []
 
     def test_reviewer_rejection_blocks_the_brief(self):
         handoffs = brief_handoffs()

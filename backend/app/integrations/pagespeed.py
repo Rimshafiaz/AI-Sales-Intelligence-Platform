@@ -7,8 +7,8 @@ import httpx
 
 
 PAGESPEED_RUN_URL = "https://www.googleapis.com/pagespeedonline/v5/runPagespeed"
-DEFAULT_TIMEOUT_SECONDS = 20.0
-DEFAULT_RETRY_ATTEMPTS = 2
+DEFAULT_TIMEOUT_SECONDS = 45.0
+DEFAULT_RETRY_ATTEMPTS = 1
 
 
 class PageSpeedProviderError(Exception):
