@@ -101,6 +101,50 @@ OPPORTUNITY_MODELS: dict[OpportunityModelId, OpportunityModel] = {
             EvidenceSignalType.WEBSITE_RESERVATION_PATH_MANUAL_ONLY,
         ),
     ),
+    "web_conversion.restaurant_customer_path": OpportunityModel(
+        id="web_conversion.restaurant_customer_path",
+        display_name="Restaurant customer path",
+        service_family=ServiceFamily.WEB_CONVERSION,
+        applicable_industries=(IndustryOverlayId.RESTAURANTS_CAFES,),
+        required_signal_types=(
+            EvidenceSignalType.BUSINESS_IDENTITY_CONFIRMED,
+            EvidenceSignalType.OFFICIAL_WEBSITE_CONFIRMED,
+            EvidenceSignalType.WEBSITE_RESTAURANT_PRIMARY_PATH_NOT_OBSERVED,
+        ),
+    ),
+    "web_conversion.fitness_membership_path": OpportunityModel(
+        id="web_conversion.fitness_membership_path",
+        display_name="Fitness membership path",
+        service_family=ServiceFamily.WEB_CONVERSION,
+        applicable_industries=(IndustryOverlayId.FITNESS_GYMS,),
+        required_signal_types=(
+            EvidenceSignalType.BUSINESS_IDENTITY_CONFIRMED,
+            EvidenceSignalType.OFFICIAL_WEBSITE_CONFIRMED,
+            EvidenceSignalType.WEBSITE_FITNESS_ENQUIRY_PATH_NOT_OBSERVED,
+        ),
+    ),
+    "web_conversion.retail_product_path": OpportunityModel(
+        id="web_conversion.retail_product_path",
+        display_name="Retail product path",
+        service_family=ServiceFamily.WEB_CONVERSION,
+        applicable_industries=(IndustryOverlayId.BOUTIQUES_RETAIL,),
+        required_signal_types=(
+            EvidenceSignalType.BUSINESS_IDENTITY_CONFIRMED,
+            EvidenceSignalType.OFFICIAL_WEBSITE_CONFIRMED,
+            EvidenceSignalType.WEBSITE_RETAIL_PRODUCT_PATH_NOT_OBSERVED,
+        ),
+    ),
+    "web_conversion.clinic_patient_path": OpportunityModel(
+        id="web_conversion.clinic_patient_path",
+        display_name="Clinic patient path",
+        service_family=ServiceFamily.WEB_CONVERSION,
+        applicable_industries=(IndustryOverlayId.DENTAL_SELECTED_CLINICS,),
+        required_signal_types=(
+            EvidenceSignalType.BUSINESS_IDENTITY_CONFIRMED,
+            EvidenceSignalType.OFFICIAL_WEBSITE_CONFIRMED,
+            EvidenceSignalType.WEBSITE_CLINIC_PATIENT_PATH_INCOMPLETE,
+        ),
+    ),
     "social_presence.dormant_official_presence": OpportunityModel(
         id="social_presence.dormant_official_presence",
         display_name="Measured official social dormancy",

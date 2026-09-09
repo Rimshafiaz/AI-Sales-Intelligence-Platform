@@ -49,6 +49,10 @@ export type OpportunityModelId =
   | 'web_conversion.mobile_performance'
   | 'web_conversion.booking_contact_path'
   | 'web_conversion.restaurant_reservation_path'
+  | 'web_conversion.restaurant_customer_path'
+  | 'web_conversion.fitness_membership_path'
+  | 'web_conversion.retail_product_path'
+  | 'web_conversion.clinic_patient_path'
   | 'social_presence.dormant_official_presence'
 
 export interface EvidenceSource {

@@ -33,11 +33,11 @@ def source() -> EvidenceSource:
 
 class TestOpportunityModelCatalog:
     def test_initial_catalog_has_web_and_social_models(self):
-        assert len(OPPORTUNITY_MODELS) == 5
+        assert len(OPPORTUNITY_MODELS) == 9
         assert get_opportunity_model(
             "web_conversion.booking_contact_path"
         ).display_name == "Appointment or inquiry path"
-        assert len(list_opportunity_models()) == 5
+        assert len(list_opportunity_models()) == 9
 
     def test_industry_coverage_is_explicit(self):
         social = get_opportunity_model("social_presence.dormant_official_presence")

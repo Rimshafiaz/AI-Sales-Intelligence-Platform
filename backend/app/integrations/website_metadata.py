@@ -51,6 +51,12 @@ class WebsiteIdentityPage:
     identity_links: tuple[str, ...]
 
 
+@dataclass(frozen=True)
+class WebsiteConversionSnapshot:
+    url: str
+    links: tuple[tuple[str, str], ...]
+
+
 class WebsiteMetadataCollector:
     def __init__(self, timeout_seconds: float = DEFAULT_TIMEOUT_SECONDS) -> None:
         if timeout_seconds <= 0:
@@ -125,6 +131,34 @@ class WebsiteMetadataCollector:
             return ()
 
         return tuple(pages)
+
+    def collect_conversion_snapshot(
+        self,
+        website: str,
+    ) -> WebsiteConversionSnapshot | None:
+        if not self._is_http_url(website):
+            return None
+        try:
+            with httpx.Client(
+                follow_redirects=True,
+                timeout=self.timeout_seconds,
+                headers={"User-Agent": USER_AGENT},
+            ) as client:
+                response = client.get(website)
+                response.raise_for_status()
+        except httpx.HTTPError:
+            return None
+        if "text/html" not in response.headers.get("content-type", "").casefold():
+            return None
+        parser = self._parse(response.text)
+        if parser is None:
+            return None
+        final_url = str(response.url)
+        links = tuple(
+            (urljoin(final_url, href), self._clean_text(label) or "")
+            for href, label in parser.links
+        )
+        return WebsiteConversionSnapshot(url=final_url, links=links)
 
     @staticmethod
     def _identity_links(

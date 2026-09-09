@@ -52,6 +52,10 @@ const MODEL_LABELS: Record<OpportunityModelId, string> = {
   'web_conversion.mobile_performance': 'Mobile performance',
   'web_conversion.booking_contact_path': 'Booking or inquiry path',
   'web_conversion.restaurant_reservation_path': 'Restaurant reservation path',
+  'web_conversion.restaurant_customer_path': 'Restaurant customer path',
+  'web_conversion.fitness_membership_path': 'Fitness membership path',
+  'web_conversion.retail_product_path': 'Retail product path',
+  'web_conversion.clinic_patient_path': 'Clinic patient path',
   'social_presence.dormant_official_presence': 'Dormant official social presence',
 }
 
@@ -86,12 +90,16 @@ function opportunityModelsFor(objective: DiscoveryObjective): OpportunityModelId
       'web_conversion.no_verified_web_presence',
       'web_conversion.mobile_performance',
     )
-    if (/booking|appointment|reservation|inquiry/.test(text)) {
-      modelIds.push(
-        /restaurant|cafe/.test(industry)
-          ? 'web_conversion.restaurant_reservation_path'
-          : 'web_conversion.booking_contact_path',
-      )
+    if (/restaurant|cafe/.test(industry)) {
+      modelIds.push('web_conversion.restaurant_customer_path')
+    } else if (/fitness|gym/.test(industry)) {
+      modelIds.push('web_conversion.fitness_membership_path')
+    } else if (/boutique|retail|fashion/.test(industry)) {
+      modelIds.push('web_conversion.retail_product_path')
+    } else if (/dental|dentist|clinic/.test(industry)) {
+      modelIds.push('web_conversion.clinic_patient_path')
+    } else if (/booking|appointment|inquiry/.test(text)) {
+      modelIds.push('web_conversion.booking_contact_path')
     }
   }
   if (hasSocialIntent) modelIds.push('social_presence.dormant_official_presence')

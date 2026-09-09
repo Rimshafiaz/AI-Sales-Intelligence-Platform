@@ -23,6 +23,10 @@ OpportunityModelId = Literal[
     "web_conversion.mobile_performance",
     "web_conversion.booking_contact_path",
     "web_conversion.restaurant_reservation_path",
+    "web_conversion.restaurant_customer_path",
+    "web_conversion.fitness_membership_path",
+    "web_conversion.retail_product_path",
+    "web_conversion.clinic_patient_path",
     "social_presence.dormant_official_presence",
 ]
 
@@ -45,6 +49,10 @@ class EvidenceSignalType(str, Enum):
     WEBSITE_MOBILE_PERFORMANCE_MEASURED = "website_mobile_performance_measured"
     WEBSITE_BOOKING_PATH_MANUAL_ONLY = "website_booking_path_manual_only"
     WEBSITE_RESERVATION_PATH_MANUAL_ONLY = "website_reservation_path_manual_only"
+    WEBSITE_RESTAURANT_PRIMARY_PATH_NOT_OBSERVED = "website_restaurant_primary_path_not_observed"
+    WEBSITE_FITNESS_ENQUIRY_PATH_NOT_OBSERVED = "website_fitness_enquiry_path_not_observed"
+    WEBSITE_RETAIL_PRODUCT_PATH_NOT_OBSERVED = "website_retail_product_path_not_observed"
+    WEBSITE_CLINIC_PATIENT_PATH_INCOMPLETE = "website_clinic_patient_path_incomplete"
     OFFICIAL_SOCIAL_PROFILE_CONFIRMED = "official_social_profile_confirmed"
     BUSINESS_ACTIVITY_CONFIRMED = "business_activity_confirmed"
     SOCIAL_HISTORIC_ACTIVITY_CONFIRMED = "social_historic_activity_confirmed"

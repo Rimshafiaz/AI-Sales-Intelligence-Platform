@@ -28,6 +28,20 @@ from app.services.opportunity_model_catalog import OpportunityModel, get_opportu
 
 POOR_MOBILE_PERFORMANCE_THRESHOLD = 50.0
 DORMANT_SOCIAL_DAYS_THRESHOLD = 60.0
+OVERLAY_MODEL_REASONS = {
+    "web_conversion.restaurant_customer_path": (
+        "The official homepage did not expose the expected restaurant customer paths recorded in the supporting evidence."
+    ),
+    "web_conversion.fitness_membership_path": (
+        "The official homepage did not expose a trial, membership, class, trainer, or contact path."
+    ),
+    "web_conversion.retail_product_path": (
+        "The official homepage did not expose a catalogue, store, product-enquiry, contact, or social path."
+    ),
+    "web_conversion.clinic_patient_path": (
+        "The official homepage has an incomplete public path across service navigation, appointment/contact, and location/contact information."
+    ),
+}
 
 
 class OpportunityQualificationError(ValueError):
@@ -244,6 +258,15 @@ def _evaluate_model(
                 "This supports a no-verified-web-presence review, not a claim that no website exists."
             ),
             supporting_evidence_keys=[item.key for item in no_website],
+        )
+
+    if model.id in OVERLAY_MODEL_REASONS:
+        supporting = _supporting_evidence(model, evidence)
+        return QualificationDecision(
+            model=model,
+            state=OpportunityQualificationState.LIKELY,
+            reason=OVERLAY_MODEL_REASONS[model.id],
+            supporting_evidence_keys=[item.key for item in supporting],
         )
 
     supporting = _supporting_evidence(model, evidence)

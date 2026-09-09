@@ -115,6 +115,14 @@ def reason_for_eligible_model(
             EvidenceSignalType.WEBSITE_RESERVATION_PATH_MANUAL_ONLY,
             observed_signals,
         )
+    overlay_signals = {
+        "web_conversion.restaurant_customer_path": EvidenceSignalType.WEBSITE_RESTAURANT_PRIMARY_PATH_NOT_OBSERVED,
+        "web_conversion.fitness_membership_path": EvidenceSignalType.WEBSITE_FITNESS_ENQUIRY_PATH_NOT_OBSERVED,
+        "web_conversion.retail_product_path": EvidenceSignalType.WEBSITE_RETAIL_PRODUCT_PATH_NOT_OBSERVED,
+        "web_conversion.clinic_patient_path": EvidenceSignalType.WEBSITE_CLINIC_PATIENT_PATH_INCOMPLETE,
+    }
+    if model_id in overlay_signals:
+        return reason_from_signal(model_id, overlay_signals[model_id], observed_signals)
     if model_id == "web_conversion.mobile_performance":
         return mobile_performance_reason(observed_signals)
     if model_id == "social_presence.dormant_official_presence":

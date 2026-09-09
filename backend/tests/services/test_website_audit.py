@@ -4,6 +4,9 @@ from datetime import UTC, datetime
 import pytest
 
 from app.integrations.pagespeed import MobilePerformanceMeasurement, PageSpeedProviderError
+from app.integrations.website_metadata import WebsiteConversionSnapshot
+from app.models.campaign_candidate_selection import CampaignCandidateSelection
+from app.models.campaign_run import CampaignRun
 from app.models.company import Company
 from app.models.research_evidence import ResearchEvidence
 from app.models.research_request import ResearchRequest
@@ -17,13 +20,17 @@ NOW = datetime(2026, 9, 8, tzinfo=UTC)
 
 
 class FakeSession:
-    def __init__(self, scalar_results):
+    def __init__(self, scalar_results, get_result=None):
         self.scalar_results = list(scalar_results)
+        self.get_result = get_result
         self.added = []
         self.committed = False
 
     def scalar(self, statement):
         return self.scalar_results.pop(0)
+
+    def get(self, model, value):
+        return self.get_result
 
     def add(self, value):
         self.added.append(value)
@@ -46,6 +53,14 @@ class StubProvider:
         if self.error:
             raise self.error
         return self.measurement
+
+
+class StubWebsiteCollector:
+    def __init__(self, links):
+        self.links = links
+
+    def collect_conversion_snapshot(self, website):
+        return WebsiteConversionSnapshot(url=website, links=self.links)
 
 
 def research_request(verified_website=True):
@@ -126,3 +141,58 @@ class TestWebsiteAudit:
 
         with pytest.raises(WebsiteAuditError, match="Accepted evidence"):
             audit_research_website(FakeSession([]), request, company(request), None)
+
+    @pytest.mark.parametrize(
+        ("business_category", "expected_signal"),
+        [
+            ("restaurants_cafes", "website_restaurant_primary_path_not_observed"),
+            ("fitness_gyms", "website_fitness_enquiry_path_not_observed"),
+            ("boutiques_retail", "website_retail_product_path_not_observed"),
+            ("dental_selected_clinics", "website_clinic_patient_path_incomplete"),
+        ],
+    )
+    def test_saves_industry_path_finding_from_official_homepage(
+        self,
+        business_category,
+        expected_signal,
+    ):
+        request = research_request()
+        run = CampaignRun(
+            id=uuid.uuid4(),
+            campaign_id=uuid.uuid4(),
+            criteria_snapshot={"business_category": business_category},
+            model_selection_snapshot={"model_ids": ["web_conversion.mobile_performance"]},
+            provider_summary={},
+            discovered_candidate_count=1,
+        )
+        selection = CampaignCandidateSelection(
+            id=uuid.uuid4(),
+            campaign_run_id=run.id,
+            company_id=request.company_id,
+            source_identity_key="test:business",
+            candidate_snapshot={},
+            shortlist_snapshot={},
+            evidence_snapshot=[],
+        )
+        db = FakeSession([None, None, request], get_result=run)
+        provider = StubProvider(
+            MobilePerformanceMeasurement(
+                final_url="https://glow.example/",
+                score=43.0,
+                retrieved_at=NOW,
+            )
+        )
+
+        audit_research_website(
+            db,
+            request,
+            company(request),
+            selection,
+            provider,
+            StubWebsiteCollector((("https://glow.example/about", "About"),)),
+        )
+
+        assert [item.signal_type for item in db.added] == [
+            expected_signal,
+            "website_mobile_performance_measured",
+        ]

@@ -32,6 +32,7 @@ class NextEvidenceAction(str, Enum):
     AUDIT_MOBILE_PERFORMANCE = "audit_mobile_performance"
     INSPECT_BOOKING_CONTACT_PATH = "inspect_booking_contact_path"
     INSPECT_RESTAURANT_RESERVATION_PATH = "inspect_restaurant_reservation_path"
+    INSPECT_INDUSTRY_CONVERSION_PATHS = "inspect_industry_conversion_paths"
     COLLECT_SOCIAL_PROFILE_OBSERVATIONS = "collect_social_profile_observations"
     VERIFY_OFFICIAL_SOCIAL_PROFILE = "verify_official_social_profile"
     CONFIRM_BUSINESS_ACTIVITY = "confirm_business_activity"

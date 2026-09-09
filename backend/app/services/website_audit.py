@@ -9,7 +9,9 @@ from app.integrations.pagespeed import (
     PageSpeedProviderError,
     create_pagespeed_provider,
 )
+from app.integrations.website_metadata import WebsiteMetadataCollector
 from app.models.campaign_candidate_selection import CampaignCandidateSelection
+from app.models.campaign_run import CampaignRun
 from app.models.company import Company
 from app.models.research_request import ResearchRequest
 from app.models.research_request import ResearchStatus
@@ -19,6 +21,8 @@ from app.schemas.evidence_gate import EvidenceGateState
 from app.schemas.opportunity_models import EvidenceSignalType, EvidenceSource, EvidenceType
 from app.schemas.website_audit import WebsiteAuditResult, WebsiteAuditState
 from app.services.evidence_gate import target_from_research_request
+from app.services.industry_conversion_paths import analyze_conversion_paths
+from app.services.local_business_discovery import LocalBusinessDiscoveryError, resolve_industry
 
 
 class WebsiteAuditError(ValueError):
@@ -31,6 +35,7 @@ def audit_research_website(
     company: Company,
     selection: CampaignCandidateSelection | None,
     provider: PageSpeedInsightsProvider | None = None,
+    website_collector: WebsiteMetadataCollector | None = None,
 ) -> ResearchRequest:
     if research_request.status is not ResearchStatus.COMPLETED:
         raise WebsiteAuditError("Finish the evidence review before auditing a website.")
@@ -44,6 +49,14 @@ def audit_research_website(
             research_request.id,
             "No verified official website is available to audit.",
         )
+
+    _collect_industry_path_evidence(
+        db,
+        research_request,
+        selection,
+        target.official_website,
+        website_collector or WebsiteMetadataCollector(),
+    )
 
     try:
         audit_provider = provider or create_pagespeed_provider(settings.pagespeed_api_key)
@@ -79,6 +92,48 @@ def audit_research_website(
     if saved_request is None:
         raise WebsiteAuditError("Research request was not found while saving the website audit.")
     return saved_request
+
+
+def _collect_industry_path_evidence(
+    db: Session,
+    research_request: ResearchRequest,
+    selection: CampaignCandidateSelection | None,
+    website: str,
+    collector: WebsiteMetadataCollector,
+) -> None:
+    if selection is None:
+        return
+    campaign_run = db.get(CampaignRun, selection.campaign_run_id)
+    if campaign_run is None:
+        return
+    try:
+        industry = resolve_industry(
+            str(campaign_run.criteria_snapshot.get("business_category", ""))
+        )
+    except LocalBusinessDiscoveryError:
+        return
+    snapshot = collector.collect_conversion_snapshot(website)
+    if snapshot is None:
+        return
+    finding = analyze_conversion_paths(industry, snapshot.links)
+    if finding is None:
+        return
+    observed_at = datetime.now(UTC)
+    upsert_research_evidence(
+        db=db,
+        research_request_id=research_request.id,
+        signal_type=finding.signal_type,
+        evidence_type=EvidenceType.OBSERVED,
+        supporting_value=finding.supporting_value,
+        numeric_value=None,
+        source=EvidenceSource(
+            provider="official_website",
+            source_url=snapshot.url,
+            retrieved_at=observed_at,
+        ),
+        source_identity_key=f"website_conversion:{industry.value}:{snapshot.url}",
+        captured_at=observed_at,
+    )
 
 
 def _save_unavailable(
