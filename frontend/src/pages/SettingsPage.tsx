@@ -73,14 +73,19 @@ export default function SettingsPage() {
                 <p className="mt-1 text-body-sm text-on-surface-variant">SalesLens requests permission to send only emails you explicitly approve.</p>
               </div>
               {connection?.status === 'connected' ? (
-                <button type="button" disabled={working} onClick={() => void disconnect()} className="rounded-control border border-line px-3 py-2 text-label-md font-medium text-on-surface disabled:opacity-60">Disconnect</button>
+                <div className="flex flex-wrap gap-2">
+                  {!connection.reply_tracking_enabled && <button type="button" disabled={working} onClick={() => void connect()} className="rounded-control bg-primary px-3 py-2 text-label-md font-medium text-on-primary disabled:opacity-60">Reconnect for reply tracking</button>}
+                  <button type="button" disabled={working} onClick={() => void disconnect()} className="rounded-control border border-line px-3 py-2 text-label-md font-medium text-on-surface disabled:opacity-60">Disconnect</button>
+                </div>
               ) : (
                 <button type="button" disabled={working || connection?.configured === false} onClick={() => void connect()} className="rounded-control bg-primary px-3 py-2 text-label-md font-medium text-on-primary disabled:opacity-60">Connect Gmail</button>
               )}
             </div>
             {connection?.status === 'connected' && <p className="mt-3 text-body-sm text-on-surface">Connected as {connection.email}</p>}
+            {connection?.status === 'connected' && !connection.reply_tracking_enabled && <p className="mt-3 text-body-sm text-on-surface-variant">Reconnect once to grant Gmail metadata access for checking replies to SalesLens-created threads.</p>}
+            {connection?.reply_tracking_enabled && <p className="mt-3 text-body-sm text-on-surface-variant">Reply tracking is enabled for Gmail threads created by SalesLens.</p>}
             {connection?.configured === false && <p className="mt-3 text-body-sm text-error">Gmail OAuth has not been configured on this SalesLens server.</p>}
-            <p className="mt-3 text-label-sm text-on-surface-variant">M83 connects the account only. It does not send email. Sending is added in M84.</p>
+            <p className="mt-3 text-label-sm text-on-surface-variant">SalesLens sends only approved drafts and checks replies only when you request it.</p>
           </div>
         </div>
       </section>

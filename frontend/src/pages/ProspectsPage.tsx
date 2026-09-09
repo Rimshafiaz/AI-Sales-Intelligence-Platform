@@ -188,6 +188,7 @@ function OutreachAttemptCard({
 }) {
   const [subject, setSubject] = useState(attempt.subject ?? '')
   const [body, setBody] = useState(attempt.body)
+  const [replyCheckMessage, setReplyCheckMessage] = useState<string | null>(null)
   const editable = attempt.status === 'draft' || attempt.status === 'approved' || attempt.status === 'failed'
   const changed = subject !== (attempt.subject ?? '') || body !== attempt.body
 
@@ -198,9 +199,10 @@ function OutreachAttemptCard({
     })
   }
 
-  async function run(action: 'save' | 'approve' | 'sent' | 'send-email') {
+  async function run(action: 'save' | 'approve' | 'sent' | 'send-email' | 'check-reply') {
     setWorking(true)
     setError(null)
+    setReplyCheckMessage(null)
     try {
       let updated = attempt
       if (action === 'save' || (action === 'approve' && changed)) updated = await saveDraft()
@@ -212,6 +214,10 @@ function OutreachAttemptCard({
       }
       if (action === 'send-email') {
         updated = await api<OutreachAttempt>(`/outreach-attempts/${attempt.id}/send-email`, { method: 'POST' })
+      }
+      if (action === 'check-reply') {
+        updated = await api<OutreachAttempt>(`/outreach-attempts/${attempt.id}/check-reply`, { method: 'POST' })
+        setReplyCheckMessage(updated.status === 'replied' ? 'Reply detected.' : 'No reply detected yet.')
       }
       onChanged(updated)
     } catch (requestError) {
@@ -271,6 +277,9 @@ function OutreachAttemptCard({
           {attempt.status === 'sent' && <button type="button" disabled={working} onClick={() => void recordOutcome('no_response', false)} className="rounded-control border border-line-soft px-3 py-1.5 text-label-md text-on-surface-variant disabled:opacity-60">Close: no response</button>}
         </div>
       )}
+      {attempt.channel === 'email' && attempt.status === 'sent' && <button type="button" disabled={working} onClick={() => void run('check-reply')} className="mt-3 rounded-control border border-secondary px-3 py-1.5 text-label-md font-medium text-secondary disabled:opacity-60">Check for reply</button>}
+      {attempt.channel === 'email' && attempt.status === 'replied' && <p className="mt-3 text-body-sm text-on-surface">A reply was detected in the SalesLens Gmail thread.</p>}
+      {replyCheckMessage && <p className="mt-2 text-label-sm text-on-surface-variant">{replyCheckMessage}</p>}
       {attempt.outcome && <p className="mt-2 text-label-sm text-on-surface-variant">Outcome: {label(attempt.outcome)}</p>}
       {attempt.failure_reason && <p className="mt-2 text-label-sm text-error">{attempt.failure_reason}</p>}
     </div>

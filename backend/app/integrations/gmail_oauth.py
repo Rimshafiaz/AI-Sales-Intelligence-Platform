@@ -1,6 +1,6 @@
 import base64
 from email.message import EmailMessage
-from urllib.parse import urlencode
+from urllib.parse import quote, urlencode
 
 import httpx
 
@@ -11,7 +11,8 @@ GOOGLE_USERINFO_URL = "https://openidconnect.googleapis.com/v1/userinfo"
 GOOGLE_REVOCATION_URL = "https://oauth2.googleapis.com/revoke"
 GMAIL_SEND_URL = "https://gmail.googleapis.com/gmail/v1/users/me/messages/send"
 GMAIL_SEND_SCOPE = "https://www.googleapis.com/auth/gmail.send"
-GMAIL_OAUTH_SCOPES = ("openid", "email", GMAIL_SEND_SCOPE)
+GMAIL_METADATA_SCOPE = "https://www.googleapis.com/auth/gmail.metadata"
+GMAIL_OAUTH_SCOPES = ("openid", "email", GMAIL_SEND_SCOPE, GMAIL_METADATA_SCOPE)
 
 
 class GmailOAuthProviderError(RuntimeError):
@@ -169,3 +170,19 @@ class GmailOAuthClient:
                 "Gmail accepted the request but did not confirm its identifiers. Do not resend this attempt."
             )
         return message_id, thread_id
+
+    def thread_metadata(self, access_token: str, thread_id: str) -> dict:
+        try:
+            response = httpx.get(
+                f"https://gmail.googleapis.com/gmail/v1/users/me/threads/{quote(thread_id, safe='')}",
+                headers={"Authorization": f"Bearer {access_token}"},
+                params={"format": "metadata", "fields": "messages(id,internalDate,labelIds)"},
+                timeout=self.timeout_seconds,
+            )
+            response.raise_for_status()
+            payload = response.json()
+        except (httpx.HTTPError, ValueError) as error:
+            raise GmailOAuthProviderError("Gmail thread metadata could not be retrieved.") from error
+        if not isinstance(payload.get("messages"), list):
+            raise GmailOAuthProviderError("Gmail returned invalid thread metadata.")
+        return payload

@@ -57,6 +57,7 @@ class OutreachAttemptResponse(BaseModel):
     outcome: OutreachOutcome | None
     provider_message_id: str | None
     provider_thread_id: str | None
+    provider_reply_message_id: str | None
     failure_reason: str | None
     approved_at: datetime | None
     sent_at: datetime | None

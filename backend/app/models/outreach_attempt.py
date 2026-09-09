@@ -113,6 +113,7 @@ class OutreachAttempt(Base):
     )
     provider_message_id: Mapped[str | None] = mapped_column(String(255), nullable=True)
     provider_thread_id: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    provider_reply_message_id: Mapped[str | None] = mapped_column(String(255), nullable=True)
     failure_reason: Mapped[str | None] = mapped_column(String(1000), nullable=True)
     approved_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     sent_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)

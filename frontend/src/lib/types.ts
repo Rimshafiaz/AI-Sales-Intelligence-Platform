@@ -174,6 +174,7 @@ export interface OutreachAttempt {
   outcome: 'interested' | 'not_interested' | 'bounced' | 'no_response' | null
   provider_message_id: string | null
   provider_thread_id: string | null
+  provider_reply_message_id: string | null
   failure_reason: string | null
   approved_at: string | null
   sent_at: string | null
@@ -188,6 +189,7 @@ export interface GmailConnection {
   status: 'connected' | 'disconnected' | null
   email: string | null
   granted_scopes: string[]
+  reply_tracking_enabled: boolean
   connected_at: string | null
   disconnected_at: string | null
 }

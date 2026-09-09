@@ -8,6 +8,7 @@ from sqlalchemy.orm import Session
 
 from app.core.config import settings
 from app.integrations.gmail_oauth import (
+    GMAIL_METADATA_SCOPE,
     GmailOAuthProviderError,
     GmailSendRejectedError,
     GmailSendUncertainError,
@@ -355,6 +356,51 @@ def send_approved_email(
     return attempt
 
 
+def check_gmail_reply(
+    db: Session,
+    attempt_id: UUID,
+    current_user: User,
+) -> OutreachAttempt:
+    attempt = _attempt_for_user(db, attempt_id, current_user.id)
+    if attempt is None:
+        raise OutreachAttemptError("Outreach attempt not found.")
+    if attempt.channel is not OutreachChannel.EMAIL or attempt.send_method is not OutreachSendMethod.GMAIL:
+        raise OutreachAttemptError("Only Gmail email attempts support reply checking.")
+    if attempt.status is OutreachStatus.REPLIED:
+        return attempt
+    if attempt.status is not OutreachStatus.SENT or not attempt.provider_message_id or not attempt.provider_thread_id:
+        raise OutreachAttemptError("Only a confirmed sent Gmail email can be checked for replies.")
+
+    connection = db.scalar(
+        select(GmailConnection).where(
+            GmailConnection.user_id == current_user.id,
+            GmailConnection.status == GmailConnectionStatus.CONNECTED,
+        )
+    )
+    if connection is None or not connection.encrypted_refresh_token:
+        raise OutreachAttemptError("Connect Gmail before checking for replies.")
+    if GMAIL_METADATA_SCOPE not in connection.granted_scopes:
+        raise OutreachAttemptError("Reconnect Gmail to enable reply tracking.")
+
+    try:
+        client, encryption_key = configured_gmail_dependencies()
+        refresh_token = decrypt_refresh_token(connection.encrypted_refresh_token, encryption_key)
+        access_token = client.refresh_access_token(refresh_token)
+        thread = client.thread_metadata(access_token, attempt.provider_thread_id)
+    except (GmailTokenVaultError, GmailOAuthProviderError, ValueError) as error:
+        raise OutreachAttemptError("The Gmail reply check could not be completed.") from error
+
+    reply = _first_incoming_message_after(thread, attempt.provider_message_id)
+    if reply is None:
+        return attempt
+    attempt.status = OutreachStatus.REPLIED
+    attempt.provider_reply_message_id = reply["id"]
+    attempt.replied_at = datetime.fromtimestamp(reply["internal_date"] / 1000, UTC)
+    db.commit()
+    db.refresh(attempt)
+    return attempt
+
+
 def record_manual_linkedin_send(
     db: Session,
     attempt_id: UUID,
@@ -494,3 +540,30 @@ def _contacts_for_channel(
         and (urlparse(contact.value).hostname or "").casefold().removeprefix("www.")
         in {"linkedin.com", "linkedin.cn"}
     ]
+
+
+def _first_incoming_message_after(thread: dict, original_message_id: str) -> dict | None:
+    messages = [message for message in thread["messages"] if isinstance(message, dict)]
+    original = next((message for message in messages if message.get("id") == original_message_id), None)
+    if original is None:
+        raise OutreachAttemptError("The original sent message was not found in its Gmail thread.")
+    try:
+        original_date = int(original["internalDate"])
+    except (KeyError, TypeError, ValueError) as error:
+        raise OutreachAttemptError("Gmail returned incomplete metadata for the sent message.") from error
+
+    incoming = []
+    for message in messages:
+        try:
+            internal_date = int(message["internalDate"])
+        except (KeyError, TypeError, ValueError):
+            continue
+        labels = set(message.get("labelIds") or [])
+        if (
+            isinstance(message.get("id"), str)
+            and internal_date > original_date
+            and "SENT" not in labels
+            and "DRAFT" not in labels
+        ):
+            incoming.append({"id": message["id"], "internal_date": internal_date})
+    return min(incoming, key=lambda message: message["internal_date"], default=None)

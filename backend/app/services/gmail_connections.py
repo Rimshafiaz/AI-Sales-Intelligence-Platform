@@ -9,6 +9,7 @@ from sqlalchemy.orm import Session
 from app.core.config import settings
 from app.integrations.gmail_oauth import (
     GMAIL_OAUTH_SCOPES,
+    GMAIL_METADATA_SCOPE,
     GMAIL_SEND_SCOPE,
     GmailOAuthClient,
     GmailOAuthProviderError,
@@ -119,6 +120,11 @@ def get_gmail_connection_status(db: Session, current_user: User) -> GmailConnect
         status=connection.status if connection else None,
         email=connection.email if connection else None,
         granted_scopes=connection.granted_scopes if connection else [],
+        reply_tracking_enabled=bool(
+            connection
+            and connection.status is GmailConnectionStatus.CONNECTED
+            and GMAIL_METADATA_SCOPE in connection.granted_scopes
+        ),
         connected_at=connection.connected_at if connection else None,
         disconnected_at=connection.disconnected_at if connection else None,
     )

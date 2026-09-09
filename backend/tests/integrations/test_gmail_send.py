@@ -55,3 +55,28 @@ def test_transport_failure_is_treated_as_uncertain_delivery(monkeypatch):
             "Evidence-backed idea",
             "A grounded message.",
         )
+
+
+def test_thread_metadata_reads_only_the_known_thread(monkeypatch):
+    captured = {}
+
+    def fake_get(url, **kwargs):
+        captured["url"] = url
+        captured.update(kwargs)
+        return httpx.Response(
+            200,
+            json={"id": "thread-1", "messages": []},
+            request=httpx.Request("GET", url),
+        )
+
+    monkeypatch.setattr(gmail_oauth.httpx, "get", fake_get)
+    client = GmailOAuthClient("client", "secret", "https://example.com/callback")
+
+    result = client.thread_metadata("access-token", "thread-1")
+
+    assert result["id"] == "thread-1"
+    assert captured["url"].endswith("/threads/thread-1")
+    assert captured["params"] == {
+        "format": "metadata",
+        "fields": "messages(id,internalDate,labelIds)",
+    }

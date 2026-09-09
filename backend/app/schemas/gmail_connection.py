@@ -18,6 +18,7 @@ class GmailConnectionResponse(BaseModel):
     status: GmailConnectionStatus | None
     email: str | None
     granted_scopes: list[str]
+    reply_tracking_enabled: bool
     connected_at: datetime | None
     disconnected_at: datetime | None
 

@@ -19,6 +19,7 @@ from app.schemas.outreach_attempt import (
 from app.services.outreach_attempts import (
     OutreachAttemptError,
     approve_outreach_attempt,
+    check_gmail_reply,
     create_outreach_attempt,
     list_outreach_attempts,
     list_outreach_draft_options,
@@ -121,6 +122,18 @@ def send_approved_email_endpoint(
     current_user: User = Depends(get_current_user),
 ) -> OutreachAttemptResponse:
     return _run(attempt_id, current_user, send_approved_email, db)
+
+
+@router.post(
+    "/outreach-attempts/{attempt_id}/check-reply",
+    response_model=OutreachAttemptResponse,
+)
+def check_gmail_reply_endpoint(
+    attempt_id: UUID,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+) -> OutreachAttemptResponse:
+    return _run(attempt_id, current_user, check_gmail_reply, db)
 
 
 @router.post(
