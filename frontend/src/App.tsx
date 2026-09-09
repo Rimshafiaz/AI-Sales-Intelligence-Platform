@@ -11,6 +11,7 @@ import ResearchPage from './pages/ResearchPage'
 import ResearchProgressPage from './pages/ResearchProgressPage'
 import ReportReviewPage from './pages/ReportReviewPage'
 import NotFoundPage from './pages/NotFoundPage'
+import ProspectsPage from './pages/ProspectsPage'
 
 function IdleWarningBanner() {
   const { idleWarning, staySignedIn } = useAuth()
@@ -71,6 +72,7 @@ export default function App() {
       >
         <Route path="/dashboard" element={<DashboardPage />} />
         <Route path="/discover" element={<DiscoveryPage />} />
+        <Route path="/prospects" element={<ProspectsPage />} />
         <Route path="/research" element={<ResearchPage />} />
         <Route path="/research/:requestId" element={<ResearchProgressPage />} />
         <Route path="/reports/:reportId" element={<ReportReviewPage />} />

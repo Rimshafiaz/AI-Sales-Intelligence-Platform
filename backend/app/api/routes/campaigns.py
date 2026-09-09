@@ -16,6 +16,11 @@ from app.schemas.campaign import (
     CampaignRunCreate,
     CampaignRunResponse,
 )
+from app.schemas.campaign_prospect import (
+    CampaignProspectCreate,
+    CampaignProspectResponse,
+    CampaignProspectUpdate,
+)
 from app.services.campaigns import (
     CampaignWorkflowError,
     campaign_candidate_selection_response,
@@ -30,6 +35,13 @@ from app.services.campaigns import (
     get_campaign_run_for_user,
     list_campaign_selections_for_user,
     list_campaigns_for_user,
+)
+from app.services.campaign_prospects import (
+    CampaignProspectError,
+    campaign_prospect_response,
+    list_campaign_prospects,
+    save_campaign_prospect,
+    update_campaign_prospect,
 )
 
 
@@ -66,6 +78,61 @@ def get_campaign_endpoint(
     if campaign is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Campaign not found")
     return campaign_response(campaign)
+
+
+@router.post(
+    "/{campaign_id}/prospects",
+    response_model=CampaignProspectResponse,
+    status_code=status.HTTP_201_CREATED,
+)
+def save_campaign_prospect_endpoint(
+    campaign_id: uuid.UUID,
+    request: CampaignProspectCreate,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    try:
+        prospect = save_campaign_prospect(db, campaign_id, current_user, request)
+    except CampaignProspectError as error:
+        status_code = status.HTTP_404_NOT_FOUND if str(error) == "Campaign not found." else status.HTTP_409_CONFLICT
+        raise HTTPException(status_code=status_code, detail=str(error)) from error
+    return campaign_prospect_response(prospect)
+
+
+@router.get(
+    "/{campaign_id}/prospects",
+    response_model=list[CampaignProspectResponse],
+)
+def list_campaign_prospects_endpoint(
+    campaign_id: uuid.UUID,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    try:
+        prospects = list_campaign_prospects(db, campaign_id, current_user)
+    except CampaignProspectError as error:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(error)) from error
+    return [campaign_prospect_response(prospect) for prospect in prospects]
+
+
+@router.patch(
+    "/{campaign_id}/prospects/{prospect_id}",
+    response_model=CampaignProspectResponse,
+)
+def update_campaign_prospect_endpoint(
+    campaign_id: uuid.UUID,
+    prospect_id: uuid.UUID,
+    request: CampaignProspectUpdate,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    try:
+        prospect = update_campaign_prospect(
+            db, campaign_id, prospect_id, current_user, request
+        )
+    except CampaignProspectError as error:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(error)) from error
+    return campaign_prospect_response(prospect)
 
 
 @router.post(

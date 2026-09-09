@@ -148,6 +148,9 @@ export default function DiscoveryPage() {
   const [queue, setQueue] = useState<DiscoveryOpportunityPreparationResponse | null>(null)
   const [selectedQueueIndexes, setSelectedQueueIndexes] = useState<number[]>([])
   const [startingBatch, setStartingBatch] = useState(false)
+  const [savingProspectIndex, setSavingProspectIndex] = useState<number | null>(null)
+  const [savedProspectIndexes, setSavedProspectIndexes] = useState<number[]>([])
+  const [campaignContext, setCampaignContext] = useState<{ campaignId: string; campaignRunId: string } | null>(null)
   const [handoffError, setHandoffError] = useState<string | null>(null)
   const selectedModels = objective ? opportunityModelsFor(objective) : []
 
@@ -179,6 +182,8 @@ export default function DiscoveryPage() {
     setResult(null)
     setQueue(null)
     setSelectedQueueIndexes([])
+    setCampaignContext(null)
+    setSavedProspectIndexes([])
     try {
       const response = await api<ParseDiscoveryResponse>('/company-discovery/parse', {
         method: 'POST',
@@ -209,6 +214,8 @@ export default function DiscoveryPage() {
     setSearching(true)
     setSearchError(null)
     setHandoffError(null)
+    setCampaignContext(null)
+    setSavedProspectIndexes([])
     try {
       const criteria = criteriaPayload()
       const discovery = await api<DiscoveryResponse>('/company-discovery', {
@@ -266,27 +273,9 @@ export default function DiscoveryPage() {
     setStartingBatch(true)
     setHandoffError(null)
     try {
-      const criteria = criteriaPayload()
-      const campaign = await api<CampaignResponse>('/campaigns', {
-        method: 'POST',
-        body: {
-          title: `${objective.target_geographies[0] ?? 'New'} ${objective.target_sectors[0] ?? 'business'} prospects`,
-          criteria,
-          model_selection: {
-            model_ids: selectedModels,
-            confirmed_by_user: true,
-          },
-        },
-      })
-      const campaignRun = await api<CampaignRunResponse>(`/campaigns/${campaign.id}/runs`, {
-        method: 'POST',
-        body: {
-          provider_summary: providerSummary(result),
-          discovered_candidate_count: result.candidates.length,
-        },
-      })
+      const { campaignRunId } = await ensureCampaignRun()
       const batch = await api<CampaignRecommendedBatchResponse>(
-        `/campaigns/runs/${campaignRun.id}/recommended-batch`,
+        `/campaigns/runs/${campaignRunId}/recommended-batch`,
         { method: 'POST', body: { opportunities } },
       )
       await Promise.all(
@@ -300,6 +289,52 @@ export default function DiscoveryPage() {
     } catch (error) {
       setHandoffError(error instanceof Error ? error.message : 'Could not start evidence review for this batch.')
       setStartingBatch(false)
+    }
+  }
+
+  async function ensureCampaignRun(): Promise<{ campaignId: string; campaignRunId: string }> {
+    if (campaignContext) return campaignContext
+    if (!result || !objective) throw new Error('Run discovery before saving a prospect.')
+    const campaign = await api<CampaignResponse>('/campaigns', {
+      method: 'POST',
+      body: {
+        title: `${objective.target_geographies[0] ?? 'New'} ${objective.target_sectors[0] ?? 'business'} prospects`,
+        criteria: criteriaPayload(),
+        model_selection: { model_ids: selectedModels, confirmed_by_user: true },
+      },
+    })
+    const campaignRun = await api<CampaignRunResponse>(`/campaigns/${campaign.id}/runs`, {
+      method: 'POST',
+      body: {
+        provider_summary: providerSummary(result),
+        discovered_candidate_count: result.candidates.length,
+      },
+    })
+    const context = { campaignId: campaign.id, campaignRunId: campaignRun.id }
+    setCampaignContext(context)
+    return context
+  }
+
+  async function saveProspect(opportunity: PreparedDiscoveryOpportunity) {
+    if (!result || !objective || savingProspectIndex !== null) return
+    const candidateIndex = opportunity.queue_entry.candidate_index
+    setSavingProspectIndex(candidateIndex)
+    setHandoffError(null)
+    try {
+      const { campaignId, campaignRunId } = await ensureCampaignRun()
+      await api(`/campaigns/${campaignId}/prospects`, {
+        method: 'POST',
+        body: {
+          campaign_run_id: campaignRunId,
+          candidate_input: opportunity.candidate_input,
+          shortlist_entry: opportunity.shortlist_entry,
+        },
+      })
+      setSavedProspectIndexes((current) => [...current, candidateIndex])
+    } catch (error) {
+      setHandoffError(error instanceof Error ? error.message : 'Could not save this prospect.')
+    } finally {
+      setSavingProspectIndex(null)
     }
   }
 
@@ -366,21 +401,21 @@ export default function DiscoveryPage() {
         <section className="mb-12 space-y-4">
           <div className="rounded-card border border-secondary/30 bg-secondary-container/35 p-space-lg shadow-sm"><div className="flex flex-col gap-3 md:flex-row md:items-end md:justify-between"><div><p className="label-caps text-secondary">Recommended first batch</p><h2 className="mt-1 font-display text-headline-lg font-semibold text-on-surface">Review {selectedQueueIndexes.length} evidence-backed prospect{selectedQueueIndexes.length === 1 ? '' : 's'}</h2><p className="mt-1 max-w-2xl text-body-sm text-on-surface-variant">These are selected to cover observable patterns, not ranked as the “best” businesses. Every card shows the factual reason it appeared.</p></div><Button type="button" onClick={startRecommendedResearch} disabled={startingBatch || selectedQueueIndexes.length === 0} className="h-10 px-space-lg">{startingBatch ? <><Loader2 size={18} className="animate-spin" />Starting evidence review...</> : <><FileSearch size={18} />Start evidence review</>}</Button></div></div>
           <div className="flex items-center justify-between gap-3"><div><h2 className="font-display text-headline-md font-semibold text-on-surface">Opportunity queue</h2><p className="text-body-sm text-on-surface-variant">{queue.candidates.length} candidates with a supported observed signal. Choose up to three.</p></div>{queue.needs_verification_count > 0 && <span className="rounded-full bg-surface-container-high px-3 py-1 text-label-sm text-on-surface-variant">{queue.needs_verification_count} hidden pending verification</span>}</div>
-          <div className="space-y-4">{queue.candidates.map((opportunity) => <OpportunityCard key={`${opportunity.candidate_input.candidate.source_provider}:${opportunity.candidate_input.candidate.source_record_id}`} opportunity={opportunity} selected={selectedQueueIndexes.includes(opportunity.queue_entry.candidate_index)} onToggle={toggleQueueCandidate} />)}</div>
+          <div className="space-y-4">{queue.candidates.map((opportunity) => <OpportunityCard key={`${opportunity.candidate_input.candidate.source_provider}:${opportunity.candidate_input.candidate.source_record_id}`} opportunity={opportunity} selected={selectedQueueIndexes.includes(opportunity.queue_entry.candidate_index)} saved={savedProspectIndexes.includes(opportunity.queue_entry.candidate_index)} saving={savingProspectIndex === opportunity.queue_entry.candidate_index} onToggle={toggleQueueCandidate} onSave={saveProspect} />)}</div>
         </section>
       )}
     </main>
   )
 }
 
-function OpportunityCard({ opportunity, selected, onToggle }: { opportunity: PreparedDiscoveryOpportunity; selected: boolean; onToggle: (candidateIndex: number) => void }) {
+function OpportunityCard({ opportunity, selected, saved, saving, onToggle, onSave }: { opportunity: PreparedDiscoveryOpportunity; selected: boolean; saved: boolean; saving: boolean; onToggle: (candidateIndex: number) => void; onSave: (opportunity: PreparedDiscoveryOpportunity) => void }) {
   const candidate = opportunity.candidate_input.candidate
   return (
     <article className={'relative overflow-hidden rounded-card border bg-surface-container-lowest p-space-lg shadow-md transition-shadow hover:shadow-xl ' + (selected ? 'border-secondary' : 'border-transparent')}>
       <div className={'absolute bottom-0 left-0 top-0 w-1.5 ' + (selected ? 'bg-secondary' : 'bg-surface-container-high')} />
       <div className="flex flex-col gap-5 pl-2 lg:flex-row lg:items-start lg:justify-between">
         <div className="min-w-0 flex-1 space-y-3"><div className="flex flex-wrap items-center gap-x-2 gap-y-1"><h3 className="font-display text-headline-lg font-semibold text-on-surface">{candidate.company_name}</h3>{candidate.website && <a href={candidate.website} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-0.5 text-label-md text-secondary hover:underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-secondary"><span>{domainOf(candidate.website)}</span><ArrowUpRight size={14} /></a>}{candidate.industry && <span className="rounded bg-surface-container px-1.5 py-0.5 text-label-sm text-on-surface-variant">{candidate.industry}</span>}</div>{candidate.formatted_address && <p className="text-body-sm text-on-surface-variant">{candidate.formatted_address}</p>}<div className="space-y-2 rounded-lg bg-surface-container-low p-4"><div className="flex items-center gap-1.5 text-secondary"><CheckCircle2 size={17} /><span className="text-label-sm font-semibold uppercase tracking-wider">Why SalesLens showed this</span></div>{opportunity.queue_entry.reasons.map((reason) => <div key={`${reason.model_id}:${reason.signal_type}`} className="border-l-2 border-secondary/60 pl-3"><p className="text-label-sm font-medium text-on-surface">{MODEL_LABELS[reason.model_id]}</p><p className="mt-0.5 text-body-sm leading-relaxed text-on-surface-variant">{reason.supporting_value}</p><p className="mt-1 text-label-sm text-outline">Source: {reason.source.source_url ? <a href={reason.source.source_url} target="_blank" rel="noopener noreferrer" className="text-secondary hover:underline">{domainOf(reason.source.source_url)}</a> : reason.source.provider}</p></div>)}</div></div>
-        <label className="flex shrink-0 cursor-pointer items-center gap-2 rounded-control border border-line bg-surface-container-lowest px-4 py-2 text-label-md font-medium text-on-surface transition-colors hover:border-secondary lg:mt-1"><input type="checkbox" checked={selected} onChange={() => onToggle(opportunity.queue_entry.candidate_index)} className="size-4 accent-current" /><span>{selected ? 'In research batch' : 'Add to batch'}</span></label>
+        <div className="flex shrink-0 flex-col gap-2 lg:mt-1"><label className="flex cursor-pointer items-center gap-2 rounded-control border border-line bg-surface-container-lowest px-4 py-2 text-label-md font-medium text-on-surface transition-colors hover:border-secondary"><input type="checkbox" checked={selected} onChange={() => onToggle(opportunity.queue_entry.candidate_index)} className="size-4 accent-current" /><span>{selected ? 'In research batch' : 'Add to batch'}</span></label><button type="button" onClick={() => onSave(opportunity)} disabled={saved || saving} className="rounded-control border border-secondary px-4 py-2 text-label-md font-medium text-secondary transition-colors hover:bg-secondary-container disabled:cursor-not-allowed disabled:opacity-60">{saving ? 'Saving...' : saved ? 'Saved to prospects' : 'Save prospect'}</button></div>
       </div>
     </article>
   )

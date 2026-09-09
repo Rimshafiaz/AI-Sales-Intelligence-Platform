@@ -134,6 +134,21 @@ export interface CampaignRecommendedBatchResponse {
   }[]
 }
 
+export interface CampaignProspect {
+  id: string
+  campaign_id: string
+  campaign_run_id: string
+  source_identity_key: string
+  candidate_index: number
+  candidate_snapshot: Record<string, unknown>
+  shortlist_snapshot: Record<string, unknown>
+  evidence_snapshot: unknown[]
+  workflow_state: 'saved' | 'needs_research' | 'ready_for_outreach' | 'closed'
+  next_action: 'research_prospect' | 'collect_evidence' | 'prepare_outreach' | 'no_action'
+  created_at: string
+  updated_at: string
+}
+
 export interface Company {
   id: string
   name: string

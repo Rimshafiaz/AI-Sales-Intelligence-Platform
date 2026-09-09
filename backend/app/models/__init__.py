@@ -6,6 +6,7 @@ from app.models.research_evidence import ResearchEvidence
 from app.models.research_social_observation import ResearchSocialObservation
 from app.models.opportunity_qualification import OpportunityQualification
 from app.models.user import User
+from app.models.campaign_prospect import CampaignProspect
 
 __all__ = [
     "Company",
@@ -19,6 +20,7 @@ __all__ = [
     "ResearchSocialObservation",
     "OpportunityQualification",
     "User",
+    "CampaignProspect",
 ]
 from app.models.campaign import Campaign
 from app.models.campaign_candidate_selection import CampaignCandidateSelection

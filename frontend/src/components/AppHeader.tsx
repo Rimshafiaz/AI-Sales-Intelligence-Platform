@@ -6,6 +6,7 @@ import { SalesLensMark } from './SalesLensMark'
 const NAV_ITEMS = [
   { to: '/dashboard', label: 'Dashboard' },
   { to: '/history', label: 'History' },
+  { to: '/prospects', label: 'Prospects' },
 ]
 
 export function AppHeader() {

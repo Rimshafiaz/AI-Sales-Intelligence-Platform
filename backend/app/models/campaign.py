@@ -11,6 +11,7 @@ from app.db.base import Base
 
 if TYPE_CHECKING:
     from app.models.campaign_run import CampaignRun
+    from app.models.campaign_prospect import CampaignProspect
     from app.models.user import User
 
 
@@ -48,5 +49,9 @@ class Campaign(Base):
     user: Mapped["User"] = relationship("User", back_populates="campaigns")
     runs: Mapped[list["CampaignRun"]] = relationship(
         "CampaignRun",
+        back_populates="campaign",
+    )
+    prospects: Mapped[list["CampaignProspect"]] = relationship(
+        "CampaignProspect",
         back_populates="campaign",
     )
