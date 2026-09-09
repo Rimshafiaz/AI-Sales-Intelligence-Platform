@@ -2,7 +2,7 @@ from datetime import UTC, datetime
 
 from app.schemas.company_discovery import CompanyDiscoveryRequest, DiscoveredCompanyCandidate
 from app.schemas.discovery_shortlist import DiscoveryOpportunityPreparationRequest
-from app.schemas.opportunity_models import OpportunityModelSelection
+from app.schemas.opportunity_models import EvidenceSignalType, OpportunityModelSelection
 from app.services.discovery_queue_preparation import prepare_discovery_opportunity_queue
 
 
@@ -22,6 +22,7 @@ def candidate(
     *,
     source_types: list[str] | None = None,
     address: str | None = "Gulberg, Lahore",
+    business_status: str | None = None,
 ) -> DiscoveredCompanyCandidate:
     return DiscoveredCompanyCandidate(
         company_name="Glow Salon",
@@ -31,6 +32,7 @@ def candidate(
         source_record_id="overture:glow-salon",
         source_retrieved_at=NOW,
         formatted_address=address,
+        business_status=business_status,
         discovery_source_types=source_types or ["local_places"],
     )
 
@@ -68,3 +70,18 @@ class TestDiscoveryQueuePreparation:
 
         assert response.candidates == []
         assert response.needs_verification_count == 2
+
+    def test_seeds_activity_only_from_an_explicit_operating_status(self):
+        active = prepare_discovery_opportunity_queue(
+            request([candidate(business_status="operational")])
+        )
+        unknown = prepare_discovery_opportunity_queue(request([candidate()]))
+
+        assert EvidenceSignalType.BUSINESS_ACTIVITY_CONFIRMED in {
+            signal.signal_type
+            for signal in active.candidates[0].candidate_input.evidence_signals
+        }
+        assert EvidenceSignalType.BUSINESS_ACTIVITY_CONFIRMED not in {
+            signal.signal_type
+            for signal in unknown.candidates[0].candidate_input.evidence_signals
+        }

@@ -70,7 +70,7 @@ def seed_discovery_evidence(
         ),
         retrieved_at=candidate.source_retrieved_at,
     )
-    return [
+    signals = [
         EvidenceSignal(
             signal_type=EvidenceSignalType.BUSINESS_IDENTITY_CONFIRMED,
             evidence_type=EvidenceType.OBSERVED,
@@ -82,3 +82,20 @@ def seed_discovery_evidence(
             captured_at=candidate.source_retrieved_at,
         )
     ]
+    if candidate.business_status and candidate.business_status.casefold() in {
+        "operational",
+        "open",
+    }:
+        signals.append(
+            EvidenceSignal(
+                signal_type=EvidenceSignalType.BUSINESS_ACTIVITY_CONFIRMED,
+                evidence_type=EvidenceType.OBSERVED,
+                supporting_value=(
+                    f"{candidate.source_provider} listed the business status as "
+                    f"{candidate.business_status}."
+                ),
+                source=source,
+                captured_at=candidate.source_retrieved_at,
+            )
+        )
+    return signals

@@ -1,6 +1,8 @@
 import uuid
 from datetime import UTC, datetime
 
+import pytest
+
 from app.models.company import Company
 from app.models.opportunity_qualification import OpportunityQualification
 from app.models.research_evidence import ResearchEvidence
@@ -20,6 +22,12 @@ from app.services.opportunity_qualification import (
 
 
 NOW = datetime(2026, 9, 8, tzinfo=UTC)
+SOCIAL_INDUSTRIES = (
+    IndustryOverlayId.BEAUTY_WELLNESS,
+    IndustryOverlayId.RESTAURANTS_CAFES,
+    IndustryOverlayId.FITNESS_GYMS,
+    IndustryOverlayId.BOUTIQUES_RETAIL,
+)
 
 
 def evidence(signal_type: EvidenceSignalType, numeric_value: float | None = None):
@@ -100,6 +108,78 @@ class TestOpportunityModelEvaluation:
 
         assert decision.state is OpportunityQualificationState.INSUFFICIENT_EVIDENCE
         assert "business activity confirmed" in decision.reason
+
+    @pytest.mark.parametrize("industry", SOCIAL_INDUSTRIES)
+    def test_social_dormancy_is_likely_for_opted_in_visual_industries(self, industry):
+        decision = _evaluate_model(
+            get_opportunity_model("social_presence.dormant_official_presence"),
+            industry,
+            [
+                evidence(EvidenceSignalType.BUSINESS_IDENTITY_CONFIRMED),
+                evidence(EvidenceSignalType.OFFICIAL_SOCIAL_PROFILE_CONFIRMED),
+                evidence(EvidenceSignalType.BUSINESS_ACTIVITY_CONFIRMED),
+                evidence(EvidenceSignalType.SOCIAL_HISTORIC_ACTIVITY_CONFIRMED),
+                evidence(EvidenceSignalType.SOCIAL_DORMANCY_MEASURED, 90),
+            ],
+        )
+
+        assert decision.state is OpportunityQualificationState.LIKELY
+
+    def test_social_dormancy_is_not_validated_for_clinics(self):
+        decision = _evaluate_model(
+            get_opportunity_model("social_presence.dormant_official_presence"),
+            IndustryOverlayId.DENTAL_SELECTED_CLINICS,
+            [
+                evidence(EvidenceSignalType.BUSINESS_IDENTITY_CONFIRMED),
+                evidence(EvidenceSignalType.OFFICIAL_SOCIAL_PROFILE_CONFIRMED),
+                evidence(EvidenceSignalType.BUSINESS_ACTIVITY_CONFIRMED),
+                evidence(EvidenceSignalType.SOCIAL_HISTORIC_ACTIVITY_CONFIRMED),
+                evidence(EvidenceSignalType.SOCIAL_DORMANCY_MEASURED, 90),
+            ],
+        )
+
+        assert decision.state is OpportunityQualificationState.NOT_ELIGIBLE
+
+    def test_recent_social_activity_is_not_a_dormancy_opportunity(self):
+        decision = _evaluate_model(
+            get_opportunity_model("social_presence.dormant_official_presence"),
+            IndustryOverlayId.BEAUTY_WELLNESS,
+            [
+                evidence(EvidenceSignalType.BUSINESS_IDENTITY_CONFIRMED),
+                evidence(EvidenceSignalType.OFFICIAL_SOCIAL_PROFILE_CONFIRMED),
+                evidence(EvidenceSignalType.BUSINESS_ACTIVITY_CONFIRMED),
+                evidence(EvidenceSignalType.SOCIAL_HISTORIC_ACTIVITY_CONFIRMED),
+                evidence(EvidenceSignalType.SOCIAL_DORMANCY_MEASURED, 14),
+            ],
+        )
+
+        assert decision.state is OpportunityQualificationState.NOT_ELIGIBLE
+
+    @pytest.mark.parametrize(
+        "missing_signal",
+        [
+            EvidenceSignalType.BUSINESS_IDENTITY_CONFIRMED,
+            EvidenceSignalType.OFFICIAL_SOCIAL_PROFILE_CONFIRMED,
+            EvidenceSignalType.BUSINESS_ACTIVITY_CONFIRMED,
+            EvidenceSignalType.SOCIAL_HISTORIC_ACTIVITY_CONFIRMED,
+            EvidenceSignalType.SOCIAL_DORMANCY_MEASURED,
+        ],
+    )
+    def test_social_dormancy_requires_every_evidence_dimension(self, missing_signal):
+        complete_evidence = [
+            evidence(EvidenceSignalType.BUSINESS_IDENTITY_CONFIRMED),
+            evidence(EvidenceSignalType.OFFICIAL_SOCIAL_PROFILE_CONFIRMED),
+            evidence(EvidenceSignalType.BUSINESS_ACTIVITY_CONFIRMED),
+            evidence(EvidenceSignalType.SOCIAL_HISTORIC_ACTIVITY_CONFIRMED),
+            evidence(EvidenceSignalType.SOCIAL_DORMANCY_MEASURED, 90),
+        ]
+        decision = _evaluate_model(
+            get_opportunity_model("social_presence.dormant_official_presence"),
+            IndustryOverlayId.BEAUTY_WELLNESS,
+            [item for item in complete_evidence if item.signal_type is not missing_signal],
+        )
+
+        assert decision.state is OpportunityQualificationState.INSUFFICIENT_EVIDENCE
 
     def test_no_verified_web_presence_is_not_eligible_after_an_official_site_is_verified(self):
         decision = _evaluate_model(
