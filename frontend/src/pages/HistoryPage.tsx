@@ -159,11 +159,11 @@ export default function HistoryPage() {
   const totalPages = data ? Math.max(1, Math.ceil(data.total / data.page_size)) : 1
 
   return (
-    <main className="mx-auto max-w-7xl px-4 py-8 sm:px-6">
+    <main className="workspace-page">
       <p className="label-caps text-ink-faint">Workspace &gt; Reports</p>
       <div className="mt-1 flex flex-wrap items-end justify-between gap-4">
         <div>
-          <h1 className="font-display text-3xl font-semibold text-ink">Report History</h1>
+          <h1 className="font-display text-3xl font-semibold text-brand">Report History</h1>
           <p className="mt-2 text-sm text-ink-soft">
             Complete archive of your evidence-backed intelligence reports, newest first.
           </p>

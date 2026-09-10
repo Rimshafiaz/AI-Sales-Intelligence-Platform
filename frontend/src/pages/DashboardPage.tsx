@@ -1,10 +1,8 @@
 import { useEffect, useState } from 'react'
-import { ArrowRight, Clock3 } from 'lucide-react'
 import { Link } from 'react-router-dom'
 import { Notice } from '../components/ui'
 import { api } from '../lib/api'
 import type { DashboardAction, DashboardActivity, DashboardSummary } from '../lib/types'
-
 
 function label(value: string): string {
   return value.replaceAll('_', ' ')
@@ -12,36 +10,33 @@ function label(value: string): string {
 
 function relativeTime(iso: string): string {
   const seconds = Math.max(0, Math.floor((Date.now() - new Date(iso).getTime()) / 1000))
-  if (seconds < 60) return 'just now'
+  if (seconds < 60) return 'Just now'
   const minutes = Math.floor(seconds / 60)
   if (minutes < 60) return `${minutes}m ago`
   const hours = Math.floor(minutes / 60)
   if (hours < 24) return `${hours}h ago`
   const days = Math.floor(hours / 24)
-  return days === 1 ? 'yesterday' : `${days}d ago`
+  return days === 1 ? 'Yesterday' : `${days}d ago`
 }
 
 function ActionRow({ action }: { action: DashboardAction }) {
   return (
-    <Link to="/prospects" className="group flex w-full items-center gap-3 px-4 py-3 text-left transition-colors hover:bg-surface-container-low focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-secondary">
-      <span className="min-w-0 flex-1">
-        <span className="block text-body-md font-medium text-on-surface">{action.prospect_name}</span>
-        <span className="mt-0.5 block text-body-sm text-on-surface-variant">{action.reason}</span>
+    <Link to="/prospects" className="group grid gap-1 border-b border-line-soft px-5 py-4 transition-colors last:border-b-0 hover:bg-canvas sm:grid-cols-[minmax(0,1fr)_auto] sm:items-center">
+      <span className="min-w-0">
+        <span className="block text-[14px] font-semibold text-ink">{action.prospect_name}</span>
+        <span className="mt-1 block text-[13px] text-ink-soft">{action.reason}</span>
+        <span className="mt-1.5 block text-[12px] text-ink-faint">{action.campaign_title}</span>
       </span>
-      {action.channel && <span className="rounded-full bg-surface-container-high px-2 py-0.5 text-label-sm text-on-surface-variant">{action.channel}</span>}
-      <ArrowRight size={15} className="shrink-0 text-outline transition-colors group-hover:text-on-surface" />
+      <span className="text-[13px] font-semibold text-action group-hover:text-ink">Open</span>
     </Link>
   )
 }
 
 function ActivityRow({ event }: { event: DashboardActivity }) {
   return (
-    <div className="flex items-start gap-3 py-2">
-      <span className="mt-2 h-2 w-2 shrink-0 rounded-full bg-secondary" />
-      <div className="min-w-0 flex-1">
-        <p className="text-body-sm text-on-surface"><span className="font-medium capitalize">{label(event.event_type)}</span> · {event.prospect_name}</p>
-        <p className="text-label-sm text-on-surface-variant">{event.campaign_title} · {relativeTime(event.occurred_at)}</p>
-      </div>
+    <div className="border-b border-line-soft py-3.5 last:border-b-0">
+      <p className="text-[13px] leading-5 text-ink"><span className="font-semibold capitalize">{label(event.event_type)}</span><span className="text-ink-faint"> · </span>{event.prospect_name}</p>
+      <p className="mt-1 text-[12px] text-ink-faint">{event.campaign_title} · {relativeTime(event.occurred_at)}</p>
     </div>
   )
 }
@@ -64,84 +59,85 @@ export default function DashboardPage() {
     }
   }, [])
 
-  if (error) {
-    return <main className="mx-auto max-w-7xl px-4 py-8 sm:px-6"><Notice kind="error">{error}</Notice></main>
-  }
-  if (!summary) {
-    return <main className="mx-auto max-w-7xl px-4 py-8 sm:px-6"><div className="h-48 animate-pulse rounded-card bg-surface-container-lowest shadow-sm" /></main>
-  }
+  if (error) return <main className="workspace-page"><Notice kind="error">{error}</Notice></main>
+  if (!summary) return <main className="workspace-page"><div className="h-80 animate-pulse rounded-card border border-line bg-card" /></main>
 
   const stats = [
-    ['Saved', summary.pipeline.prospects_saved],
-    ['Need research', summary.pipeline.needs_research],
-    ['Ready for outreach', summary.pipeline.ready_for_outreach],
-    ['Contacted', summary.pipeline.contacted],
-    ['Replied', summary.pipeline.replied],
-    ['Interested', summary.pipeline.interested],
+    ['Need review', summary.pipeline.needs_research, 'Research required'],
+    ['Ready to contact', summary.pipeline.ready_for_outreach, 'Approved prospects'],
+    ['Replies', summary.pipeline.replied, 'Outreach responses'],
   ] as const
-  return (
-    <main className="mx-auto flex w-full max-w-7xl flex-col gap-6 px-4 py-8 sm:px-6">
-      <section>
-        <p className="label-caps text-secondary">SalesLens workspace</p>
-        <h1 className="mt-1 font-display text-headline-xl font-semibold tracking-tight text-on-surface">What needs your attention</h1>
-        <p className="mt-2 max-w-2xl text-body-md text-on-surface-variant">Move evidence-backed prospects from research to outreach and follow-up.</p>
-      </section>
+  const today = new Intl.DateTimeFormat(undefined, {
+    weekday: 'long',
+    day: 'numeric',
+    month: 'long',
+    year: 'numeric',
+  }).format(new Date())
 
-      <section className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6" aria-label="Prospect pipeline">
-        {stats.map(([name, value]) => (
-          <div key={name} className="rounded-card border border-line-soft bg-surface-container-lowest p-4 shadow-sm">
-            <p className="font-display text-headline-lg font-semibold text-on-surface">{value}</p>
-            <p className="mt-1 text-label-sm text-on-surface-variant">{name}</p>
+  return (
+    <main className="workspace-page">
+      <header className="page-heading-row">
+        <div>
+          <p className="page-date">{today}</p>
+          <h1 className="page-title">Your prospecting workspace</h1>
+          <p className="page-description">Review opportunities, take action, and keep campaigns moving.</p>
+        </div>
+        <Link to="/discover" className="primary-link-button">New campaign</Link>
+      </header>
+
+      <section className="mt-9 grid grid-cols-1 border-y border-line sm:grid-cols-3" aria-label="Work summary">
+        {stats.map(([name, value, detail]) => (
+          <div key={name} className="grid grid-cols-[3.25rem_1fr] items-center gap-3 border-b border-line px-2 py-5 last:border-b-0 sm:border-b-0 sm:border-r sm:px-7 sm:first:pl-2 sm:last:border-r-0">
+            <p className="text-[30px] font-semibold leading-none tracking-[-0.04em] text-ink tabular-nums">{value}</p>
+            <div>
+              <p className="text-[13px] font-semibold text-ink">{name}</p>
+              <p className="mt-1 text-[12px] text-ink-faint">{detail}</p>
+            </div>
           </div>
         ))}
       </section>
 
-      {summary.next_best_action ? (
-        <Link to="/prospects" className="group flex w-full items-center gap-4 border-y border-line-soft py-4 text-left hover:bg-surface-container-low">
-          <span className="label-caps shrink-0 text-secondary">Next action</span>
-          <span className="min-w-0 flex-1">
-            <span className="block text-body-md font-medium text-on-surface">{label(summary.next_best_action.action_type)} · {summary.next_best_action.prospect_name}</span>
-            <span className="mt-0.5 block text-body-sm text-on-surface-variant">{summary.next_best_action.reason}</span>
-          </span>
-          <ArrowRight size={16} className="shrink-0 text-outline group-hover:text-on-surface" />
-        </Link>
-      ) : (
-        <Link to="/discover" className="group flex w-full items-center gap-4 border-y border-line-soft py-4 text-left hover:bg-surface-container-low">
-          <span className="label-caps shrink-0 text-secondary">Next action</span>
-          <span className="min-w-0 flex-1 text-body-md font-medium text-on-surface">Start a discovery campaign</span>
-          <ArrowRight size={16} className="shrink-0 text-outline group-hover:text-on-surface" />
-        </Link>
+      {summary.next_best_action && (
+        <section className="mt-6 flex flex-col gap-3 border border-line bg-card px-5 py-4 sm:flex-row sm:items-center">
+          <p className="shrink-0 text-[12px] font-semibold text-ink-soft">Next action</p>
+          <div className="min-w-0 flex-1">
+            <p className="text-[14px] font-semibold capitalize text-ink">{label(summary.next_best_action.action_type)} for {summary.next_best_action.prospect_name}</p>
+            <p className="mt-0.5 text-[13px] text-ink-soft">{summary.next_best_action.reason}</p>
+          </div>
+          <Link to="/prospects" className="text-[13px] font-semibold text-action hover:text-ink">Continue</Link>
+        </section>
       )}
 
-      <section className="grid gap-6 lg:grid-cols-12">
-        <div className="space-y-6 lg:col-span-8">
-          <div>
-            <div className="mb-3 flex items-center justify-between">
-              <h2 className="font-display text-headline-md font-semibold text-on-surface">Needs attention</h2>
-              <span className="text-label-sm text-on-surface-variant">{summary.needs_attention.length}</span>
-            </div>
-            <div className="divide-y divide-line-soft rounded-card border border-line-soft bg-surface-container-lowest shadow-sm">
-              {summary.needs_attention.length === 0 ? <p className="p-4 text-body-sm text-on-surface-variant">No prospect or draft currently needs attention.</p> : summary.needs_attention.map((action) => <ActionRow key={`${action.action_type}:${action.prospect_id}:${action.outreach_attempt_id ?? ''}`} action={action} />)}
-            </div>
+      <section className="mt-8 grid gap-8 lg:grid-cols-[minmax(0,1.8fr)_minmax(17rem,0.8fr)]">
+        <div>
+          <div className="section-heading-row">
+            <div><h2>Needs your attention</h2><p>Prospects and messages waiting for a decision.</p></div>
+            <span>{summary.needs_attention.length}</span>
           </div>
-
-          <div>
-            <div className="mb-3 flex items-center justify-between">
-              <h2 className="flex items-center gap-2 font-display text-headline-md font-semibold text-on-surface"><Clock3 size={18} />Follow-ups due</h2>
-              <span className="text-label-sm text-on-surface-variant">{summary.follow_ups_due.length}</span>
-            </div>
-            <div className="divide-y divide-line-soft rounded-card border border-line-soft bg-surface-container-lowest shadow-sm">
-              {summary.follow_ups_due.length === 0 ? <p className="p-4 text-body-sm text-on-surface-variant">No sent outreach currently needs a follow-up.</p> : summary.follow_ups_due.map((action) => <ActionRow key={`follow-up:${action.outreach_attempt_id}`} action={action} />)}
-            </div>
+          <div className="overflow-hidden border border-line bg-card">
+            {summary.needs_attention.length === 0 ? (
+              <div className="px-5 py-10"><p className="text-[14px] font-semibold text-ink">Nothing needs attention</p><p className="mt-1 text-[13px] text-ink-soft">New research and outreach tasks will appear here.</p></div>
+            ) : summary.needs_attention.map((action) => (
+              <ActionRow key={`${action.action_type}:${action.prospect_id}:${action.outreach_attempt_id ?? ''}`} action={action} />
+            ))}
           </div>
         </div>
 
-        <div className="lg:col-span-4">
-          <h2 className="mb-3 font-display text-headline-md font-semibold text-on-surface">Recent activity</h2>
-          <div className="rounded-card border border-line-soft bg-surface-container-lowest px-4 py-2 shadow-sm">
-            {summary.recent_activity.length === 0 ? <p className="py-3 text-body-sm text-on-surface-variant">No prospecting activity yet.</p> : summary.recent_activity.map((event) => <ActivityRow key={`${event.event_type}:${event.prospect_id}:${event.occurred_at}`} event={event} />)}
+        <aside>
+          <div className="section-heading-row"><div><h2>Recent activity</h2><p>Your latest prospecting updates.</p></div></div>
+          <div className="border-t border-line">
+            {summary.recent_activity.length === 0 ? (
+              <div className="py-5"><p className="text-[13px] font-semibold text-ink">No activity yet</p><p className="mt-1 text-[12px] text-ink-soft">Campaign updates will appear here.</p></div>
+            ) : summary.recent_activity.map((event) => (
+              <ActivityRow key={`${event.event_type}:${event.prospect_id}:${event.occurred_at}`} event={event} />
+            ))}
           </div>
-        </div>
+        </aside>
+      </section>
+
+      <section className="mt-9 flex items-center justify-between border-t border-line pt-5">
+        <div><h2 className="text-[14px] font-semibold text-ink">Your campaigns</h2><p className="mt-1 text-[13px] text-ink-soft">Return to discovery work and saved prospects.</p></div>
+        <Link to="/campaigns" className="text-[13px] font-semibold text-action hover:text-ink">View campaigns</Link>
       </section>
     </main>
   )

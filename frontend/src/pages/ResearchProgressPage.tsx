@@ -414,7 +414,7 @@ export default function ResearchProgressPage() {
 
   if (loadError) {
     return (
-      <main className="mx-auto max-w-3xl px-4 py-12 sm:px-6">
+      <main className="workspace-page">
         <Notice kind="error">{loadError}</Notice>
         <p className="mt-4 text-sm">
           <Link to="/dashboard" className="text-action hover:underline">
@@ -427,7 +427,7 @@ export default function ResearchProgressPage() {
 
   if (!request) {
     return (
-      <main className="mx-auto max-w-4xl px-4 py-8 sm:px-6">
+      <main className="workspace-page">
         <div className="h-32 animate-pulse rounded-card border border-line-soft bg-card" />
       </main>
     )
@@ -445,9 +445,9 @@ export default function ResearchProgressPage() {
       typeof request.objective?.offering === 'string' ? request.objective.offering : null
 
     return (
-      <main className="mx-auto max-w-4xl px-4 py-8 sm:px-6">
+      <main className="workspace-page">
         <p className="label-caps text-ink-faint">Known prospect confirmed</p>
-        <h1 className="mt-1 font-display text-3xl font-semibold text-ink">{companyTitle}</h1>
+        <h1 className="mt-1 font-display text-3xl font-semibold text-brand">{companyTitle}</h1>
         <section className="mt-6 rounded-card border border-line-soft bg-card p-5">
           <span className="rounded-control bg-good-wash px-2.5 py-1 font-mono text-[11px] uppercase text-good-ink">
             Identity verified
@@ -552,11 +552,11 @@ export default function ResearchProgressPage() {
   ]
 
   return (
-    <main className="mx-auto max-w-4xl px-4 py-8 sm:px-6">
+    <main className="workspace-page">
       <p className="label-caps text-ink-faint">
         Research request <span className="font-mono">{request.id.slice(0, 8)}</span>
       </p>
-      <h1 className="mt-1 font-display text-3xl font-semibold text-ink">{companyTitle}</h1>
+      <h1 className="mt-1 font-display text-3xl font-semibold text-brand">{companyTitle}</h1>
 
       <section className="mt-6 rounded-card border border-line-soft bg-card p-5">
         <h2 className="label-caps text-ink-soft">Investigation progress</h2>

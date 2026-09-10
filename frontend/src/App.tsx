@@ -2,9 +2,9 @@ import type { ReactNode } from 'react'
 import { Navigate, Outlet, Route, Routes } from 'react-router-dom'
 import { useAuth } from './lib/auth'
 import { AppHeader } from './components/AppHeader'
-import { AppFooter } from './components/AppFooter'
 import AuthPage from './pages/AuthPage'
 import DashboardPage from './pages/DashboardPage'
+import CampaignsPage from './pages/CampaignsPage'
 import DiscoveryPage from './pages/DiscoveryPage'
 import HistoryPage from './pages/HistoryPage'
 import ResearchPage from './pages/ResearchPage'
@@ -12,6 +12,8 @@ import ResearchProgressPage from './pages/ResearchProgressPage'
 import ReportReviewPage from './pages/ReportReviewPage'
 import NotFoundPage from './pages/NotFoundPage'
 import ProspectsPage from './pages/ProspectsPage'
+import ProspectPage from './pages/ProspectPage'
+import OutreachPage from './pages/OutreachPage'
 import SettingsPage from './pages/SettingsPage'
 
 function IdleWarningBanner() {
@@ -35,12 +37,11 @@ function IdleWarningBanner() {
 
 function ProtectedLayout() {
   return (
-    <div className="flex min-h-screen flex-col">
+    <div className="min-h-screen">
       <AppHeader />
-      <div className="flex-1">
+      <div>
         <Outlet />
       </div>
-      <AppFooter />
       <IdleWarningBanner />
     </div>
   )
@@ -72,8 +73,11 @@ export default function App() {
         }
       >
         <Route path="/dashboard" element={<DashboardPage />} />
+        <Route path="/campaigns" element={<CampaignsPage />} />
         <Route path="/discover" element={<DiscoveryPage />} />
         <Route path="/prospects" element={<ProspectsPage />} />
+        <Route path="/campaigns/:campaignId/prospects/:prospectId" element={<ProspectPage />} />
+        <Route path="/outreach" element={<OutreachPage />} />
         <Route path="/research" element={<ResearchPage />} />
         <Route path="/research/:requestId" element={<ResearchProgressPage />} />
         <Route path="/reports/:reportId" element={<ReportReviewPage />} />

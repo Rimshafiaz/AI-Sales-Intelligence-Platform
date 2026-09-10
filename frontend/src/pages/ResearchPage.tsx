@@ -121,9 +121,9 @@ export default function ResearchPage() {
   const isVerified = resolution?.identity_state === 'verified'
 
   return (
-    <main className="mx-auto max-w-4xl px-4 py-8 sm:px-6">
+    <main className="workspace-page">
       <p className="label-caps text-ink-faint">Known prospect research</p>
-      <h1 className="mt-1 font-display text-3xl font-semibold text-ink">Research a company</h1>
+      <h1 className="mt-1 font-display text-3xl font-semibold text-brand">Research a company</h1>
       <p className="mt-2 max-w-2xl text-sm text-ink-soft">
         Define what you offer and what you need to decide. SalesLens verifies the
         business identity before it creates an evidence-review request.

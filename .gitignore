@@ -80,3 +80,10 @@ Thumbs.db
 Desktop.ini
 
 screens/
+
+# Local AI-agent skills and tooling
+.agents/
+.claude/
+.codex/
+.cursor/
+skills-lock.json

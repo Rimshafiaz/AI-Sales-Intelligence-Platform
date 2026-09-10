@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
-import { CircleAlert, Loader2, UserRound } from 'lucide-react'
+import { CircleAlert, Loader2 } from 'lucide-react'
+import { Link } from 'react-router-dom'
 import { api } from '../lib/api'
 import type {
   CampaignProspect,
@@ -47,31 +48,27 @@ export default function ProspectsPage() {
   }, [])
 
   return (
-    <main className="mx-auto max-w-7xl px-4 py-8 sm:px-6">
-      <div className="mb-8 flex items-end justify-between gap-4">
+    <main className="workspace-page">
+      <div className="mb-8 border-b border-line pb-6">
         <div>
-          <p className="label-caps text-secondary">Prospect workspace</p>
-          <h1 className="mt-1 font-display text-headline-xl font-semibold text-on-surface">Saved prospects</h1>
-          <p className="mt-2 max-w-2xl text-body-md text-on-surface-variant">
-            Candidates you explicitly saved from a campaign. Discovery records remain temporary until saved.
-          </p>
+          <h1 className="text-headline-xl font-semibold tracking-tight text-brand">Prospects</h1>
+          <p className="mt-2 max-w-xl text-body-md text-on-surface-variant">Saved businesses moving through research and outreach.</p>
         </div>
-        <UserRound className="hidden text-secondary sm:block" size={28} />
       </div>
 
       {loading && <div className="flex items-center gap-2 text-body-sm text-on-surface-variant"><Loader2 size={16} className="animate-spin" />Loading prospects...</div>}
       {error && <div className="flex items-start gap-2 rounded-lg bg-error-container/40 p-3 text-body-sm text-on-surface"><CircleAlert size={16} className="mt-0.5 text-error" />{error}</div>}
       {!loading && !error && groups.length === 0 && (
-        <section className="rounded-card bg-surface-container-lowest p-space-lg shadow-md">
-          <p className="font-display text-headline-md font-semibold text-on-surface">No saved prospects yet</p>
-          <p className="mt-2 text-body-md text-on-surface-variant">Save an evidence-backed candidate from Discovery to keep it in this workspace.</p>
+        <section className="py-12">
+          <p className="text-headline-md font-semibold text-on-surface">No saved prospects</p>
+          <p className="mt-2 text-body-md text-on-surface-variant">Save a candidate from a campaign to keep it here.</p>
         </section>
       )}
       <div className="space-y-6">
         {groups.map(({ campaign, prospects }) => (
-          <section key={campaign.id} className="rounded-card bg-surface-container-lowest p-space-lg shadow-md">
+          <section key={campaign.id} className="border-b border-line py-6 first:pt-0">
             <div className="mb-4 flex items-center justify-between gap-3">
-              <h2 className="font-display text-headline-md font-semibold text-on-surface">{campaign.title}</h2>
+              <h2 className="text-headline-md font-semibold text-on-surface">{campaign.title}</h2>
               <span className="text-label-md text-on-surface-variant">{prospects.length} saved</span>
             </div>
             <div className="divide-y divide-line-soft">
@@ -80,11 +77,11 @@ export default function ProspectsPage() {
                   <div className="min-w-0 flex-1">
                     <h3 className="font-medium text-on-surface">{String(prospect.candidate_snapshot.company_name ?? 'Unnamed business')}</h3>
                     <p className="mt-1 text-body-sm text-on-surface-variant">{String(prospect.candidate_snapshot.formatted_address ?? 'Location not listed')}</p>
-                    <ProspectOutreach campaignId={campaign.id} prospect={prospect} />
                   </div>
                   <div className="flex items-center gap-3 text-label-md">
                     <span className="rounded-full bg-secondary-container px-2.5 py-1 text-on-secondary-container">{label(prospect.workflow_state)}</span>
                     <span className="text-on-surface-variant">Next: {label(prospect.next_action)}</span>
+                    <Link to={`/campaigns/${campaign.id}/prospects/${prospect.id}`} className="font-semibold text-secondary hover:text-on-surface">Open</Link>
                   </div>
                 </article>
               ))}
@@ -96,7 +93,7 @@ export default function ProspectsPage() {
   )
 }
 
-function ProspectOutreach({ campaignId, prospect }: { campaignId: string; prospect: CampaignProspect }) {
+export function ProspectOutreach({ campaignId, prospect }: { campaignId: string; prospect: CampaignProspect }) {
   const [attempts, setAttempts] = useState<OutreachAttempt[]>([])
   const [options, setOptions] = useState<OutreachDraftOption[]>([])
   const [working, setWorking] = useState(false)
@@ -151,8 +148,8 @@ function ProspectOutreach({ campaignId, prospect }: { campaignId: string; prospe
   if (attempts.length === 0 && options.length === 0 && !error) return null
 
   return (
-    <div className="mt-4 space-y-3 border-t border-line-soft pt-3">
-      <p className="text-label-sm font-semibold uppercase tracking-wide text-secondary">Outreach</p>
+    <div className="space-y-3">
+      <p className="text-label-sm font-semibold text-ink">Outreach</p>
       {error && <p className="text-body-sm text-error">{error}</p>}
       {options.map((option) => (
         <button key={`${option.research_report_id}:${option.channel}:${option.recipient}`} type="button" disabled={working} onClick={() => createDraft(option)} className="rounded-control border border-secondary px-3 py-1.5 text-label-md font-medium text-secondary hover:bg-secondary-container disabled:opacity-60">
@@ -244,7 +241,7 @@ function OutreachAttemptCard({
   }
 
   return (
-    <div className="rounded-lg bg-surface-container-low p-3">
+    <div className="border-t border-line pt-4">
       <div className="flex flex-wrap items-center justify-between gap-2">
         <p className="text-label-md font-medium text-on-surface">{label(attempt.channel)} / {attempt.recipient}</p>
         <span className="rounded-full bg-surface-container-high px-2 py-0.5 text-label-sm text-on-surface-variant">{label(attempt.status)}</span>
@@ -259,7 +256,7 @@ function OutreachAttemptCard({
           {(attempt.status === 'draft' || changed) && <button type="button" disabled={working} onClick={() => void run('approve')} className="rounded-control bg-primary px-3 py-1.5 text-label-md font-medium text-on-primary disabled:opacity-60">{attempt.status === 'approved' ? 'Approve changes' : 'Approve draft'}</button>}
         </div>
       )}
-      {attempt.edited_by_user && <p className="mt-2 text-label-sm text-on-surface-variant">User-edited after evidence-grounded generation.</p>}
+      {attempt.edited_by_user && <p className="mt-2 text-label-sm text-on-surface-variant">Edited by you.</p>}
       {attempt.status === 'approved' && attempt.channel === 'email' && !changed && (
         <button type="button" disabled={working} onClick={() => void run('send-email')} className="mt-3 rounded-control bg-primary px-3 py-1.5 text-label-md font-medium text-on-primary disabled:opacity-60">Send with Gmail</button>
       )}

@@ -232,7 +232,7 @@ export default function ReportReviewPage() {
 
   if (loadError) {
     return (
-      <main className="mx-auto max-w-3xl px-4 py-12 sm:px-6">
+      <main className="workspace-page">
         <Notice kind="error">{loadError}</Notice>
         <p className="mt-4 text-sm">
           <Link to="/history" className="text-action hover:underline">
@@ -245,7 +245,7 @@ export default function ReportReviewPage() {
 
   if (!detail) {
     return (
-      <main className="mx-auto max-w-5xl px-4 py-8 sm:px-6">
+      <main className="workspace-page">
         <div className="h-48 animate-pulse rounded-card border border-line-soft bg-card" />
       </main>
     )
@@ -258,7 +258,7 @@ export default function ReportReviewPage() {
   if (isProspectEvidenceBrief(report)) {
     const brief = report.report_data
     return (
-      <main className="mx-auto max-w-5xl px-4 py-8 sm:px-6">
+      <main className="workspace-page">
         <div className="flex flex-wrap items-center justify-between gap-3">
           <Link to="/history" className="text-xs text-ink-soft hover:text-ink">
             Back to history
@@ -287,7 +287,7 @@ export default function ReportReviewPage() {
             <Notice kind="error">{actionError}</Notice>
           </div>
         )}
-        <h1 className="mt-6 font-display text-3xl font-bold tracking-tight text-ink">
+        <h1 className="mt-6 font-display text-3xl font-bold tracking-tight text-brand">
           {brief.prospect.business_name}
         </h1>
         <p className="mt-1 font-ui text-xs text-ink-faint">
@@ -311,7 +311,7 @@ export default function ReportReviewPage() {
         : 'text-bad-ink'
 
   return (
-    <main className="mx-auto max-w-5xl px-4 py-8 sm:px-6">
+    <main className="workspace-page">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <Link to="/history" className="text-xs text-ink-soft hover:text-ink">
           Back to history
@@ -494,7 +494,7 @@ export default function ReportReviewPage() {
         </div>
       )}
 
-      <h1 className="mt-6 font-display text-3xl font-bold tracking-tight text-ink">
+      <h1 className="mt-6 font-display text-3xl font-bold tracking-tight text-brand">
         {company?.name ?? 'Intelligence Report'}
       </h1>
       <p className="mt-1 font-ui text-xs text-ink-faint">

@@ -1,5 +1,4 @@
 import { useEffect, useState } from 'react'
-import { Mail } from 'lucide-react'
 import { useSearchParams } from 'react-router-dom'
 import { Notice } from '../components/ui'
 import { api } from '../lib/api'
@@ -52,25 +51,25 @@ export default function SettingsPage() {
   }
 
   return (
-    <main className="mx-auto max-w-4xl px-4 py-8 sm:px-6">
-      <p className="label-caps text-secondary">Settings</p>
-      <h1 className="mt-1 font-display text-headline-xl font-semibold text-on-surface">Integrations</h1>
-      <p className="mt-2 text-body-md text-on-surface-variant">Connect accounts used for approved SalesLens actions.</p>
+    <main className="workspace-page">
+      <header className="border-b border-line pb-5">
+        <h1 className="text-headline-xl font-semibold tracking-tight text-brand">Settings</h1>
+        <p className="mt-1 text-body-md text-on-surface-variant">Manage connected accounts.</p>
+      </header>
 
-      <div className="mt-6 space-y-3">
+      <div className="mt-4 space-y-2">
         {searchParams.get('gmail') === 'connected' && <Notice kind="info">Gmail connected successfully.</Notice>}
         {searchParams.get('gmail') === 'error' && <Notice kind="error">Gmail connection was not completed. Please try again.</Notice>}
         {error && <Notice kind="error">{error}</Notice>}
       </div>
 
-      <section className="mt-6 rounded-card border border-line-soft bg-surface-container-lowest p-5 shadow-sm">
-        <div className="flex items-start gap-4">
-          <Mail className="mt-1 shrink-0 text-secondary" size={22} />
-          <div className="min-w-0 flex-1">
+      <section className="mt-4 grid gap-4 border-b border-line py-5 sm:grid-cols-[10rem_minmax(0,1fr)]">
+          <h2 className="text-body-md font-semibold text-on-surface">Email</h2>
+          <div className="min-w-0">
             <div className="flex flex-wrap items-center justify-between gap-3">
               <div>
-                <h2 className="font-display text-headline-md font-semibold text-on-surface">Gmail</h2>
-                <p className="mt-1 text-body-sm text-on-surface-variant">SalesLens requests permission to send only emails you explicitly approve.</p>
+                <h3 className="text-body-md font-semibold text-on-surface">Gmail</h3>
+                <p className="mt-1 text-body-sm text-on-surface-variant">Send drafts after you approve them.</p>
               </div>
               {connection?.status === 'connected' ? (
                 <div className="flex flex-wrap gap-2">
@@ -85,9 +84,8 @@ export default function SettingsPage() {
             {connection?.status === 'connected' && !connection.reply_tracking_enabled && <p className="mt-3 text-body-sm text-on-surface-variant">Reconnect once to grant Gmail metadata access for checking replies to SalesLens-created threads.</p>}
             {connection?.reply_tracking_enabled && <p className="mt-3 text-body-sm text-on-surface-variant">Reply tracking is enabled for Gmail threads created by SalesLens.</p>}
             {connection?.configured === false && <p className="mt-3 text-body-sm text-error">Gmail OAuth has not been configured on this SalesLens server.</p>}
-            <p className="mt-3 text-label-sm text-on-surface-variant">SalesLens sends only approved drafts and checks replies only when you request it.</p>
+            <p className="mt-3 text-label-sm text-on-surface-variant">SalesLens never sends a draft without your approval.</p>
           </div>
-        </div>
       </section>
     </main>
   )

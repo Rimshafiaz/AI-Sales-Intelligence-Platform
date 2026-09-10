@@ -2,14 +2,8 @@ import { useState, type FormEvent } from 'react'
 import { useNavigate } from 'react-router-dom'
 import {
   ArrowUpRight,
-  CheckCircle2,
   CircleAlert,
-  FileSearch,
-  Info,
   Loader2,
-  Pencil,
-  Search,
-  Sparkles,
 } from 'lucide-react'
 import { api } from '../lib/api'
 import type {
@@ -347,56 +341,64 @@ export default function DiscoveryPage() {
   }
 
   const inputClass =
-    'h-9 w-full rounded bg-surface-container-low px-space-sm text-body-md text-on-surface outline-none transition-colors placeholder:text-outline-variant focus:bg-surface-container-lowest focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-secondary'
+    'h-10 w-full rounded-control border border-line bg-card px-3 text-[13px] text-ink outline-none transition-colors placeholder:text-ink-faint focus:border-action focus:ring-1 focus:ring-action'
 
   return (
-    <main className="mx-auto max-w-7xl px-4 py-8 sm:px-6">
-      <div className="mb-8 flex flex-col justify-between gap-3 md:flex-row md:items-end">
+    <main className="workspace-page">
+      <header>
         <div className="space-y-1">
-          <div className="flex items-center gap-2">
-            <span className="text-label-sm font-semibold uppercase tracking-widest text-secondary">Discovery</span>
-            <span className="text-label-sm text-outline-variant">•</span>
-            <span className="text-label-sm text-on-surface-variant">Evidence-backed opportunity queue</span>
-          </div>
-          <h1 className="font-display text-headline-xl font-semibold tracking-tight text-on-surface">Find the companies worth pursuing</h1>
-          <p className="max-w-2xl text-body-md text-on-surface-variant">SalesLens finds local, web, and social candidates, then only shows businesses with an observable signal relevant to the service you sell.</p>
+          <h1 className="page-title">{step === 'form' ? 'New campaign' : step === 'confirm' ? 'Review campaign' : 'Opportunity queue'}</h1>
+          <p className="page-description">Describe the businesses you want to find and the service you offer.</p>
         </div>
-      </div>
+      </header>
 
       {step === 'form' && (
-        <section className="mb-8 rounded-card bg-surface-container-lowest p-space-lg shadow-md">
-          <form className="space-y-4" onSubmit={handleParse}>
-            <div className="space-y-1.5">
-              <label htmlFor="discovery-goal" className="block text-label-sm font-medium uppercase tracking-wide text-on-surface-variant">What are you looking for?</label>
-              <textarea id="discovery-goal" rows={3} placeholder="e.g. I want salons in Lahore to pitch website and booking improvements to." value={form.goal} onChange={(event) => update('goal', event.target.value)} className={inputClass + ' h-auto min-h-20 resize-y py-2 leading-relaxed'} />
+        <section className="mt-8 grid gap-8 border-t border-line pt-7 lg:grid-cols-[minmax(0,1.65fr)_minmax(18rem,0.75fr)]">
+          <form className="space-y-5" onSubmit={handleParse}>
+            <div className="space-y-2">
+              <label htmlFor="discovery-goal" className="block text-[13px] font-medium text-ink">What are you looking for?<span className="text-error"> *</span></label>
+              <textarea id="discovery-goal" rows={4} placeholder="For example, find restaurants in Lahore that I can pitch website and reservation improvements to." value={form.goal} onChange={(event) => update('goal', event.target.value)} className={inputClass + ' h-auto min-h-28 resize-y py-3 leading-5'} />
             </div>
-            <div className="flex flex-wrap items-center gap-2">
-              {OBJECTIVE_CHIPS.map((chip) => {
-                const active = activeChip === chip.value
-                return <button key={chip.value} type="button" aria-pressed={active} onClick={() => setActiveChip(active ? null : chip.value)} className={'rounded-full border px-3 py-1 text-label-md transition-colors focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-secondary ' + (active ? 'border-primary bg-primary text-on-primary' : 'border-line bg-surface-container-lowest text-on-surface-variant hover:border-outline hover:text-on-surface')}>{chip.label}</button>
-              })}
-              <span className="text-label-sm text-outline">optional hint — your text always wins</span>
-            </div>
-            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-              <div className="space-y-1.5"><label htmlFor="discovery-region" className="block text-label-sm font-medium uppercase tracking-wide text-on-surface-variant">Where (optional)</label><input id="discovery-region" placeholder="e.g. Lahore" value={form.region} onChange={(event) => update('region', event.target.value)} className={inputClass} /></div>
-              <div className="space-y-1.5"><label htmlFor="discovery-size" className="block text-label-sm font-medium uppercase tracking-wide text-on-surface-variant">Company size (optional)</label><input id="discovery-size" placeholder="e.g. 50-250, startups" value={form.company_size} onChange={(event) => update('company_size', event.target.value)} className={inputClass} /></div>
+            <fieldset>
+              <legend className="sr-only">Campaign objective</legend>
+              <div className="flex flex-wrap gap-2">
+                {OBJECTIVE_CHIPS.map((chip) => {
+                  const active = activeChip === chip.value
+                  return <button key={chip.value} type="button" aria-pressed={active} onClick={() => setActiveChip(active ? null : chip.value)} className={'rounded-control border px-3 py-1.5 text-[12px] font-medium transition-colors focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-action ' + (active ? 'border-action bg-action text-white' : 'border-line bg-card text-ink-soft hover:border-action hover:text-ink')}>{chip.label}</button>
+                })}
+              </div>
+            </fieldset>
+            <div className="grid grid-cols-1 gap-5 sm:grid-cols-2">
+              <div className="space-y-2"><label htmlFor="discovery-region" className="block text-[13px] font-medium text-ink">Where <span className="font-normal text-ink-faint">(optional)</span></label><input id="discovery-region" placeholder="For example, Lahore" value={form.region} onChange={(event) => update('region', event.target.value)} className={inputClass} /></div>
+              <div className="space-y-2"><label htmlFor="discovery-size" className="block text-[13px] font-medium text-ink">Company size <span className="font-normal text-ink-faint">(optional)</span></label><input id="discovery-size" placeholder="For example, 10–50" value={form.company_size} onChange={(event) => update('company_size', event.target.value)} className={inputClass} /></div>
             </div>
             {searchError && <ErrorNotice message={searchError} />}
-            <div className="flex flex-col justify-between gap-2 pt-1 sm:flex-row sm:items-center"><div className="flex items-center gap-1 text-on-surface-variant"><Info size={16} className="text-secondary" /><span className="text-label-sm">We show what we understood before running anything.</span></div><Button type="submit" disabled={parsing} className="h-10 px-space-lg">{parsing ? <><Loader2 size={18} className="animate-spin" />Interpreting goal...</> : <><FileSearch size={18} />Continue</>}</Button></div>
+            <div className="flex justify-end border-t border-line pt-5"><Button type="submit" disabled={parsing} className="h-10 min-w-28 px-5">{parsing ? <><Loader2 size={16} className="animate-spin" />Reviewing</> : <>Continue</>}</Button></div>
           </form>
+
+          <aside className="border-t border-line pt-6 lg:border-l lg:border-t-0 lg:pl-8 lg:pt-0">
+            <h2 className="font-display text-[20px] font-bold tracking-[-0.025em] text-ink">Campaign brief</h2>
+            <p className="mt-1 text-[13px] text-ink-soft">Built from your input before discovery begins.</p>
+            <dl className="mt-6 space-y-5 text-[13px]">
+              <div><dt className="text-ink-soft">Objective</dt><dd className="mt-1 font-medium text-ink">{activeChip ? GOAL_TYPE_LABELS[activeChip] : 'Not set'}</dd></div>
+              <div><dt className="text-ink-soft">Target businesses</dt><dd className="mt-1 line-clamp-3 font-medium text-ink">{form.goal.trim() || 'Not set'}</dd></div>
+              <div><dt className="text-ink-soft">Location</dt><dd className="mt-1 font-medium text-ink">{form.region.trim() || 'Any location'}</dd></div>
+              <div><dt className="text-ink-soft">Company size</dt><dd className="mt-1 font-medium text-ink">{form.company_size.trim() || 'Any size'}</dd></div>
+            </dl>
+          </aside>
         </section>
       )}
 
       {step === 'confirm' && objective && (
-        <section className="mb-8 rounded-card border border-line-soft bg-surface-container-lowest p-space-lg shadow-md">
-          <div className="flex items-center gap-2"><Sparkles size={18} className="text-secondary" /><span className="label-caps text-ink-faint">Here&apos;s what we&apos;ll look for</span></div>
+        <section className="mb-6 max-w-4xl border-b border-line pb-6">
+          <p className="text-label-sm font-semibold text-ink">What we will check</p>
           <p className="mt-3 text-body-lg font-medium text-on-surface">{GOAL_TYPE_LABELS[objective.goal_type] ?? 'Custom goal'}{objective.target_sectors.length > 0 && <span className="text-on-surface-variant"> · {joinItems(objective.target_sectors)}</span>}{objective.target_geographies.length > 0 && <span className="text-on-surface-variant"> · {joinItems(objective.target_geographies)}</span>}</p>
           {objective.offering && <p className="mt-1 text-body-md text-on-surface-variant">Offering: {objective.offering}</p>}
           <div className="mt-4 border-t border-line-soft pt-3"><p className="label-caps text-ink-faint">Opportunity lenses</p>{selectedModels.length > 0 ? <div className="mt-2 flex flex-wrap gap-1.5">{selectedModels.map((modelId) => <span key={modelId} className="rounded-control bg-secondary-container px-2 py-1 text-label-sm text-on-surface">{MODEL_LABELS[modelId]}</span>)}</div> : <p className="mt-1 text-body-sm text-warn-ink">This offering does not yet map to an evidence-backed Opportunity Model.</p>}</div>
-          <div className="mt-4 border-t border-line-soft pt-3"><p className="label-caps text-ink-faint">We&apos;ll search</p><ul className="mt-1.5 space-y-1">{objective.search_queries.map((query) => <li key={query} className="flex items-start gap-1.5 text-body-sm text-on-surface-variant"><Search size={13} className="mt-1 shrink-0 text-outline" /><span>{query}</span></li>)}</ul></div>
+          <div className="mt-4 border-t border-line-soft pt-3"><p className="text-label-sm font-semibold text-on-surface">Searches</p><ul className="mt-1.5 space-y-1">{objective.search_queries.map((query) => <li key={query} className="text-body-sm text-on-surface-variant">{query}</li>)}</ul></div>
           {gate && !gate.supported && gate.message && <div className="mt-4 rounded-card border border-warn-bg bg-warn-bg p-4"><p className="text-label-sm font-semibold uppercase tracking-wide text-warn-ink">Not supported yet</p><p className="mt-1 text-body-sm text-on-surface">{gate.message}</p></div>}
           {searchError && <div className="mt-4"><ErrorNotice message={searchError} /></div>}
-          <div className="mt-4 flex flex-col gap-2 sm:flex-row sm:items-center">{(!gate || gate.supported) && <Button type="button" onClick={handleConfirmedRun} disabled={searching || selectedModels.length === 0} className="h-10 px-space-lg">{searching ? <><Loader2 size={18} className="animate-spin" />Finding opportunities...</> : <><FileSearch size={18} />Looks right — find opportunities</>}</Button>}<button type="button" onClick={() => setStep('form')} className="inline-flex items-center justify-center gap-1.5 text-label-md font-medium text-secondary transition-colors hover:text-on-surface focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-secondary"><Pencil size={14} />Edit</button></div>
+          <div className="mt-4 flex flex-col gap-2 sm:flex-row sm:items-center">{(!gate || gate.supported) && <Button type="button" onClick={handleConfirmedRun} disabled={searching || selectedModels.length === 0} className="h-10 px-space-lg">{searching ? <><Loader2 size={18} className="animate-spin" />Finding opportunities...</> : <>Find opportunities</>}</Button>}<button type="button" onClick={() => setStep('form')} className="inline-flex items-center justify-center text-label-md font-medium text-secondary transition-colors hover:text-on-surface focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-secondary">Edit</button></div>
         </section>
       )}
 
@@ -407,7 +409,7 @@ export default function DiscoveryPage() {
 
       {!searching && queue && queue.candidates.length > 0 && (
         <section className="mb-12 space-y-4">
-          <div className="rounded-card border border-secondary/30 bg-secondary-container/35 p-space-lg shadow-sm"><div className="flex flex-col gap-3 md:flex-row md:items-end md:justify-between"><div><p className="label-caps text-secondary">Recommended first batch</p><h2 className="mt-1 font-display text-headline-lg font-semibold text-on-surface">Review {selectedQueueIndexes.length} evidence-backed prospect{selectedQueueIndexes.length === 1 ? '' : 's'}</h2><p className="mt-1 max-w-2xl text-body-sm text-on-surface-variant">These are selected to cover observable patterns, not ranked as the “best” businesses. Every card shows the factual reason it appeared.</p></div><Button type="button" onClick={startRecommendedResearch} disabled={startingBatch || selectedQueueIndexes.length === 0} className="h-10 px-space-lg">{startingBatch ? <><Loader2 size={18} className="animate-spin" />Starting evidence review...</> : <><FileSearch size={18} />Start evidence review</>}</Button></div></div>
+          <div className="border-y border-line py-5"><div className="flex flex-col gap-3 md:flex-row md:items-end md:justify-between"><div><p className="text-label-sm font-semibold text-ink-soft">Recommended first batch</p><h2 className="mt-1 text-headline-lg font-semibold text-on-surface">Review {selectedQueueIndexes.length} evidence-backed prospect{selectedQueueIndexes.length === 1 ? '' : 's'}</h2><p className="mt-1 max-w-2xl text-body-sm text-on-surface-variant">Selected to represent different observable opportunities. This is not a ranking.</p></div><Button type="button" onClick={startRecommendedResearch} disabled={startingBatch || selectedQueueIndexes.length === 0} className="h-10 px-space-lg">{startingBatch ? <><Loader2 size={18} className="animate-spin" />Starting evidence review...</> : <>Start evidence review</>}</Button></div></div>
           <div className="flex items-center justify-between gap-3"><div><h2 className="font-display text-headline-md font-semibold text-on-surface">Opportunity queue</h2><p className="text-body-sm text-on-surface-variant">{queue.candidates.length} candidates with a supported observed signal. Choose up to three.</p></div>{queue.needs_verification_count > 0 && <span className="rounded-full bg-surface-container-high px-3 py-1 text-label-sm text-on-surface-variant">{queue.needs_verification_count} hidden pending verification</span>}</div>
           <div className="space-y-4">{queue.candidates.map((opportunity) => <OpportunityCard key={`${opportunity.candidate_input.candidate.source_provider}:${opportunity.candidate_input.candidate.source_record_id}`} opportunity={opportunity} selected={selectedQueueIndexes.includes(opportunity.queue_entry.candidate_index)} saved={savedProspectIndexes.includes(opportunity.queue_entry.candidate_index)} saving={savingProspectIndex === opportunity.queue_entry.candidate_index} onToggle={toggleQueueCandidate} onSave={saveProspect} />)}</div>
         </section>
@@ -422,7 +424,7 @@ function OpportunityCard({ opportunity, selected, saved, saving, onToggle, onSav
     <article className={'relative overflow-hidden rounded-card border bg-surface-container-lowest p-space-lg shadow-md transition-shadow hover:shadow-xl ' + (selected ? 'border-secondary' : 'border-transparent')}>
       <div className={'absolute bottom-0 left-0 top-0 w-1.5 ' + (selected ? 'bg-secondary' : 'bg-surface-container-high')} />
       <div className="flex flex-col gap-5 pl-2 lg:flex-row lg:items-start lg:justify-between">
-        <div className="min-w-0 flex-1 space-y-3"><div className="flex flex-wrap items-center gap-x-2 gap-y-1"><h3 className="font-display text-headline-lg font-semibold text-on-surface">{candidate.company_name}</h3>{candidate.website && <a href={candidate.website} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-0.5 text-label-md text-secondary hover:underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-secondary"><span>{domainOf(candidate.website)}</span><ArrowUpRight size={14} /></a>}{candidate.industry && <span className="rounded bg-surface-container px-1.5 py-0.5 text-label-sm text-on-surface-variant">{candidate.industry}</span>}</div>{candidate.formatted_address && <p className="text-body-sm text-on-surface-variant">{candidate.formatted_address}</p>}<div className="space-y-2 rounded-lg bg-surface-container-low p-4"><div className="flex items-center gap-1.5 text-secondary"><CheckCircle2 size={17} /><span className="text-label-sm font-semibold uppercase tracking-wider">Why SalesLens showed this</span></div>{opportunity.queue_entry.reasons.map((reason) => <div key={`${reason.model_id}:${reason.signal_type}`} className="border-l-2 border-secondary/60 pl-3"><p className="text-label-sm font-medium text-on-surface">{MODEL_LABELS[reason.model_id]}</p><p className="mt-0.5 text-body-sm leading-relaxed text-on-surface-variant">{reason.supporting_value}</p><p className="mt-1 text-label-sm text-outline">Source: {reason.source.source_url ? <a href={reason.source.source_url} target="_blank" rel="noopener noreferrer" className="text-secondary hover:underline">{domainOf(reason.source.source_url)}</a> : reason.source.provider}</p></div>)}</div></div>
+        <div className="min-w-0 flex-1 space-y-3"><div className="flex flex-wrap items-center gap-x-2 gap-y-1"><h3 className="text-headline-lg font-semibold text-on-surface">{candidate.company_name}</h3>{candidate.website && <a href={candidate.website} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-0.5 text-label-md text-secondary hover:underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-secondary"><span>{domainOf(candidate.website)}</span><ArrowUpRight size={14} /></a>}{candidate.industry && <span className="rounded bg-surface-container px-1.5 py-0.5 text-label-sm text-on-surface-variant">{candidate.industry}</span>}</div>{candidate.formatted_address && <p className="text-body-sm text-on-surface-variant">{candidate.formatted_address}</p>}<div className="space-y-2 bg-surface-container-low p-4"><p className="text-label-sm font-semibold text-ink">Why this appeared</p>{opportunity.queue_entry.reasons.map((reason) => <div key={`${reason.model_id}:${reason.signal_type}`} className="border-l-2 border-line pl-3"><p className="text-label-sm font-medium text-on-surface">{MODEL_LABELS[reason.model_id]}</p><p className="mt-0.5 text-body-sm leading-relaxed text-on-surface-variant">{reason.supporting_value}</p><p className="mt-1 text-label-sm text-outline">Source: {reason.source.source_url ? <a href={reason.source.source_url} target="_blank" rel="noopener noreferrer" className="text-secondary hover:underline">{domainOf(reason.source.source_url)}</a> : reason.source.provider}</p></div>)}</div></div>
         <div className="flex shrink-0 flex-col gap-2 lg:mt-1"><label className="flex cursor-pointer items-center gap-2 rounded-control border border-line bg-surface-container-lowest px-4 py-2 text-label-md font-medium text-on-surface transition-colors hover:border-secondary"><input type="checkbox" checked={selected} onChange={() => onToggle(opportunity.queue_entry.candidate_index)} className="size-4 accent-current" /><span>{selected ? 'In research batch' : 'Add to batch'}</span></label><button type="button" onClick={() => onSave(opportunity)} disabled={saved || saving} className="rounded-control border border-secondary px-4 py-2 text-label-md font-medium text-secondary transition-colors hover:bg-secondary-container disabled:cursor-not-allowed disabled:opacity-60">{saving ? 'Saving...' : saved ? 'Saved to prospects' : 'Save prospect'}</button></div>
       </div>
     </article>
