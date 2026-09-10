@@ -79,7 +79,13 @@ function contactHref(type: string, value: string): string {
   return value
 }
 
-export function ProspectEvidenceBriefView({ brief }: { brief: ProspectEvidenceBriefData }) {
+export function ProspectEvidenceBriefView({
+  brief,
+  outreach,
+}: {
+  brief: ProspectEvidenceBriefData
+  outreach?: ProspectEvidenceBriefData['outreach']
+}) {
   const aggregate = (brief.aggregate_verdict ?? 'needs_review').replaceAll('_', ' ')
   const qualifications = brief.qualifications ?? [brief.verdict]
   return (
@@ -209,10 +215,10 @@ export function ProspectEvidenceBriefView({ brief }: { brief: ProspectEvidenceBr
               </article>
             ))}
           </div>
-          {brief.outreach && (
+          {outreach && (
             <p className="mt-3">
               <Link
-                to={`/campaigns/${brief.outreach.campaign_id}/prospects/${brief.outreach.prospect_id}`}
+                to={`/campaigns/${outreach.campaign_id}/prospects/${outreach.prospect_id}`}
                 className="text-label-md font-semibold text-action hover:text-ink"
               >
                 Manage approval and sending in Outreach
@@ -251,7 +257,7 @@ export function ProspectEvidenceBriefView({ brief }: { brief: ProspectEvidenceBr
         )}
       </Section>
 
-      {brief.outreach && (
+      {outreach && (
         <section className="rounded-card border border-action bg-action-container/40 p-5">
           <p className="label-caps text-ink-faint">Ready for outreach</p>
           <p className="mt-1.5 max-w-2xl text-body-md text-on-surface">
@@ -259,14 +265,14 @@ export function ProspectEvidenceBriefView({ brief }: { brief: ProspectEvidenceBr
             available. Approval and sending live in Outreach.
           </p>
           <Link
-            to={`/campaigns/${brief.outreach.campaign_id}/prospects/${brief.outreach.prospect_id}`}
+            to={`/campaigns/${outreach.campaign_id}/prospects/${outreach.prospect_id}`}
             className="mt-3 inline-flex items-center justify-center rounded-control bg-primary px-4 py-2 text-label-md font-medium text-on-primary transition-colors hover:bg-inverse-surface focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-secondary"
           >
-            {brief.outreach.attempt_summary === 'none'
+            {outreach.attempt_summary === 'none'
               ? 'Create outreach attempt'
-              : brief.outreach.attempt_summary === 'draft'
+              : outreach.attempt_summary === 'draft'
                 ? 'Review outreach draft'
-                : brief.outreach.attempt_summary === 'approved'
+                : outreach.attempt_summary === 'approved'
                   ? 'Send from Outreach'
                   : 'View outreach activity'}
           </Link>

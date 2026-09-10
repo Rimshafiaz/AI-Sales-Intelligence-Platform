@@ -175,6 +175,12 @@ export interface ReportDetail {
   sources: SourceItem[]
   goal?: string | null
   objective?: DiscoveryObjective | null
+  outreach?: {
+    campaign_id: string
+    prospect_id: string
+    workflow_state: string
+    attempt_summary: 'none' | 'draft' | 'approved' | 'sent' | 'replied'
+  } | null
 }
 
 export function isProspectEvidenceBrief(

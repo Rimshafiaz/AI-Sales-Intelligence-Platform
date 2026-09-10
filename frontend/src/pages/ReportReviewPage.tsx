@@ -301,7 +301,7 @@ export default function ReportReviewPage() {
           Generated {new Date(report.generated_at).toLocaleString()} | Evidence brief{' '}
           <span className="font-mono">{report.id.slice(0, 8)}</span>
         </p>
-        <ProspectEvidenceBriefView brief={brief} />
+        <ProspectEvidenceBriefView brief={brief} outreach={detail.outreach ?? null} />
         {nextBatchRequestId && (
           <section className="mt-6 flex flex-wrap items-center justify-between gap-3 rounded-card border border-line-soft bg-card p-4">
             <p className="text-body-sm text-ink-soft">
