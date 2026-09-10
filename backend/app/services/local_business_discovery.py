@@ -4,6 +4,7 @@ from app.integrations.business_discovery import (
     LocalBusinessDiscoveryRequest,
     LocalDiscoveryArea,
 )
+from app.integrations.geocoding import GeocodingProvider, NominatimGeocodingProvider
 from app.schemas.company_discovery import (
     CompanyDiscoveryRequest,
     CompanyDiscoveryResponse,
@@ -15,10 +16,6 @@ from app.schemas.opportunity_models import IndustryOverlayId
 class LocalBusinessDiscoveryError(Exception):
     pass
 
-
-LOCAL_DISCOVERY_AREAS: dict[str, tuple[float, float]] = {
-    "lahore": (31.5204, 74.3587),
-}
 
 INDUSTRY_ALIASES: dict[IndustryOverlayId, tuple[str, ...]] = {
     IndustryOverlayId.BEAUTY_WELLNESS: (
@@ -70,10 +67,11 @@ def discover_local_businesses(
 def collect_local_businesses(
     criteria: CompanyDiscoveryRequest,
     provider: BusinessDiscoveryProvider,
+    geocoding_provider: GeocodingProvider | None = None,
 ) -> list[DiscoveredBusiness]:
     request = LocalBusinessDiscoveryRequest(
         industry=resolve_industry(criteria.industry),
-        area=resolve_area(criteria),
+        area=resolve_area(criteria, geocoding_provider),
         max_results=criteria.max_results,
     )
     return provider.discover(request)
@@ -90,25 +88,30 @@ def resolve_industry(value: str) -> IndustryOverlayId:
     )
 
 
-def resolve_area(criteria: CompanyDiscoveryRequest) -> LocalDiscoveryArea:
+def resolve_area(
+    criteria: CompanyDiscoveryRequest,
+    geocoding_provider: GeocodingProvider | None = None,
+) -> LocalDiscoveryArea:
     if criteria.latitude is not None and criteria.longitude is not None:
         return LocalDiscoveryArea(
-            display_name=criteria.region,
+            display_name=criteria.location,
             latitude=criteria.latitude,
             longitude=criteria.longitude,
             radius_miles=criteria.radius_miles,
         )
 
-    coordinates = LOCAL_DISCOVERY_AREAS.get(criteria.region.casefold())
-    if coordinates is None:
+    provider = geocoding_provider or NominatimGeocodingProvider()
+    location_text = criteria.location or ""
+    resolved = provider.geocode(location_text)
+    if resolved is None:
         raise LocalBusinessDiscoveryError(
-            "Local discovery needs latitude and longitude for this location. "
-            "Lahore is the configured pilot location."
+            f"Could not resolve location '{location_text}'. Try a city and "
+            "country, e.g. Karachi, Pakistan."
         )
     return LocalDiscoveryArea(
-        display_name=criteria.region,
-        latitude=coordinates[0],
-        longitude=coordinates[1],
+        display_name=resolved.display_name,
+        latitude=resolved.latitude,
+        longitude=resolved.longitude,
         radius_miles=criteria.radius_miles,
     )
 
