@@ -100,6 +100,12 @@ export interface ProspectEvidenceBriefData {
   aggregate_verdict?: 'qualified' | 'needs_review' | 'not_a_fit'
   aggregate_headline?: string
   modelLabels?: Record<string, string>
+  outreach?: {
+    campaign_id: string
+    prospect_id: string
+    workflow_state: string
+    attempt_summary: 'none' | 'draft' | 'approved' | 'sent' | 'replied'
+  } | null
   evidence_quality: 'high' | 'medium' | 'needs_review'
   findings: {
     statement: string

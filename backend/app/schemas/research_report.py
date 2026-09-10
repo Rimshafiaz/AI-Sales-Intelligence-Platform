@@ -1,5 +1,5 @@
 from datetime import datetime
-from typing import Any
+from typing import Any, Literal
 from uuid import UUID
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
@@ -120,8 +120,20 @@ class ResearchReportResponse(BaseModel):
 
     model_config = ConfigDict(from_attributes=True)
 
+class OutreachBridge(BaseModel):
+    """Contextual handoff from a qualified brief to the prospect's
+    operational outreach card. The Brief page previews drafts; the Outreach
+    page owns attempt state (create, approve, send, replies)."""
+
+    campaign_id: UUID
+    prospect_id: UUID
+    workflow_state: str
+    attempt_summary: Literal["none", "draft", "approved", "sent", "replied"]
+
+
 class ReportDetailResponse(BaseModel):
     report: ResearchReportResponse
     sources: list[ResearchSourceResponse]
     goal: str | None = None
     objective: DiscoveryObjective | None = None
+    outreach: OutreachBridge | None = None

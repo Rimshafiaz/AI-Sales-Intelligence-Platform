@@ -3,9 +3,14 @@ from datetime import date
 from uuid import UUID
 
 from pydantic import ValidationError
+from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+from app.models.campaign_candidate_selection import CampaignCandidateSelection
+from app.models.campaign_prospect import CampaignProspect
+from app.models.outreach_attempt import OutreachAttempt, OutreachStatus
 from app.models.research_report import ReportKind, ReportReviewStatus, ResearchReport
+from app.models.research_request import ResearchRequest
 from app.models.user import User
 from app.repositories.research_reports import (
     approve_research_report,
@@ -19,12 +24,15 @@ from app.repositories.research_sources import list_research_sources_for_user
 from app.schemas.company_discovery import DiscoveryObjective
 from app.schemas.report_list import ReportListResponse, ReportSummary
 from app.schemas.research_report import (
+    OutreachBridge,
     ReportDetailResponse,
     ReportEditRequest,
     ResearchReportResponse,
 )
 from app.schemas.research_source import ResearchSourceResponse
 from app.schemas.sales_intelligence_report import SalesIntelligenceReport
+from app.schemas.prospect_evidence_brief import ProspectEvidenceBrief
+from app.services.aggregate_verdict import AggregateVerdict
 
 
 DETAIL_SOURCE_LIMIT = 50
@@ -75,6 +83,66 @@ def get_report_detail_for_user(
         ],
         goal=goal,
         objective=objective,
+        outreach=_outreach_bridge(db, research_request, report),
+    )
+
+
+def _outreach_bridge(
+    db: Session,
+    research_request: ResearchRequest,
+    report: ResearchReport,
+) -> OutreachBridge | None:
+    """Deep-link a qualified brief to its prospect's outreach card. The Brief
+    page previews drafts; attempt state (create, approve, send, replies) is
+    owned by the Outreach page — the bridge only summarizes it."""
+    if research_request.campaign_candidate_selection_id is None:
+        return None
+    if report.report_kind is not ReportKind.PROSPECT_EVIDENCE_BRIEF:
+        return None
+    try:
+        brief = ProspectEvidenceBrief.model_validate(report.report_data)
+    except ValidationError:
+        return None
+    if brief.aggregate_verdict is not AggregateVerdict.QUALIFIED:
+        return None
+
+    selection = db.get(
+        CampaignCandidateSelection,
+        research_request.campaign_candidate_selection_id,
+    )
+    if selection is None:
+        return None
+    prospect = db.scalar(
+        select(CampaignProspect).where(
+            CampaignProspect.campaign_run_id == selection.campaign_run_id,
+            CampaignProspect.source_identity_key == selection.source_identity_key,
+        )
+    )
+    if prospect is None:
+        return None
+
+    attempts = db.scalars(
+        select(OutreachAttempt).where(
+            OutreachAttempt.campaign_prospect_id == prospect.id
+        )
+    ).all()
+    statuses = {attempt.status for attempt in attempts}
+    if not attempts:
+        attempt_summary = "none"
+    elif any(status is OutreachStatus.REPLIED for status in statuses):
+        attempt_summary = "replied"
+    elif any(status is OutreachStatus.SENT for status in statuses):
+        attempt_summary = "sent"
+    elif any(status is OutreachStatus.APPROVED for status in statuses):
+        attempt_summary = "approved"
+    else:
+        attempt_summary = "draft"
+
+    return OutreachBridge(
+        campaign_id=prospect.campaign_id,
+        prospect_id=prospect.id,
+        workflow_state=prospect.workflow_state.value,
+        attempt_summary=attempt_summary,
     )
 
 

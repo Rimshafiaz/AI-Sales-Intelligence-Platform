@@ -245,7 +245,7 @@ class TestCampaignSchemas:
 
 class TestCampaignSelectionHandoff:
     def test_persists_only_selected_snapshot_and_creates_pending_research_request(self):
-        db = FakeSession(scalar_results=[None, None])
+        db = FakeSession(scalar_results=[None, None, None])
         user = User(id=uuid.uuid4(), email="owner@example.com")
 
         selection, research_request = create_candidate_selection_and_research_request(
@@ -282,7 +282,7 @@ class TestCampaignSelectionHandoff:
         assert db.committed is False
 
     def test_rolls_back_if_the_atomic_handoff_cannot_be_committed(self):
-        db = FakeSession(scalar_results=[None, None], commit_error=RuntimeError("db down"))
+        db = FakeSession(scalar_results=[None, None, None], commit_error=RuntimeError("db down"))
         user = User(id=uuid.uuid4(), email="owner@example.com")
 
         with pytest.raises(RuntimeError, match="db down"):
@@ -296,7 +296,7 @@ class TestCampaignSelectionHandoff:
         assert db.rolled_back is True
 
     def test_recommended_batch_creates_multiple_pending_requests_in_one_commit(self):
-        db = FakeSession(scalar_results=[None, None, None, None])
+        db = FakeSession(scalar_results=[None, None, None, None, None, None])
         user = User(id=uuid.uuid4(), email="owner@example.com")
         batch = CampaignRecommendedBatchCreate(
             opportunities=[prepared_opportunity("Glow Salon"), prepared_opportunity("Lumen Salon")]

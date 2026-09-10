@@ -3,7 +3,11 @@ import uuid
 from sqlalchemy import select
 from sqlalchemy.orm import Session, selectinload
 
-from app.models.campaign_prospect import CampaignProspect, CampaignProspectState
+from app.models.campaign_prospect import (
+    CampaignProspect,
+    CampaignProspectNextAction,
+    CampaignProspectState,
+)
 
 from app.models.campaign import Campaign
 from app.models.campaign_candidate_selection import CampaignCandidateSelection
@@ -243,6 +247,29 @@ def create_candidate_selections_and_research_requests(
                 db.add(company)
             db.add(selection)
             db.add(research_request)
+            existing_prospect = db.scalar(
+                select(CampaignProspect).where(
+                    CampaignProspect.campaign_id == campaign_run.campaign_id,
+                    CampaignProspect.source_identity_key == source_identity_key,
+                )
+            )
+            if existing_prospect is None:
+                db.add(
+                    CampaignProspect(
+                        campaign_id=campaign_run.campaign_id,
+                        campaign_run_id=campaign_run.id,
+                        source_identity_key=source_identity_key,
+                        candidate_index=selection_data.shortlist_entry.candidate_index,
+                        candidate_snapshot=candidate.model_dump(mode="json"),
+                        shortlist_snapshot=selection_data.shortlist_entry.model_dump(mode="json"),
+                        evidence_snapshot=[
+                            signal.model_dump(mode="json")
+                            for signal in selection_data.candidate_input.evidence_signals
+                        ],
+                        workflow_state=CampaignProspectState.NEEDS_RESEARCH,
+                        next_action=CampaignProspectNextAction.COLLECT_EVIDENCE,
+                    )
+                )
             created.append((selection, research_request))
         db.commit()
         for selection, research_request in created:

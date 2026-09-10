@@ -279,8 +279,6 @@ def _sync_campaign_prospect_state(
             CampaignProspect.source_identity_key == selection.source_identity_key,
         )
     )
-    if prospect is None:
-        return
     mapping = {
         AggregateVerdict.QUALIFIED: (
             CampaignProspectState.READY_FOR_OUTREACH,
@@ -296,8 +294,22 @@ def _sync_campaign_prospect_state(
         ),
     }
     workflow_state, next_action = mapping[report.aggregate_verdict]
-    prospect.workflow_state = workflow_state
-    prospect.next_action = next_action
+    if prospect is None:
+        prospect = CampaignProspect(
+            campaign_id=selection.campaign_run.campaign_id,
+            campaign_run_id=selection.campaign_run_id,
+            source_identity_key=selection.source_identity_key,
+            candidate_index=0,
+            candidate_snapshot=dict(selection.candidate_snapshot),
+            shortlist_snapshot=dict(selection.shortlist_snapshot),
+            evidence_snapshot=list(selection.evidence_snapshot),
+            workflow_state=workflow_state,
+            next_action=next_action,
+        )
+        db.add(prospect)
+    else:
+        prospect.workflow_state = workflow_state
+        prospect.next_action = next_action
     db.commit()
 
 
