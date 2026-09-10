@@ -3,6 +3,8 @@ import uuid
 from sqlalchemy import select
 from sqlalchemy.orm import Session, selectinload
 
+from app.models.campaign_prospect import CampaignProspect, CampaignProspectState
+
 from app.models.campaign import Campaign
 from app.models.campaign_candidate_selection import CampaignCandidateSelection
 from app.models.campaign_run import CampaignRun, CampaignRunStatus
@@ -121,18 +123,44 @@ def create_recommended_research_batch(
     batch_data: CampaignRecommendedBatchCreate,
 ) -> list[tuple[CampaignCandidateSelection, ResearchRequest]]:
     selected_model_ids = set(campaign_run.model_selection_snapshot.get("model_ids", []))
+    ruled_out = {
+        prospect.source_identity_key
+        for prospect in db.scalars(
+            select(CampaignProspect).where(
+                CampaignProspect.campaign_run_id == campaign_run.id,
+                CampaignProspect.workflow_state == CampaignProspectState.NOT_A_FIT,
+            )
+        ).all()
+    }
     selection_data = []
+    skipped = 0
     for opportunity in batch_data.opportunities:
         queue_model_ids = {reason.model_id for reason in opportunity.queue_entry.reasons}
         if not queue_model_ids <= selected_model_ids:
             raise CampaignWorkflowError(
                 "The recommended candidate does not match this campaign's Opportunity Models."
             )
+        source_identity_key = (
+            f"{opportunity.candidate_input.candidate.source_provider}:"
+            f"{opportunity.candidate_input.candidate.source_record_id}"
+        )
+        if source_identity_key in ruled_out:
+            skipped += 1
+            continue
         selection_data.append(
             CampaignCandidateSelectionCreate(
                 candidate_input=opportunity.candidate_input,
                 shortlist_entry=opportunity.shortlist_entry,
             )
+        )
+    if skipped and not selection_data:
+        raise CampaignWorkflowError(
+            "Every selected prospect was already researched and ruled out for this campaign."
+        )
+    if skipped:
+        raise CampaignWorkflowError(
+            "Some selected prospects were already researched and ruled out for "
+            "this campaign. Deselect them and try again."
         )
     return create_candidate_selections_and_research_requests(
         db,

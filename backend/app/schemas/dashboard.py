@@ -12,7 +12,7 @@ DashboardActionType = Literal[
     "collect_evidence",
     "prepare_outreach",
     "approve_outreach",
-    "send_linkedin",
+    "send_manual",
     "awaiting_gmail",
     "follow_up",
 ]

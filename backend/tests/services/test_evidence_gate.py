@@ -1,4 +1,5 @@
 from app.integrations.search_provider import CollectedSource
+from app.models.campaign_candidate_selection import CampaignCandidateSelection
 from app.models.company import Company
 from app.models.research_request import ResearchRequest
 from app.schemas.evidence_gate import EvidenceGateState, SourceAdmissionState
@@ -114,3 +115,41 @@ class TestEvidenceGate:
 
         assert admissions[0].state is SourceAdmissionState.ACCEPTED
         assert result.state is EvidenceGateState.NEEDS_REVIEW
+
+    def test_accepts_matching_evidence_for_a_provider_verified_selection(self):
+        company = Company(name="Activfit")
+        request = ResearchRequest(objective={"location": "Lahore"})
+        selection = CampaignCandidateSelection(
+            source_identity_key="open_places:overture:activfit",
+            candidate_snapshot={
+                "company_name": "Activfit",
+                "formatted_address": "Lahore, PK",
+                "supporting_source_urls": [],
+            },
+            shortlist_snapshot={},
+            evidence_snapshot=[
+                {
+                    "signal_type": "business_identity_confirmed",
+                    "source": {
+                        "provider": "open_places",
+                        "provider_record_id": "overture:activfit",
+                    },
+                }
+            ],
+        )
+
+        resolved_target = target_from_research_request(request, company, selection)
+        admissions, result = review_sources(
+            resolved_target,
+            [
+                CollectedSource(
+                    url="https://directory.example/activfit",
+                    title="Activfit gym in Lahore",
+                    excerpt="Fitness and training services in Lahore.",
+                )
+            ],
+        )
+
+        assert resolved_target.identity_verified is True
+        assert admissions[0].state is SourceAdmissionState.ACCEPTED
+        assert result.state is EvidenceGateState.READY_FOR_DEEPER_RESEARCH

@@ -110,7 +110,7 @@ def test_builds_operational_dashboard_and_prioritizes_research(monkeypatch):
     assert [action.action_type for action in result.needs_attention] == [
         "research_prospect",
         "approve_outreach",
-        "send_linkedin",
+        "send_manual",
         "awaiting_gmail",
     ]
     assert result.follow_ups_due[0].reason == "No reply has been recorded 7 days after sending."

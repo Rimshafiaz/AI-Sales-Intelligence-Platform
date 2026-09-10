@@ -35,7 +35,7 @@ ACTION_PRIORITY = {
     "collect_evidence": 1,
     "prepare_outreach": 2,
     "approve_outreach": 3,
-    "send_linkedin": 4,
+    "send_manual": 4,
     "follow_up": 5,
     "awaiting_gmail": 6,
 }
@@ -127,9 +127,9 @@ def _outreach_action(
     if attempt.status is OutreachStatus.DRAFT:
         action_type = "approve_outreach"
         reason = f"Review and approve the {attempt.channel.value} draft."
-    elif attempt.channel is OutreachChannel.LINKEDIN:
-        action_type = "send_linkedin"
-        reason = "This approved LinkedIn message is ready for manual sending."
+    elif attempt.channel is not OutreachChannel.EMAIL:
+        action_type = "send_manual"
+        reason = f"This approved {attempt.channel.value} message is ready for manual sending."
     else:
         action_type = "awaiting_gmail"
         reason = "This approved email is waiting for Gmail connection and sending."

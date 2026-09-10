@@ -19,6 +19,8 @@ class ResearchSocialObservationResponse(BaseModel):
     is_private: bool | None = None
     latest_public_post_at: datetime | None = None
     recent_public_post_dates: list[datetime]
+    public_emails: list[str]
+    public_phones: list[str]
     source_provider: str
     source_record_id: str | None = None
     source_url: str

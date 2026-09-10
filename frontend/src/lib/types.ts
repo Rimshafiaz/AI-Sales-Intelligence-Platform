@@ -155,7 +155,7 @@ export interface CampaignProspect {
 
 export interface OutreachDraftOption {
   research_report_id: string
-  channel: 'email' | 'linkedin'
+  channel: OutreachChannel
   recipient: string
   subject: string | null
   body: string
@@ -165,7 +165,7 @@ export interface OutreachAttempt {
   id: string
   campaign_prospect_id: string
   research_report_id: string
-  channel: 'email' | 'linkedin'
+  channel: OutreachChannel
   send_method: 'gmail' | 'manual'
   recipient: string
   subject: string | null
@@ -313,21 +313,30 @@ export interface DashboardActivity {
   campaign_title: string
   prospect_id: string
   prospect_name: string
-  channel: 'email' | 'linkedin' | null
+  channel: OutreachChannel | null
   occurred_at: string
 }
 
 export interface DashboardAction {
-  action_type: 'research_prospect' | 'collect_evidence' | 'prepare_outreach' | 'approve_outreach' | 'send_linkedin' | 'awaiting_gmail' | 'follow_up'
+  action_type: 'research_prospect' | 'collect_evidence' | 'prepare_outreach' | 'approve_outreach' | 'send_manual' | 'awaiting_gmail' | 'follow_up'
   campaign_id: string
   campaign_title: string
   prospect_id: string
   prospect_name: string
   outreach_attempt_id: string | null
-  channel: 'email' | 'linkedin' | null
+  channel: OutreachChannel | null
   reason: string
   reference_at: string | null
 }
+
+export type OutreachChannel =
+  | 'email'
+  | 'linkedin'
+  | 'instagram'
+  | 'facebook'
+  | 'whatsapp'
+  | 'phone'
+  | 'contact_form'
 
 export interface DashboardSummary {
   pipeline: {

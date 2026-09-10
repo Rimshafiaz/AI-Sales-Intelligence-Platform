@@ -160,16 +160,13 @@ export default function HistoryPage() {
 
   return (
     <main className="workspace-page">
-      <p className="label-caps text-ink-faint">Workspace &gt; Reports</p>
-      <div className="mt-1 flex flex-wrap items-end justify-between gap-4">
+      <header className="page-heading-row">
         <div>
-          <h1 className="font-display text-3xl font-semibold text-brand">Report History</h1>
-          <p className="mt-2 text-sm text-ink-soft">
-            Complete archive of your evidence-backed intelligence reports, newest first.
-          </p>
+          <h1 className="page-title">Reports</h1>
+          <p className="page-description">Review evidence briefs and earlier company research.</p>
         </div>
         <Button onClick={() => navigate('/research')}>New research</Button>
-      </div>
+      </header>
 
       <form
         onSubmit={handleApply}
@@ -304,7 +301,7 @@ export default function HistoryPage() {
             <p className="font-narrative text-sm text-ink-soft">
               {hasFilters
                 ? 'No reports match these filters.'
-                : 'No reports yet. Generate your first report from the dashboard.'}
+                : 'No reports yet. Use New research to create one.'}
             </p>
           </div>
         )}
@@ -314,7 +311,7 @@ export default function HistoryPage() {
             <div className="overflow-x-auto rounded-card border border-line-soft bg-card">
               <table className="w-full text-left">
                 <thead>
-                  <tr className="border-b border-ink">
+                  <tr className="border-b border-line bg-canvas">
                     {[
                       'Company name',
                       'Report type',

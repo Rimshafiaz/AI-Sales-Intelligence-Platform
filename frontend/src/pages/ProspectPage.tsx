@@ -48,7 +48,7 @@ export default function ProspectPage() {
   }, [campaignId, prospectId])
 
   if (loading) return <main className="workspace-page"><div className="h-48 animate-pulse bg-surface-container-low" /></main>
-  if (error || !campaign || !prospect || !campaignId) return <main className="workspace-page"><Notice kind="error">{error ?? 'Prospect not found.'}</Notice></main>
+  if (error || !campaign || !prospect || !campaignId) return <main className="workspace-page"><Notice kind="error">{error ?? 'Prospect not found.'}</Notice><Link to="/prospects" className="mt-4 inline-flex text-label-md font-semibold text-action hover:text-ink">Back to prospects</Link></main>
 
   const candidate = prospect.candidate_snapshot
   const evidence = prospect.evidence_snapshot as EvidenceSignal[]
@@ -61,7 +61,7 @@ export default function ProspectPage() {
         <p className="text-label-sm text-on-surface-variant">{campaign.title}</p>
         <div className="mt-2 flex flex-col justify-between gap-4 sm:flex-row sm:items-end">
           <div>
-            <h1 className="text-headline-xl font-semibold tracking-tight text-brand">{name}</h1>
+            <h1 className="page-title">{name}</h1>
             <p className="mt-2 text-body-md text-on-surface-variant">{String(candidate.formatted_address ?? 'Location not listed')}</p>
           </div>
           <div className="text-left sm:text-right">
@@ -82,7 +82,7 @@ export default function ProspectPage() {
                 <article key={`${item.signal_type}:${index}`} className="py-4">
                   <p className="text-label-sm font-semibold capitalize text-on-surface">{label(item.signal_type)}</p>
                   <p className="mt-1 text-body-sm text-on-surface-variant">{item.supporting_value}</p>
-                  <p className="mt-2 text-label-sm text-on-surface-variant">Source: {item.source.provider}</p>
+                  <p className="mt-2 text-label-sm text-on-surface-variant">Source: {item.source.source_url ? <a href={item.source.source_url} target="_blank" rel="noreferrer" className="font-semibold text-action hover:text-ink">{item.source.provider}</a> : item.source.provider}</p>
                 </article>
               ))}
             </div>

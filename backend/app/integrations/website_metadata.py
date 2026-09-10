@@ -1,6 +1,7 @@
 from dataclasses import dataclass
 from html.parser import HTMLParser
 import json
+import re
 from urllib.parse import urljoin, urlparse
 
 import httpx
@@ -31,6 +32,7 @@ JSON_LD_IDENTITY_FIELDS = {
     "streetaddress",
     "telephone",
 }
+EMAIL_PATTERN = re.compile(r"(?<![\w.+-])([\w.+-]+@[\w-]+(?:\.[\w-]+)+)(?![\w.-])", re.IGNORECASE)
 
 
 @dataclass(frozen=True)
@@ -49,6 +51,15 @@ class WebsiteIdentityPage:
     description: str | None
     identity_text: str
     identity_links: tuple[str, ...]
+    contact_links: tuple[str, ...] = ()
+    has_form: bool = False
+
+
+@dataclass(frozen=True)
+class WebsiteContactPath:
+    contact_type: str
+    value: str
+    source_url: str
 
 
 @dataclass(frozen=True)
@@ -160,6 +171,33 @@ class WebsiteMetadataCollector:
         )
         return WebsiteConversionSnapshot(url=final_url, links=links)
 
+    def collect_contact_paths(self, website: str) -> tuple[WebsiteContactPath, ...]:
+        contacts = []
+        for page in self.collect_identity_pages(website):
+            for email in EMAIL_PATTERN.findall(page.identity_text):
+                contacts.append(WebsiteContactPath("email", email, page.url))
+            for link in page.contact_links:
+                parsed = urlparse(link)
+                if parsed.scheme == "mailto" and parsed.path:
+                    contacts.append(WebsiteContactPath("email", parsed.path, page.url))
+                elif parsed.scheme == "tel" and parsed.path:
+                    contacts.append(WebsiteContactPath("phone", parsed.path, page.url))
+                elif (parsed.hostname or "").casefold().removeprefix("www.") in {
+                    "wa.me",
+                    "api.whatsapp.com",
+                }:
+                    contacts.append(WebsiteContactPath("whatsapp", link, page.url))
+            if page.has_form and any(
+                term in urlparse(page.url).path.casefold()
+                for term in ("contact", "reach-us")
+            ):
+                contacts.append(WebsiteContactPath("contact_form", page.url, page.url))
+        unique = {}
+        for contact in contacts:
+            key = (contact.contact_type, contact.value.strip().rstrip("/").casefold())
+            unique.setdefault(key, contact)
+        return tuple(unique.values())
+
     @staticmethod
     def _identity_links(
         homepage_url: str,
@@ -215,7 +253,22 @@ class WebsiteMetadataCollector:
             description=self._clean_text(parser.description),
             identity_text=identity_text,
             identity_links=self._identity_links(str(response.url), parser.links),
+            contact_links=tuple(
+                urljoin(str(response.url), href)
+                for href, _label in parser.links
+                if self._is_contact_link(href)
+            ),
+            has_form=parser.has_form,
         )
+
+    @staticmethod
+    def _is_contact_link(value: str) -> bool:
+        parsed = urlparse(value.strip())
+        host = (parsed.hostname or "").casefold().removeprefix("www.")
+        return parsed.scheme in {"mailto", "tel"} or host in {
+            "wa.me",
+            "api.whatsapp.com",
+        }
 
     @staticmethod
     def _parse(content: str) -> "_WebsiteHTMLParser | None":
@@ -296,6 +349,7 @@ class _WebsiteHTMLParser(HTMLParser):
         self.visible_text_parts: list[str] = []
         self.links: list[tuple[str, str]] = []
         self.json_ld_blocks: list[str] = []
+        self.has_form = False
         self._ignored_depth = 0
         self._inside_title = False
         self._inside_body = False
@@ -323,6 +377,8 @@ class _WebsiteHTMLParser(HTMLParser):
         elif tag == "a" and self._anchor_href is None:
             self._anchor_href = attributes.get("href")
             self._anchor_text_parts = []
+        elif tag == "form":
+            self.has_form = True
 
     def handle_endtag(self, tag: str) -> None:
         tag = tag.casefold()

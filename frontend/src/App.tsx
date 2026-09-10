@@ -20,7 +20,7 @@ function IdleWarningBanner() {
   const { idleWarning, staySignedIn } = useAuth()
   if (!idleWarning) return null
   return (
-    <div className="fixed bottom-5 right-5 z-50 w-80 rounded-card border border-line bg-surface-container-lowest p-4 shadow-sm">
+    <div className="fixed bottom-5 right-5 z-50 w-80 rounded-card border border-line bg-card p-4">
       <p className="text-body-sm text-on-surface">
         You have been inactive. You will be signed out in 2 minutes.
       </p>

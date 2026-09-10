@@ -1,9 +1,12 @@
+from datetime import UTC, datetime
 from uuid import UUID
+
+from sqlalchemy.orm import Session
 
 from app.core.config import settings
 from app.db.session import SessionLocal
 from app.integrations.search_provider import create_tavily_search_provider
-from app.integrations.website_metadata import WebsiteMetadataCollector
+from app.integrations.website_metadata import WebsiteContactPath, WebsiteMetadataCollector
 from app.models.campaign_candidate_selection import CampaignCandidateSelection
 from app.models.campaign_run import CampaignRun
 from app.repositories.companies import get_company_by_id, update_company_website
@@ -15,6 +18,9 @@ from app.repositories.research_requests import (
     save_evidence_gate_result,
 )
 from app.repositories.research_sources import create_research_sources
+from app.repositories.research_evidence import upsert_research_evidence
+from app.schemas.evidence_gate import EvidenceGateState
+from app.schemas.opportunity_models import EvidenceSignalType, EvidenceSource, EvidenceType
 from app.services.company_resolution import CompanyWebsiteResolver
 from app.services.evidence_gate import review_sources, target_from_research_request
 from app.services.research_sources import (
@@ -128,6 +134,15 @@ def run_research(request_id: UUID) -> None:
             research_request_id=research_request.id,
             sources=admissions,
         )
+        if (
+            gate_result.state is EvidenceGateState.READY_FOR_DEEPER_RESEARCH
+            and target.official_website is not None
+        ):
+            _save_website_contacts(
+                db,
+                research_request.id,
+                WebsiteMetadataCollector().collect_contact_paths(target.official_website),
+            )
         save_evidence_gate_result(db, request_id, gate_result)
         mark_research_request_complete(db, request_id)
 
@@ -152,3 +167,37 @@ def _resolution_location(
         or (campaign_criteria or {}).get("location")
         or candidate.get("formatted_address")
     )
+
+
+def _save_website_contacts(
+    db: Session,
+    request_id: UUID,
+    contacts: tuple[WebsiteContactPath, ...],
+) -> None:
+    signal_by_type = {
+        "email": EvidenceSignalType.PUBLIC_EMAIL_OBSERVED,
+        "phone": EvidenceSignalType.PUBLIC_PHONE_OBSERVED,
+        "whatsapp": EvidenceSignalType.PUBLIC_WHATSAPP_OBSERVED,
+        "contact_form": EvidenceSignalType.WEBSITE_CONTACT_FORM_OBSERVED,
+    }
+    captured_at = datetime.now(UTC)
+    for contact in contacts:
+        signal_type = signal_by_type.get(contact.contact_type)
+        if signal_type is None:
+            continue
+        source = EvidenceSource(
+            provider="official_website",
+            source_url=contact.source_url,
+            retrieved_at=captured_at,
+        )
+        upsert_research_evidence(
+            db=db,
+            research_request_id=request_id,
+            signal_type=signal_type,
+            evidence_type=EvidenceType.OBSERVED,
+            supporting_value=contact.value,
+            numeric_value=None,
+            source=source,
+            source_identity_key=f"official_website:{contact.contact_type}:{contact.value.casefold()}",
+            captured_at=captured_at,
+        )

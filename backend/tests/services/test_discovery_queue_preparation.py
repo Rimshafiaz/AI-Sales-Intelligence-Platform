@@ -1,7 +1,11 @@
 from datetime import UTC, datetime
 
+from app.schemas.campaign import CampaignRecommendedBatchCreate
 from app.schemas.company_discovery import CompanyDiscoveryRequest, DiscoveredCompanyCandidate
-from app.schemas.discovery_shortlist import DiscoveryOpportunityPreparationRequest
+from app.schemas.discovery_shortlist import (
+    DiscoveryOpportunityPreparationRequest,
+    DiscoveryShortlistState,
+)
 from app.schemas.opportunity_models import EvidenceSignalType, OpportunityModelSelection
 from app.services.discovery_queue_preparation import prepare_discovery_opportunity_queue
 
@@ -85,3 +89,26 @@ class TestDiscoveryQueuePreparation:
             signal.signal_type
             for signal in unknown.candidates[0].candidate_input.evidence_signals
         }
+
+    def test_candidate_actionable_for_one_model_can_enter_a_research_batch(self):
+        preparation_request = request([candidate(business_status="operational")])
+        preparation_request.model_selection = OpportunityModelSelection(
+            model_ids=(
+                "web_conversion.no_verified_web_presence",
+                "social_presence.dormant_official_presence",
+            ),
+            confirmed_by_user=True,
+        )
+
+        response = prepare_discovery_opportunity_queue(preparation_request)
+        opportunity = response.candidates[0]
+        batch = CampaignRecommendedBatchCreate(opportunities=[opportunity])
+
+        assert opportunity.shortlist_entry.state is (
+            DiscoveryShortlistState.ELIGIBLE_FOR_DEEPER_RESEARCH
+        )
+        assert {evaluation.state for evaluation in opportunity.shortlist_entry.model_evaluations} == {
+            DiscoveryShortlistState.ELIGIBLE_FOR_DEEPER_RESEARCH,
+            DiscoveryShortlistState.NEEDS_EVIDENCE,
+        }
+        assert batch.opportunities == [opportunity]

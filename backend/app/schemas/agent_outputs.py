@@ -113,7 +113,7 @@ class BriefFindingsOutput(BaseModel):
 
 class BriefStrategyOutput(BaseModel):
     pitch_angle: AgentPitchAngle | None = None
-    outreach_drafts: list[AgentGroundedOutreachDraft] = Field(default_factory=list, max_length=2)
+    outreach_drafts: list[AgentGroundedOutreachDraft] = Field(default_factory=list, max_length=6)
     caveats: list[str] = Field(default_factory=list, max_length=3)
 
     @field_validator("caveats")

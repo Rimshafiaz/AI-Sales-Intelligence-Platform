@@ -78,13 +78,13 @@ export default function AuthPage() {
   const tabClass = (active: boolean) =>
     'flex-1 px-2 py-1.5 rounded text-center text-label-md transition-all duration-150 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-secondary ' +
     (active
-      ? 'bg-surface-container-lowest font-semibold text-on-surface shadow-sm'
+      ? 'border border-line bg-card font-semibold text-ink'
       : 'font-medium text-on-surface-variant hover:text-on-surface')
 
   return (
-    <main className="flex min-h-screen items-center justify-center bg-surface px-4 py-12">
+    <main className="flex min-h-dvh items-center justify-center bg-canvas px-4 py-12">
       <div className="w-full max-w-md">
-        <div className="relative flex flex-col gap-6 rounded-card bg-surface-container-lowest p-8 shadow-sm">
+        <div className="relative flex flex-col gap-6 rounded-card border border-line bg-card p-8">
           <div className="flex flex-col items-center gap-1 text-center">
             <div className="flex h-8 items-center gap-2">
               <SalesLensMark size={24} />
@@ -92,8 +92,8 @@ export default function AuthPage() {
                 SalesLens
               </span>
             </div>
-            <p className="text-label-md uppercase tracking-wider text-on-surface-variant">
-              Sales intelligence workspace
+            <p className="text-label-md text-ink-soft">
+              Evidence-backed prospecting
             </p>
           </div>
 
@@ -172,7 +172,7 @@ export default function AuthPage() {
                 placeholder="Enter email"
                 value={email}
                 onChange={(event) => setEmail(event.target.value)}
-                className="h-10 w-full rounded-control bg-surface-container-lowest px-3 text-body-md text-on-surface shadow-sm outline-none transition-all placeholder:text-outline-variant focus:bg-surface-container-low focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-secondary"
+                className="h-10 w-full rounded-control border border-line bg-card px-3 text-body-md text-on-surface outline-none transition-colors placeholder:text-ink-faint focus:border-action focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-action"
               />
             </div>
 
@@ -199,7 +199,7 @@ export default function AuthPage() {
                   placeholder="Enter password"
                   value={password}
                   onChange={(event) => setPassword(event.target.value)}
-                  className="h-10 w-full rounded-control bg-surface-container-lowest px-3 pr-10 text-body-md text-on-surface shadow-sm outline-none transition-all placeholder:text-outline-variant focus:bg-surface-container-low focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-secondary"
+                  className="h-10 w-full rounded-control border border-line bg-card px-3 pr-10 text-body-md text-on-surface outline-none transition-colors placeholder:text-ink-faint focus:border-action focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-action"
                 />
                 <button
                   type="button"
@@ -215,7 +215,7 @@ export default function AuthPage() {
             <button
               type="submit"
               disabled={submitting}
-              className="mt-2 flex h-10 w-full items-center justify-center rounded-control bg-primary text-headline-sm text-on-primary shadow-sm transition-all duration-150 hover:bg-inverse-surface active:scale-[0.99] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-secondary disabled:cursor-not-allowed disabled:opacity-60"
+              className="mt-2 flex h-10 w-full items-center justify-center rounded-control bg-action text-headline-sm text-white transition-colors duration-150 hover:bg-action-hover focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-action disabled:cursor-not-allowed disabled:opacity-60"
             >
               <span>
                 {submitting
@@ -242,12 +242,6 @@ export default function AuthPage() {
             </button>
           </div>
 
-          <div className="mt-1 flex items-center justify-center gap-2 rounded-lg bg-surface-container-low p-3">
-            <SalesLensMark size={14} />
-            <p className="text-label-sm text-on-surface-variant">
-              SalesLens is an evidence-backed intelligence platform.
-            </p>
-          </div>
         </div>
       </div>
     </main>

@@ -57,6 +57,10 @@ class EvidenceSignalType(str, Enum):
     BUSINESS_ACTIVITY_CONFIRMED = "business_activity_confirmed"
     SOCIAL_HISTORIC_ACTIVITY_CONFIRMED = "social_historic_activity_confirmed"
     SOCIAL_DORMANCY_MEASURED = "social_dormancy_measured"
+    PUBLIC_EMAIL_OBSERVED = "public_email_observed"
+    PUBLIC_PHONE_OBSERVED = "public_phone_observed"
+    PUBLIC_WHATSAPP_OBSERVED = "public_whatsapp_observed"
+    WEBSITE_CONTACT_FORM_OBSERVED = "website_contact_form_observed"
 
 
 

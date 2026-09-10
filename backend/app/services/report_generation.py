@@ -9,6 +9,11 @@ from app.ai.crew import run_prospect_evidence_brief_crew, run_sales_intelligence
 from app.core.logging import get_logger
 from app.db.session import SessionLocal
 from app.models.campaign_candidate_selection import CampaignCandidateSelection
+from app.models.campaign_prospect import (
+    CampaignProspect,
+    CampaignProspectNextAction,
+    CampaignProspectState,
+)
 from app.models.company import Company
 from app.models.research_report import ReportKind
 from app.models.research_request import ResearchRequest, ResearchStatus
@@ -22,6 +27,7 @@ from app.repositories.research_requests import get_research_request_for_user
 from app.repositories.research_sources import list_research_sources_for_user
 from app.schemas.company_discovery import DiscoveryObjective
 from app.schemas.prospect_evidence_brief import ProspectEvidenceBrief
+from app.services.aggregate_verdict import AggregateVerdict
 from app.schemas.sales_intelligence_report import SalesIntelligenceReport
 from app.schemas.evidence_gate import EvidenceGateState, SourceAdmissionState
 from app.services.company_discovery import build_objective_context
@@ -161,6 +167,7 @@ def run_generation_background(request_id: UUID, user_id: UUID) -> None:
             generated_at=datetime.now(timezone.utc),
             report_kind=report_kind,
         )
+        _sync_campaign_prospect_state(db, research_request, report)
         logger.info("Background generation completed for request %s.", request_id)
     finally:
         db.close()
@@ -242,9 +249,56 @@ def run_regeneration_background(
             generated_at=datetime.now(timezone.utc),
             report_kind=report_kind,
         )
+        _sync_campaign_prospect_state(db, research_request, report)
         logger.info("Background regeneration completed for report %s.", report_id)
     finally:
         db.close()
+
+
+def _sync_campaign_prospect_state(
+    db: Session,
+    research_request: ResearchRequest,
+    report: SalesIntelligenceReport | ProspectEvidenceBrief,
+) -> None:
+    """Brief generation is the single point where research + qualification are
+    both complete: sync the campaign prospect row with the aggregate verdict
+    so the queue, batches, and outreach reflect the research outcome."""
+    if research_request.campaign_candidate_selection_id is None:
+        return
+    if not isinstance(report, ProspectEvidenceBrief):
+        return
+    selection = db.get(
+        CampaignCandidateSelection,
+        research_request.campaign_candidate_selection_id,
+    )
+    if selection is None:
+        return
+    prospect = db.scalar(
+        select(CampaignProspect).where(
+            CampaignProspect.campaign_run_id == selection.campaign_run_id,
+            CampaignProspect.source_identity_key == selection.source_identity_key,
+        )
+    )
+    if prospect is None:
+        return
+    mapping = {
+        AggregateVerdict.QUALIFIED: (
+            CampaignProspectState.READY_FOR_OUTREACH,
+            CampaignProspectNextAction.PREPARE_OUTREACH,
+        ),
+        AggregateVerdict.NEEDS_REVIEW: (
+            CampaignProspectState.NEEDS_RESEARCH,
+            CampaignProspectNextAction.COLLECT_EVIDENCE,
+        ),
+        AggregateVerdict.NOT_A_FIT: (
+            CampaignProspectState.NOT_A_FIT,
+            CampaignProspectNextAction.NO_ACTION,
+        ),
+    }
+    workflow_state, next_action = mapping[report.aggregate_verdict]
+    prospect.workflow_state = workflow_state
+    prospect.next_action = next_action
+    db.commit()
 
 
 def _generate_report(

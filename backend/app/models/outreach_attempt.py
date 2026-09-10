@@ -19,6 +19,11 @@ if TYPE_CHECKING:
 class OutreachChannel(str, Enum):
     EMAIL = "email"
     LINKEDIN = "linkedin"
+    INSTAGRAM = "instagram"
+    FACEBOOK = "facebook"
+    WHATSAPP = "whatsapp"
+    PHONE = "phone"
+    CONTACT_FORM = "contact_form"
 
 
 class OutreachSendMethod(str, Enum):

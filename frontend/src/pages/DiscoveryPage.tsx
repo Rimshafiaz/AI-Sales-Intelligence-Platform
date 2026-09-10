@@ -42,7 +42,7 @@ const GOAL_TYPE_LABELS: Record<string, string> = {
 }
 
 const MODEL_LABELS: Record<OpportunityModelId, string> = {
-  'web_conversion.no_verified_web_presence': 'No verified web presence',
+  'web_conversion.no_verified_web_presence': 'No website listed by provider',
   'web_conversion.mobile_performance': 'Mobile performance',
   'web_conversion.booking_contact_path': 'Booking or inquiry path',
   'web_conversion.restaurant_reservation_path': 'Restaurant reservation path',
@@ -77,11 +77,18 @@ function opportunityModelsFor(objective: DiscoveryObjective): OpportunityModelId
   const industry = objective.target_sectors.join(' ').toLowerCase()
   const modelIds: OpportunityModelId[] = []
   const hasWebIntent = /website|web design|web development|landing page|conversion|cms|wordpress|seo/.test(text)
+  const redesignOnly =
+    /redesign|rebuild|revamp|overhaul|website refresh/.test(text) &&
+    !/new website|website development|build a website|create a website|landing page|no website|web presence/.test(
+      text,
+    )
   const hasSocialIntent = /social|instagram|tiktok|content|reels|short.form|short form/.test(text)
 
   if (hasWebIntent) {
+    if (!redesignOnly) {
+      modelIds.push('web_conversion.no_verified_web_presence')
+    }
     modelIds.push(
-      'web_conversion.no_verified_web_presence',
       'web_conversion.mobile_performance',
     )
     if (/restaurant|cafe/.test(industry)) {
@@ -287,7 +294,13 @@ export default function DiscoveryPage() {
           }),
         ),
       )
-      navigate(`/research/${batch.selections[0].research_request_id}`)
+      navigate(`/research/${batch.selections[0].research_request_id}`, {
+        state: {
+          batchRequestIds: batch.selections.map(
+            (selection) => selection.research_request_id,
+          ),
+        },
+      })
     } catch (error) {
       setHandoffError(error instanceof Error ? error.message : 'Could not start evidence review for this batch.')
       setStartingBatch(false)
@@ -347,7 +360,7 @@ export default function DiscoveryPage() {
     <main className="workspace-page">
       <header>
         <div className="space-y-1">
-          <h1 className="page-title">{step === 'form' ? 'New campaign' : step === 'confirm' ? 'Review campaign' : 'Opportunity queue'}</h1>
+          <h1 className="page-title">{step === 'form' ? 'New campaign' : step === 'confirm' ? 'Review campaign' : 'Research queue'}</h1>
           <p className="page-description">Describe the businesses you want to find and the service you offer.</p>
         </div>
       </header>
@@ -394,23 +407,23 @@ export default function DiscoveryPage() {
           <p className="text-label-sm font-semibold text-ink">What we will check</p>
           <p className="mt-3 text-body-lg font-medium text-on-surface">{GOAL_TYPE_LABELS[objective.goal_type] ?? 'Custom goal'}{objective.target_sectors.length > 0 && <span className="text-on-surface-variant"> · {joinItems(objective.target_sectors)}</span>}{objective.target_geographies.length > 0 && <span className="text-on-surface-variant"> · {joinItems(objective.target_geographies)}</span>}</p>
           {objective.offering && <p className="mt-1 text-body-md text-on-surface-variant">Offering: {objective.offering}</p>}
-          <div className="mt-4 border-t border-line-soft pt-3"><p className="label-caps text-ink-faint">Opportunity lenses</p>{selectedModels.length > 0 ? <div className="mt-2 flex flex-wrap gap-1.5">{selectedModels.map((modelId) => <span key={modelId} className="rounded-control bg-secondary-container px-2 py-1 text-label-sm text-on-surface">{MODEL_LABELS[modelId]}</span>)}</div> : <p className="mt-1 text-body-sm text-warn-ink">This offering does not yet map to an evidence-backed Opportunity Model.</p>}</div>
+          <div className="mt-4 border-t border-line-soft pt-3"><p className="label-caps text-ink-faint">Research lenses</p>{selectedModels.length > 0 ? <div className="mt-2 flex flex-wrap gap-1.5">{selectedModels.map((modelId) => <span key={modelId} className="rounded-control bg-secondary-container px-2 py-1 text-label-sm text-on-surface">{MODEL_LABELS[modelId]}</span>)}</div> : <p className="mt-1 text-body-sm text-warn-ink">This offering does not yet map to an evidence-backed Opportunity Model.</p>}</div>
           <div className="mt-4 border-t border-line-soft pt-3"><p className="text-label-sm font-semibold text-on-surface">Searches</p><ul className="mt-1.5 space-y-1">{objective.search_queries.map((query) => <li key={query} className="text-body-sm text-on-surface-variant">{query}</li>)}</ul></div>
           {gate && !gate.supported && gate.message && <div className="mt-4 rounded-card border border-warn-bg bg-warn-bg p-4"><p className="text-label-sm font-semibold uppercase tracking-wide text-warn-ink">Not supported yet</p><p className="mt-1 text-body-sm text-on-surface">{gate.message}</p></div>}
           {searchError && <div className="mt-4"><ErrorNotice message={searchError} /></div>}
-          <div className="mt-4 flex flex-col gap-2 sm:flex-row sm:items-center">{(!gate || gate.supported) && <Button type="button" onClick={handleConfirmedRun} disabled={searching || selectedModels.length === 0} className="h-10 px-space-lg">{searching ? <><Loader2 size={18} className="animate-spin" />Finding opportunities...</> : <>Find opportunities</>}</Button>}<button type="button" onClick={() => setStep('form')} className="inline-flex items-center justify-center text-label-md font-medium text-secondary transition-colors hover:text-on-surface focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-secondary">Edit</button></div>
+          <div className="mt-4 flex flex-col gap-2 sm:flex-row sm:items-center">{(!gate || gate.supported) && <Button type="button" onClick={handleConfirmedRun} disabled={searching || selectedModels.length === 0} className="h-10 px-space-lg">{searching ? <><Loader2 size={18} className="animate-spin" />Finding research candidates...</> : <>Find research candidates</>}</Button>}<button type="button" onClick={() => setStep('form')} className="inline-flex items-center justify-center text-label-md font-medium text-secondary transition-colors hover:text-on-surface focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-secondary">Edit</button></div>
         </section>
       )}
 
       {handoffError && <div className="mb-6"><ErrorNotice message={handoffError} /></div>}
-      {searching && <div className="space-y-4" aria-live="polite"><div className="flex items-center gap-2 rounded-card border border-line-soft bg-surface-container-lowest p-4 shadow-sm"><Loader2 size={18} className="shrink-0 animate-spin text-secondary" /><p className="text-body-md text-on-surface">Finding businesses and checking observable evidence...</p></div>{[1, 2, 3].map((index) => <div key={index} className="h-40 animate-pulse rounded-card bg-surface-container-lowest shadow-md" />)}</div>}
+      {searching && <div className="space-y-4" aria-live="polite"><div className="flex items-center gap-2 rounded-card border border-line bg-card p-4"><Loader2 size={18} className="shrink-0 animate-spin text-secondary" /><p className="text-body-md text-on-surface">Finding businesses and checking observable evidence...</p></div>{[1, 2, 3].map((index) => <div key={index} className="h-40 animate-pulse rounded-card border border-line bg-card" />)}</div>}
 
-      {!searching && result && queue && queue.candidates.length === 0 && <section className="rounded-card bg-surface-container-lowest p-8 text-center shadow-md"><p className="font-display text-headline-md font-semibold text-on-surface">No evidence-backed opportunities yet</p><p className="mx-auto mt-2 max-w-xl text-body-md text-on-surface-variant">We found {result.candidates.length} candidates, but none has enough observable evidence for the selected service models. SalesLens will not make you research them blindly.</p>{queue.needs_verification_count > 0 && <p className="mt-2 text-label-md text-on-surface-variant">{queue.needs_verification_count} candidates need additional identity or evidence verification.</p>}</section>}
+      {!searching && result && queue && queue.candidates.length === 0 && <section className="rounded-card border border-line bg-card p-8 text-center"><p className="font-display text-headline-md font-semibold text-on-surface">No research candidates with an observed signal yet</p><p className="mx-auto mt-2 max-w-xl text-body-md text-on-surface-variant">We found {result.candidates.length} candidates, but none has enough observable evidence for the selected service models. SalesLens will not make you research them blindly.</p>{queue.needs_verification_count > 0 && <p className="mt-2 text-label-md text-on-surface-variant">{queue.needs_verification_count} candidates need additional identity or evidence verification.</p>}</section>}
 
       {!searching && queue && queue.candidates.length > 0 && (
         <section className="mb-12 space-y-4">
-          <div className="border-y border-line py-5"><div className="flex flex-col gap-3 md:flex-row md:items-end md:justify-between"><div><p className="text-label-sm font-semibold text-ink-soft">Recommended first batch</p><h2 className="mt-1 text-headline-lg font-semibold text-on-surface">Review {selectedQueueIndexes.length} evidence-backed prospect{selectedQueueIndexes.length === 1 ? '' : 's'}</h2><p className="mt-1 max-w-2xl text-body-sm text-on-surface-variant">Selected to represent different observable opportunities. This is not a ranking.</p></div><Button type="button" onClick={startRecommendedResearch} disabled={startingBatch || selectedQueueIndexes.length === 0} className="h-10 px-space-lg">{startingBatch ? <><Loader2 size={18} className="animate-spin" />Starting evidence review...</> : <>Start evidence review</>}</Button></div></div>
-          <div className="flex items-center justify-between gap-3"><div><h2 className="font-display text-headline-md font-semibold text-on-surface">Opportunity queue</h2><p className="text-body-sm text-on-surface-variant">{queue.candidates.length} candidates with a supported observed signal. Choose up to three.</p></div>{queue.needs_verification_count > 0 && <span className="rounded-full bg-surface-container-high px-3 py-1 text-label-sm text-on-surface-variant">{queue.needs_verification_count} hidden pending verification</span>}</div>
+          <div className="border-y border-line py-5"><div className="flex flex-col gap-3 md:flex-row md:items-end md:justify-between"><div><p className="text-label-sm font-semibold text-ink-soft">Suggested research batch</p><h2 className="mt-1 text-headline-lg font-semibold text-on-surface">Review {selectedQueueIndexes.length} evidence-backed prospect{selectedQueueIndexes.length === 1 ? '' : 's'}</h2><p className="mt-1 max-w-2xl text-body-sm text-on-surface-variant">Selected to represent different observable opportunities. This is not a ranking.</p></div><Button type="button" onClick={startRecommendedResearch} disabled={startingBatch || selectedQueueIndexes.length === 0} className="h-10 px-space-lg">{startingBatch ? <><Loader2 size={18} className="animate-spin" />Starting evidence review...</> : <>Start evidence review</>}</Button></div></div>
+          <div className="flex items-center justify-between gap-3"><div><h2 className="font-display text-headline-md font-semibold text-on-surface">Research queue</h2><p className="text-body-sm text-on-surface-variant">{queue.candidates.length} candidates with a supported observed signal. Choose up to three.</p></div>{queue.needs_verification_count > 0 && <span className="rounded-full bg-surface-container-high px-3 py-1 text-label-sm text-on-surface-variant">{queue.needs_verification_count} hidden pending verification</span>}</div>
           <div className="space-y-4">{queue.candidates.map((opportunity) => <OpportunityCard key={`${opportunity.candidate_input.candidate.source_provider}:${opportunity.candidate_input.candidate.source_record_id}`} opportunity={opportunity} selected={selectedQueueIndexes.includes(opportunity.queue_entry.candidate_index)} saved={savedProspectIndexes.includes(opportunity.queue_entry.candidate_index)} saving={savingProspectIndex === opportunity.queue_entry.candidate_index} onToggle={toggleQueueCandidate} onSave={saveProspect} />)}</div>
         </section>
       )}
@@ -421,7 +434,7 @@ export default function DiscoveryPage() {
 function OpportunityCard({ opportunity, selected, saved, saving, onToggle, onSave }: { opportunity: PreparedDiscoveryOpportunity; selected: boolean; saved: boolean; saving: boolean; onToggle: (candidateIndex: number) => void; onSave: (opportunity: PreparedDiscoveryOpportunity) => void }) {
   const candidate = opportunity.candidate_input.candidate
   return (
-    <article className={'relative overflow-hidden rounded-card border bg-surface-container-lowest p-space-lg shadow-md transition-shadow hover:shadow-xl ' + (selected ? 'border-secondary' : 'border-transparent')}>
+    <article className={'relative overflow-hidden rounded-card border bg-card p-space-lg transition-colors ' + (selected ? 'border-action' : 'border-line')}>
       <div className={'absolute bottom-0 left-0 top-0 w-1.5 ' + (selected ? 'bg-secondary' : 'bg-surface-container-high')} />
       <div className="flex flex-col gap-5 pl-2 lg:flex-row lg:items-start lg:justify-between">
         <div className="min-w-0 flex-1 space-y-3"><div className="flex flex-wrap items-center gap-x-2 gap-y-1"><h3 className="text-headline-lg font-semibold text-on-surface">{candidate.company_name}</h3>{candidate.website && <a href={candidate.website} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-0.5 text-label-md text-secondary hover:underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-secondary"><span>{domainOf(candidate.website)}</span><ArrowUpRight size={14} /></a>}{candidate.industry && <span className="rounded bg-surface-container px-1.5 py-0.5 text-label-sm text-on-surface-variant">{candidate.industry}</span>}</div>{candidate.formatted_address && <p className="text-body-sm text-on-surface-variant">{candidate.formatted_address}</p>}<div className="space-y-2 bg-surface-container-low p-4"><p className="text-label-sm font-semibold text-ink">Why this appeared</p>{opportunity.queue_entry.reasons.map((reason) => <div key={`${reason.model_id}:${reason.signal_type}`} className="border-l-2 border-line pl-3"><p className="text-label-sm font-medium text-on-surface">{MODEL_LABELS[reason.model_id]}</p><p className="mt-0.5 text-body-sm leading-relaxed text-on-surface-variant">{reason.supporting_value}</p><p className="mt-1 text-label-sm text-outline">Source: {reason.source.source_url ? <a href={reason.source.source_url} target="_blank" rel="noopener noreferrer" className="text-secondary hover:underline">{domainOf(reason.source.source_url)}</a> : reason.source.provider}</p></div>)}</div></div>

@@ -9,7 +9,7 @@ MAX_EVIDENCE_EXCERPT_LENGTH = 600
 def build_research_evidence_context(sources: list[ResearchSource]) -> str:
     if not sources:
         raise ValueError("Evidence context requires at least one research source.")
-    if any(source.admission_state is not SourceAdmissionState.ACCEPTED for source in sources):
+    if any(source.admission_state != SourceAdmissionState.ACCEPTED for source in sources):
         raise ValueError("Evidence context may contain only accepted research sources.")
 
     source_blocks: list[str] = []

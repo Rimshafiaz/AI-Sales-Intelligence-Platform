@@ -5,6 +5,7 @@ from pydantic import BaseModel, ConfigDict, Field, HttpUrl, field_serializer, fi
 
 from app.schemas.opportunity_models import EvidenceSignalType, EvidenceSource, EvidenceType, OpportunityModelId
 from app.schemas.opportunity_qualification import OpportunityQualificationState
+from app.services.aggregate_verdict import AggregateVerdict
 
 
 class BriefEvidenceQuality(str, Enum):
@@ -24,6 +25,10 @@ class ContactPathType(str, Enum):
     PHONE = "phone"
     EMAIL = "email"
     SOCIAL_PROFILE = "social_profile"
+    LINKEDIN = "linkedin"
+    INSTAGRAM = "instagram"
+    FACEBOOK = "facebook"
+    WHATSAPP = "whatsapp"
     CONTACT_FORM = "contact_form"
 
 
@@ -35,6 +40,11 @@ class ContactEvidenceState(str, Enum):
 class OutreachChannel(str, Enum):
     EMAIL = "email"
     LINKEDIN = "linkedin"
+    INSTAGRAM = "instagram"
+    FACEBOOK = "facebook"
+    WHATSAPP = "whatsapp"
+    PHONE = "phone"
+    CONTACT_FORM = "contact_form"
 
 
 class BriefObjective(BaseModel):
@@ -252,11 +262,14 @@ class ProspectEvidenceBrief(BaseModel):
     objective: BriefObjective
     prospect: BriefProspect
     verdict: BriefQualification
+    qualifications: list[BriefQualification] = Field(default_factory=list, max_length=6)
+    aggregate_verdict: AggregateVerdict = AggregateVerdict.NEEDS_REVIEW
+    aggregate_headline: str = "Needs review"
     evidence_quality: BriefEvidenceQuality
     findings: list[BriefFinding] = Field(default_factory=list, max_length=12)
     contacts: list[BriefContactPath] = Field(default_factory=list, max_length=10)
     pitch_angle: PitchAngle | None = None
-    outreach_drafts: list[GroundedOutreachDraft] = Field(default_factory=list, max_length=2)
+    outreach_drafts: list[GroundedOutreachDraft] = Field(default_factory=list, max_length=6)
     caveats: list[str] = Field(default_factory=list, max_length=10)
     evidence: list[BriefEvidence] = Field(min_length=1, max_length=30)
     sources: list[BriefSource] = Field(default_factory=list, max_length=15)

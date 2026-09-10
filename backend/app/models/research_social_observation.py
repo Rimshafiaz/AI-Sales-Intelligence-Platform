@@ -50,6 +50,8 @@ class ResearchSocialObservation(Base):
         nullable=True,
     )
     recent_public_post_dates: Mapped[list] = mapped_column(JSONB, nullable=False, default=list)
+    public_emails: Mapped[list] = mapped_column(JSONB, nullable=False, default=list)
+    public_phones: Mapped[list] = mapped_column(JSONB, nullable=False, default=list)
     source_provider: Mapped[str] = mapped_column(String(100), nullable=False)
     source_record_id: Mapped[str | None] = mapped_column(String(255), nullable=True)
     source_url: Mapped[str] = mapped_column(String(2048), nullable=False)

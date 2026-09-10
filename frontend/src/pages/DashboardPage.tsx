@@ -21,7 +21,7 @@ function relativeTime(iso: string): string {
 
 function ActionRow({ action }: { action: DashboardAction }) {
   return (
-    <Link to="/prospects" className="group grid gap-1 border-b border-line-soft px-5 py-4 transition-colors last:border-b-0 hover:bg-canvas sm:grid-cols-[minmax(0,1fr)_auto] sm:items-center">
+    <Link to={`/campaigns/${action.campaign_id}/prospects/${action.prospect_id}`} className="group grid gap-1 border-b border-line-soft px-5 py-4 transition-colors last:border-b-0 hover:bg-canvas sm:grid-cols-[minmax(0,1fr)_auto] sm:items-center">
       <span className="min-w-0">
         <span className="block text-[14px] font-semibold text-ink">{action.prospect_name}</span>
         <span className="mt-1 block text-[13px] text-ink-soft">{action.reason}</span>
@@ -104,7 +104,7 @@ export default function DashboardPage() {
             <p className="text-[14px] font-semibold capitalize text-ink">{label(summary.next_best_action.action_type)} for {summary.next_best_action.prospect_name}</p>
             <p className="mt-0.5 text-[13px] text-ink-soft">{summary.next_best_action.reason}</p>
           </div>
-          <Link to="/prospects" className="text-[13px] font-semibold text-action hover:text-ink">Continue</Link>
+          <Link to={`/campaigns/${summary.next_best_action.campaign_id}/prospects/${summary.next_best_action.prospect_id}`} className="text-[13px] font-semibold text-action hover:text-ink">Continue</Link>
         </section>
       )}
 

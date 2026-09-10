@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { CircleAlert, Loader2 } from 'lucide-react'
-import { Link } from 'react-router-dom'
+import { Link, useSearchParams } from 'react-router-dom'
 import { api } from '../lib/api'
 import type {
   CampaignProspect,
@@ -19,6 +19,7 @@ function label(value: string): string {
 }
 
 export default function ProspectsPage() {
+  const [searchParams] = useSearchParams()
   const [groups, setGroups] = useState<CampaignProspects[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
@@ -47,25 +48,31 @@ export default function ProspectsPage() {
     }
   }, [])
 
+  const campaignFilter = searchParams.get('campaign')
+  const visibleGroups = campaignFilter
+    ? groups.filter(({ campaign }) => campaign.id === campaignFilter)
+    : groups
+
   return (
     <main className="workspace-page">
       <div className="mb-8 border-b border-line pb-6">
         <div>
-          <h1 className="text-headline-xl font-semibold tracking-tight text-brand">Prospects</h1>
-          <p className="mt-2 max-w-xl text-body-md text-on-surface-variant">Saved businesses moving through research and outreach.</p>
+          <h1 className="page-title">Prospects</h1>
+          <p className="page-description">Saved businesses moving through research and outreach.</p>
         </div>
       </div>
 
       {loading && <div className="flex items-center gap-2 text-body-sm text-on-surface-variant"><Loader2 size={16} className="animate-spin" />Loading prospects...</div>}
       {error && <div className="flex items-start gap-2 rounded-lg bg-error-container/40 p-3 text-body-sm text-on-surface"><CircleAlert size={16} className="mt-0.5 text-error" />{error}</div>}
-      {!loading && !error && groups.length === 0 && (
+      {!loading && !error && visibleGroups.length === 0 && (
         <section className="py-12">
-          <p className="text-headline-md font-semibold text-on-surface">No saved prospects</p>
-          <p className="mt-2 text-body-md text-on-surface-variant">Save a candidate from a campaign to keep it here.</p>
+          <p className="text-headline-md font-semibold text-on-surface">{campaignFilter ? 'No prospects in this campaign' : 'No saved prospects'}</p>
+          <p className="mt-2 text-body-md text-on-surface-variant">{campaignFilter ? 'This campaign does not have saved prospects yet.' : 'Save a candidate from a campaign to keep it here.'}</p>
+          {campaignFilter && <Link to="/prospects" className="mt-4 inline-flex text-label-md font-semibold text-action hover:text-ink">View all prospects</Link>}
         </section>
       )}
       <div className="space-y-6">
-        {groups.map(({ campaign, prospects }) => (
+        {visibleGroups.map(({ campaign, prospects }) => (
           <section key={campaign.id} className="border-b border-line py-6 first:pt-0">
             <div className="mb-4 flex items-center justify-between gap-3">
               <h2 className="text-headline-md font-semibold text-on-surface">{campaign.title}</h2>
@@ -207,7 +214,7 @@ function OutreachAttemptCard({
         updated = await api<OutreachAttempt>(`/outreach-attempts/${attempt.id}/approve`, { method: 'POST' })
       }
       if (action === 'sent') {
-        updated = await api<OutreachAttempt>(`/outreach-attempts/${attempt.id}/manual-linkedin-send`, { method: 'POST' })
+        updated = await api<OutreachAttempt>(`/outreach-attempts/${attempt.id}/manual-send`, { method: 'POST' })
       }
       if (action === 'send-email') {
         updated = await api<OutreachAttempt>(`/outreach-attempts/${attempt.id}/send-email`, { method: 'POST' })
@@ -260,14 +267,14 @@ function OutreachAttemptCard({
       {attempt.status === 'approved' && attempt.channel === 'email' && !changed && (
         <button type="button" disabled={working} onClick={() => void run('send-email')} className="mt-3 rounded-control bg-primary px-3 py-1.5 text-label-md font-medium text-on-primary disabled:opacity-60">Send with Gmail</button>
       )}
-      {attempt.status === 'approved' && attempt.channel === 'linkedin' && !changed && (
+      {attempt.status === 'approved' && attempt.send_method === 'manual' && !changed && (
         <div className="mt-3 flex flex-wrap gap-2">
           <button type="button" disabled={working} onClick={() => void navigator.clipboard.writeText(body)} className="rounded-control border border-secondary px-3 py-1.5 text-label-md font-medium text-secondary disabled:opacity-60">Copy message</button>
-          <a href={attempt.recipient} target="_blank" rel="noreferrer" className="rounded-control border border-secondary px-3 py-1.5 text-label-md font-medium text-secondary">Open LinkedIn</a>
+          <a href={contactHref(attempt.channel, attempt.recipient)} target={attempt.channel === 'phone' ? undefined : '_blank'} rel="noreferrer" className="rounded-control border border-secondary px-3 py-1.5 text-label-md font-medium text-secondary">Open {label(attempt.channel)}</a>
           <button type="button" disabled={working} onClick={() => void run('sent')} className="rounded-control bg-primary px-3 py-1.5 text-label-md font-medium text-on-primary disabled:opacity-60">Mark sent</button>
         </div>
       )}
-      {attempt.channel === 'linkedin' && (attempt.status === 'sent' || attempt.status === 'replied') && (
+      {attempt.send_method === 'manual' && (attempt.status === 'sent' || attempt.status === 'replied') && (
         <div className="mt-3 flex flex-wrap gap-2">
           <button type="button" disabled={working} onClick={() => void recordOutcome('interested', true)} className="rounded-control border border-secondary px-3 py-1.5 text-label-md text-secondary disabled:opacity-60">Replied: interested</button>
           <button type="button" disabled={working} onClick={() => void recordOutcome('not_interested', true)} className="rounded-control border border-secondary px-3 py-1.5 text-label-md text-secondary disabled:opacity-60">Replied: not interested</button>
@@ -281,4 +288,12 @@ function OutreachAttemptCard({
       {attempt.failure_reason && <p className="mt-2 text-label-sm text-error">{attempt.failure_reason}</p>}
     </div>
   )
+}
+
+function contactHref(channel: OutreachAttempt['channel'], recipient: string): string {
+  if (channel === 'phone') return `tel:${recipient}`
+  if (channel === 'whatsapp' && !recipient.startsWith('http')) {
+    return `https://wa.me/${recipient.replace(/\D/g, '')}`
+  }
+  return recipient
 }

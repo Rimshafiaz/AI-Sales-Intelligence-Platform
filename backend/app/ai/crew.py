@@ -28,13 +28,20 @@ from app.schemas.opportunity_qualification import OpportunityQualificationState
 from app.schemas.prospect_evidence_brief import (
     BriefEvidenceQuality,
     BriefFinding,
+    BriefContactPath,
     BriefQualification,
+    ContactPathType,
     GroundedOutreachDraft,
+    OutreachChannel,
     PitchAngle,
     ProspectEvidenceBrief,
     ProspectEvidenceBriefHandoffs,
 )
 from app.schemas.sales_intelligence_report import SalesIntelligenceReport
+from app.services.aggregate_verdict import (
+    aggregate_headline,
+    aggregate_verdict as compute_aggregate_verdict,
+)
 from app.services.prospect_evidence_brief_review import require_approved_prospect_evidence_brief
 
 
@@ -255,10 +262,14 @@ def assemble_prospect_evidence_brief(
 ) -> ProspectEvidenceBrief:
     context = handoffs.evidence_quality_review.context
     verdict = _select_brief_verdict(context.qualifications)
+    aggregate = compute_aggregate_verdict(
+        [item.state for item in context.qualifications]
+    )
     evidence_keys = {evidence.key for evidence in context.evidence}
     findings = _unique_findings(finding_outputs, evidence_keys)
     caveats = _unique_caveats(finding_outputs, strategy)
     is_likely = verdict.state is OpportunityQualificationState.LIKELY
+    available_channels = _available_outreach_channels(context.contacts)
     pitch_angle = (
         PitchAngle.model_validate(strategy.pitch_angle.model_dump())
         if is_likely
@@ -272,6 +283,7 @@ def assemble_prospect_evidence_brief(
             GroundedOutreachDraft.model_validate(draft.model_dump())
             for draft in strategy.outreach_drafts
             if draft.offering == context.objective.offering
+            and draft.channel in available_channels
             and all(set(grounding.evidence_keys) <= evidence_keys for grounding in draft.grounding)
         ]
         if is_likely
@@ -281,6 +293,9 @@ def assemble_prospect_evidence_brief(
         objective=context.objective,
         prospect=context.prospect,
         verdict=verdict,
+        qualifications=context.qualifications,
+        aggregate_verdict=aggregate,
+        aggregate_headline=aggregate_headline(aggregate),
         evidence_quality=_brief_evidence_quality(verdict),
         findings=findings,
         contacts=context.contacts,
@@ -292,6 +307,26 @@ def assemble_prospect_evidence_brief(
     )
 
 
+def _available_outreach_channels(
+    contacts: list[BriefContactPath],
+) -> set[OutreachChannel]:
+    channel_by_contact = {
+        ContactPathType.EMAIL: OutreachChannel.EMAIL,
+        ContactPathType.LINKEDIN: OutreachChannel.LINKEDIN,
+        ContactPathType.INSTAGRAM: OutreachChannel.INSTAGRAM,
+        ContactPathType.FACEBOOK: OutreachChannel.FACEBOOK,
+        ContactPathType.WHATSAPP: OutreachChannel.WHATSAPP,
+        ContactPathType.PHONE: OutreachChannel.PHONE,
+        ContactPathType.CONTACT_FORM: OutreachChannel.CONTACT_FORM,
+    }
+    channels = {
+        channel_by_contact[contact.contact_type]
+        for contact in contacts
+        if contact.contact_type in channel_by_contact
+    }
+    if any(contact.contact_type is ContactPathType.SOCIAL_PROFILE for contact in contacts):
+        channels.add(OutreachChannel.LINKEDIN)
+    return channels
 def _select_brief_verdict(
     qualifications: list[BriefQualification],
 ) -> BriefQualification:

@@ -57,10 +57,13 @@ function EvidenceList({ keys, evidence }: { keys: string[]; evidence: BriefEvide
   )
 }
 
-const verdictStyle = {
+const verdictStyle: Record<string, string> = {
   likely: 'border-ok-bg bg-ok-bg/50 text-ok-ink',
   insufficient_evidence: 'border-warn-bg bg-warn-bg/60 text-warn-ink',
   not_eligible: 'border-line bg-slate-wash text-ink-soft',
+  qualified: 'border-ok-bg bg-ok-bg/50 text-ok-ink',
+  needs_review: 'border-warn-bg bg-warn-bg/60 text-warn-ink',
+  not_a_fit: 'border-line bg-slate-wash text-ink-soft',
 }
 
 const evidenceStyle = {
@@ -76,7 +79,8 @@ function contactHref(type: string, value: string): string {
 }
 
 export function ProspectEvidenceBriefView({ brief }: { brief: ProspectEvidenceBriefData }) {
-  const verdict = brief.verdict.state.replaceAll('_', ' ')
+  const aggregate = (brief.aggregate_verdict ?? 'needs_review').replaceAll('_', ' ')
+  const qualifications = brief.qualifications ?? [brief.verdict]
   return (
     <>
       <section className="mt-6 rounded-card border border-line-soft bg-card p-5">
@@ -86,10 +90,10 @@ export function ProspectEvidenceBriefView({ brief }: { brief: ProspectEvidenceBr
             <span
               className={
                 'mt-1.5 inline-flex rounded-control border px-2 py-1 font-ui text-sm font-semibold capitalize ' +
-                verdictStyle[brief.verdict.state]
+                verdictStyle[brief.aggregate_verdict ?? 'needs_review']
               }
             >
-              {verdict}
+              {aggregate}
             </span>
             <p className="mt-2 text-xs capitalize text-ink-faint">
               Evidence quality: {brief.evidence_quality.replaceAll('_', ' ')}
@@ -97,9 +101,27 @@ export function ProspectEvidenceBriefView({ brief }: { brief: ProspectEvidenceBr
           </div>
           <div className="max-w-xl">
             <p className="label-caps text-ink-faint">Why it surfaced</p>
-            <p className="mt-1 text-sm text-ink">{brief.verdict.reason}</p>
+            <p className="mt-1 text-sm text-ink">{brief.aggregate_headline ?? aggregate}</p>
           </div>
         </div>
+        <ul className="mt-4 divide-y divide-line-soft">
+          {qualifications.map((item) => (
+            <li key={item.opportunity_model_id} className="flex items-center justify-between gap-3 py-2">
+              <span className="min-w-0 truncate text-sm text-ink">
+                {brief.modelLabels?.[item.opportunity_model_id] ?? item.opportunity_model_id}
+              </span>
+              <span
+                className={
+                  'shrink-0 rounded-control border px-2 py-0.5 font-ui text-xs font-medium capitalize ' +
+                  verdictStyle[item.state]
+                }
+              >
+                {item.state.replaceAll('_', ' ')}
+              </span>
+            </li>
+          ))}
+        </ul>
+        <p className="mt-2 text-xs text-ink-faint">{brief.verdict.reason}</p>
         <EvidenceList keys={brief.verdict.supporting_evidence_keys} evidence={brief.evidence} />
       </section>
 

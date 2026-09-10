@@ -21,6 +21,7 @@ class CampaignProspectState(str, Enum):
     NEEDS_RESEARCH = "needs_research"
     READY_FOR_OUTREACH = "ready_for_outreach"
     CONTACTED = "contacted"
+    NOT_A_FIT = "not_a_fit"
     CLOSED = "closed"
 
 

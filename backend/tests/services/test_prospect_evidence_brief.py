@@ -14,10 +14,12 @@ from app.schemas.opportunity_qualification import OpportunityQualificationState
 from app.schemas.prospect_evidence_brief import (
     BusinessContextHandoff,
     BriefClaimKind,
+    BriefContactPath,
     BriefEvidence,
     BriefObjective,
     BriefProspect,
     BriefQualification,
+    BriefSource,
     DigitalPresenceHandoff,
     EvidenceQualityReviewHandoff,
     OpportunityDiagnosisHandoff,
@@ -82,7 +84,14 @@ def brief_payload():
         "verdict": verdict,
         "evidence_quality": "high",
         "findings": [],
-        "contacts": [],
+        "contacts": [
+            BriefContactPath(
+                contact_type="email",
+                value="owner@glowsalon.example",
+                state="observed",
+                source_keys=[evidence.key],
+            )
+        ],
         "pitch_angle": None,
         "outreach_drafts": [],
         "caveats": [],
@@ -99,7 +108,7 @@ def brief_handoffs():
         qualifications=[payload["verdict"]],
         evidence=payload["evidence"],
         sources=[],
-        contacts=[],
+        contacts=payload["contacts"],
     )
     return ProspectEvidenceBriefHandoffs(
         business_context=BusinessContextHandoff(
@@ -200,6 +209,35 @@ class TestProspectEvidenceBriefSchema:
 
 
 class TestProspectEvidenceBriefHandoffs:
+    def test_extracts_email_and_social_contact_from_accepted_source(self, monkeypatch):
+        request = ResearchRequest(
+            id=uuid.uuid4(),
+            company_id=uuid.uuid4(),
+            user_id=uuid.uuid4(),
+        )
+        source = BriefSource(
+            key="research_source:facebook",
+            provider="web_search",
+            source_url="https://facebook.com/activfit.pk",
+            retrieved_at=NOW,
+            title="Activfit Lahore",
+            excerpt="Business enquiries: hello@activfit.example",
+        )
+        monkeypatch.setattr(
+            prospect_evidence_brief,
+            "list_social_observations_for_user",
+            lambda *_: [],
+        )
+
+        contacts = prospect_evidence_brief._brief_contacts(
+            object(), request, None, None, [brief_evidence()], [source]
+        )
+
+        assert {(item.contact_type.value, item.value) for item in contacts} == {
+            ("email", "hello@activfit.example"),
+            ("facebook", "https://facebook.com/activfit.pk"),
+        }
+
     def test_builds_goal_specific_handoffs_from_accepted_facts(self, monkeypatch):
         request_id = uuid.uuid4()
         request = ResearchRequest(

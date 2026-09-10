@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { useSearchParams } from 'react-router-dom'
-import { Notice } from '../components/ui'
+import { Button, Notice } from '../components/ui'
 import { api } from '../lib/api'
 import type { GmailAuthorization, GmailConnection } from '../lib/types'
 
@@ -8,6 +8,7 @@ import type { GmailAuthorization, GmailConnection } from '../lib/types'
 export default function SettingsPage() {
   const [searchParams] = useSearchParams()
   const [connection, setConnection] = useState<GmailConnection | null>(null)
+  const [loading, setLoading] = useState(true)
   const [working, setWorking] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
@@ -19,6 +20,9 @@ export default function SettingsPage() {
       })
       .catch((requestError: unknown) => {
         if (active) setError(requestError instanceof Error ? requestError.message : 'Could not load integrations.')
+      })
+      .finally(() => {
+        if (active) setLoading(false)
       })
     return () => {
       active = false
@@ -52,9 +56,9 @@ export default function SettingsPage() {
 
   return (
     <main className="workspace-page">
-      <header className="border-b border-line pb-5">
-        <h1 className="text-headline-xl font-semibold tracking-tight text-brand">Settings</h1>
-        <p className="mt-1 text-body-md text-on-surface-variant">Manage connected accounts.</p>
+      <header className="border-b border-line pb-6">
+        <h1 className="page-title">Settings</h1>
+        <p className="page-description">Manage accounts used for outreach.</p>
       </header>
 
       <div className="mt-4 space-y-2">
@@ -63,6 +67,9 @@ export default function SettingsPage() {
         {error && <Notice kind="error">{error}</Notice>}
       </div>
 
+      {loading && <div className="mt-4 h-28 animate-pulse border-y border-line bg-card" />}
+
+      {!loading && (
       <section className="mt-4 grid gap-4 border-b border-line py-5 sm:grid-cols-[10rem_minmax(0,1fr)]">
           <h2 className="text-body-md font-semibold text-on-surface">Email</h2>
           <div className="min-w-0">
@@ -73,11 +80,11 @@ export default function SettingsPage() {
               </div>
               {connection?.status === 'connected' ? (
                 <div className="flex flex-wrap gap-2">
-                  {!connection.reply_tracking_enabled && <button type="button" disabled={working} onClick={() => void connect()} className="rounded-control bg-primary px-3 py-2 text-label-md font-medium text-on-primary disabled:opacity-60">Reconnect for reply tracking</button>}
-                  <button type="button" disabled={working} onClick={() => void disconnect()} className="rounded-control border border-line px-3 py-2 text-label-md font-medium text-on-surface disabled:opacity-60">Disconnect</button>
+                  {!connection.reply_tracking_enabled && <Button type="button" disabled={working} onClick={() => void connect()}>Reconnect for reply tracking</Button>}
+                  <Button type="button" variant="secondary" disabled={working} onClick={() => void disconnect()}>Disconnect</Button>
                 </div>
               ) : (
-                <button type="button" disabled={working || connection?.configured === false} onClick={() => void connect()} className="rounded-control bg-primary px-3 py-2 text-label-md font-medium text-on-primary disabled:opacity-60">Connect Gmail</button>
+                <Button type="button" disabled={working || connection?.configured === false} onClick={() => void connect()}>Connect Gmail</Button>
               )}
             </div>
             {connection?.status === 'connected' && <p className="mt-3 text-body-sm text-on-surface">Connected as {connection.email}</p>}
@@ -87,6 +94,7 @@ export default function SettingsPage() {
             <p className="mt-3 text-label-sm text-on-surface-variant">SalesLens never sends a draft without your approval.</p>
           </div>
       </section>
+      )}
     </main>
   )
 }

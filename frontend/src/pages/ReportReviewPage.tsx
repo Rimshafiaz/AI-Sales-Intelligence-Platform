@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { Link, useNavigate, useParams } from 'react-router-dom'
+import { Link, useLocation, useNavigate, useParams } from 'react-router-dom'
 import { Check, Copy, Loader2 } from 'lucide-react'
 import { api } from '../lib/api'
 import {
@@ -62,6 +62,9 @@ function CopyButton({ text }: { text: string }) {
 export default function ReportReviewPage() {
   const { reportId } = useParams<{ reportId: string }>()
   const navigate = useNavigate()
+  const location = useLocation()
+  const batchRequestIds =
+    (location.state as { batchRequestIds?: string[] } | null)?.batchRequestIds ?? []
   const [detail, setDetail] = useState<ReportDetail | null>(null)
   const [loadError, setLoadError] = useState<string | null>(null)
   const [company, setCompany] = useState<Company | null>(null)
@@ -230,6 +233,10 @@ export default function ReportReviewPage() {
     return () => clearInterval(interval)
   }, [regenPhase, detail, navigate])
 
+  const nextBatchRequestId = batchRequestIds.find(
+    (id) => detail?.report.research_request_id !== id,
+  )
+
   if (loadError) {
     return (
       <main className="workspace-page">
@@ -265,7 +272,7 @@ export default function ReportReviewPage() {
           </Link>
           <div className="flex items-center gap-2">
             <StatusBadge status={report.review_status} />
-            <Button variant="secondary" onClick={handleApprove} disabled={approving}>
+            <Button variant="secondary" onClick={handleApprove} disabled={approving || approved}>
               {approving ? (
                 <>
                   <Loader2 size={14} className="animate-spin" />
@@ -287,7 +294,7 @@ export default function ReportReviewPage() {
             <Notice kind="error">{actionError}</Notice>
           </div>
         )}
-        <h1 className="mt-6 font-display text-3xl font-bold tracking-tight text-brand">
+        <h1 className="mt-6 page-title">
           {brief.prospect.business_name}
         </h1>
         <p className="mt-1 font-ui text-xs text-ink-faint">
@@ -295,6 +302,25 @@ export default function ReportReviewPage() {
           <span className="font-mono">{report.id.slice(0, 8)}</span>
         </p>
         <ProspectEvidenceBriefView brief={brief} />
+        {nextBatchRequestId && (
+          <section className="mt-6 flex flex-wrap items-center justify-between gap-3 rounded-card border border-line-soft bg-card p-4">
+            <p className="text-body-sm text-ink-soft">
+              This prospect was part of your research batch. Other prospects in
+              the batch are still being reviewed or waiting for you.
+            </p>
+            <button
+              type="button"
+              onClick={() =>
+                navigate(`/research/${nextBatchRequestId}`, {
+                  state: { batchRequestIds },
+                })
+              }
+              className="inline-flex items-center justify-center rounded-control bg-primary px-4 py-2 text-label-md font-medium text-on-primary transition-colors hover:bg-inverse-surface focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-secondary"
+            >
+              Review next prospect in batch
+            </button>
+          </section>
+        )}
       </main>
     )
   }
@@ -318,7 +344,7 @@ export default function ReportReviewPage() {
         </Link>
         <div className="flex items-center gap-2">
           <StatusBadge status={report.review_status} />
-          <Button variant="secondary" onClick={handleApprove} disabled={approving}>
+          <Button variant="secondary" onClick={handleApprove} disabled={approving || approved}>
             {approving ? (
               <>
                 <Loader2 size={14} className="animate-spin" />
@@ -494,7 +520,7 @@ export default function ReportReviewPage() {
         </div>
       )}
 
-      <h1 className="mt-6 font-display text-3xl font-bold tracking-tight text-brand">
+      <h1 className="mt-6 page-title">
         {company?.name ?? 'Intelligence Report'}
       </h1>
       <p className="mt-1 font-ui text-xs text-ink-faint">

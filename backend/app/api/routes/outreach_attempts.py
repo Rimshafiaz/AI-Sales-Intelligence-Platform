@@ -24,7 +24,7 @@ from app.services.outreach_attempts import (
     list_outreach_attempts,
     list_outreach_draft_options,
     outreach_attempt_response,
-    record_manual_linkedin_send,
+    record_manual_send,
     record_manual_outcome,
     send_approved_email,
     update_outreach_draft,
@@ -137,6 +137,18 @@ def check_gmail_reply_endpoint(
 
 
 @router.post(
+    "/outreach-attempts/{attempt_id}/manual-send",
+    response_model=OutreachAttemptResponse,
+)
+def record_manual_send_endpoint(
+    attempt_id: UUID,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+) -> OutreachAttemptResponse:
+    return _run(attempt_id, current_user, record_manual_send, db)
+
+
+@router.post(
     "/outreach-attempts/{attempt_id}/manual-linkedin-send",
     response_model=OutreachAttemptResponse,
 )
@@ -145,7 +157,7 @@ def record_manual_linkedin_send_endpoint(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ) -> OutreachAttemptResponse:
-    return _run(attempt_id, current_user, record_manual_linkedin_send, db)
+    return _run(attempt_id, current_user, record_manual_send, db)
 
 
 @router.post(

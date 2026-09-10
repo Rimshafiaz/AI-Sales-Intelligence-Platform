@@ -7,6 +7,13 @@ from app.models.campaign_candidate_selection import CampaignCandidateSelection
 from app.models.company import Company
 from app.models.research_request import ResearchRequest
 from app.schemas.evidence_gate import EvidenceGateResponse, EvidenceGateState, SourceAdmissionState
+from app.services.identity_resolution import (
+    IdentityResolution,
+    IdentityStatus,
+    REASONABLE_NAME_SCORE,
+    domain_stem,
+    resolve_source_identity,
+)
 
 
 @dataclass(frozen=True)
@@ -17,6 +24,8 @@ class EvidenceGateTarget:
     official_website: str | None
     identity_verified: bool
     trusted_source_urls: frozenset[str]
+    no_listed_official_website: bool = False
+    phone_number: str | None = None
 
 
 @dataclass(frozen=True)
@@ -58,6 +67,8 @@ def target_from_research_request(
             official_website=None,
             identity_verified=_selection_confirms_identity(selection),
             trusted_source_urls=frozenset(trusted_urls),
+            no_listed_official_website=_selection_has_no_listed_website(selection),
+            phone_number=_text(candidate.get("phone_number")),
         )
 
     return EvidenceGateTarget(
@@ -74,7 +85,12 @@ def review_sources(
     target: EvidenceGateTarget,
     sources: list[CollectedSource],
 ) -> tuple[list[SourceAdmission], EvidenceGateResponse]:
-    admissions = [_review_source(target, source) for source in sources]
+    reviewed = [_review_source(target, source) for source in sources]
+    admissions = [admission for admission, _resolution in reviewed]
+    resolutions = [resolution for _admission, resolution in reviewed]
+
+    _apply_corroboration(admissions, reviewed, target)
+
     has_accepted_source = any(
         item.state is SourceAdmissionState.ACCEPTED for item in admissions
     )
@@ -82,6 +98,13 @@ def review_sources(
     if not target.identity_verified:
         state = EvidenceGateState.NEEDS_REVIEW
         reason = "The business identity is not verified by traceable target evidence."
+    elif not has_accepted_source and target.no_listed_official_website:
+        state = EvidenceGateState.READY_FOR_DEEPER_RESEARCH
+        reason = (
+            "The provider record verified this business identity and lists no "
+            "official website, so web evidence is unavailable by design. "
+            "Proceed to social and contact verification."
+        )
     elif not has_accepted_source:
         state = EvidenceGateState.NEEDS_REVIEW
         reason = "No collected source was accepted as evidence for the resolved target."
@@ -96,6 +119,40 @@ def review_sources(
     )
 
 
+def _apply_corroboration(
+    admissions: list[SourceAdmission],
+    reviewed: list[tuple[SourceAdmission, IdentityResolution]],
+    target: EvidenceGateTarget,
+) -> None:
+    """Policy C: multiple independent corroborating sources upgrade
+    name-matched, location-supported candidates from NEEDS_REVIEW to ACCEPTED."""
+    corroborating = {
+        index
+        for index, (_admission, resolution) in enumerate(reviewed)
+        if (
+            admissions[index].state is SourceAdmissionState.NEEDS_REVIEW
+            and resolution.name_score >= REASONABLE_NAME_SCORE
+            and resolution.location_match
+        )
+    }
+    if len(corroborating) < 2:
+        return
+    domains = {
+        domain_stem(admissions[index].source.url) for index in corroborating
+    }
+    if len(domains) < 2:
+        return
+    for index in corroborating:
+        admissions[index] = SourceAdmission(
+            source=admissions[index].source,
+            state=SourceAdmissionState.ACCEPTED,
+            reason=(
+                "Multiple independent sources name the resolved business at "
+                "its resolved location."
+            ),
+        )
+
+
 def requires_deep_qualification(research_request: ResearchRequest) -> bool:
     objective = research_request.objective
     return (
@@ -104,42 +161,57 @@ def requires_deep_qualification(research_request: ResearchRequest) -> bool:
     )
 
 
-def _review_source(target: EvidenceGateTarget, source: CollectedSource) -> SourceAdmission:
+def _review_source(target: EvidenceGateTarget, source: CollectedSource) -> tuple[
+    SourceAdmission,
+    IdentityResolution,
+]:
     normalized_url = _normalized_url(source.url)
     if normalized_url is not None and normalized_url in target.trusted_source_urls:
         return SourceAdmission(
             source=source,
             state=SourceAdmissionState.ACCEPTED,
             reason="The source matches evidence captured during target resolution or selection.",
-        )
+        ), _trusted_resolution(target)
 
     if target.official_origin and _origin(source.url) == target.official_origin:
         return SourceAdmission(
             source=source,
             state=SourceAdmissionState.ACCEPTED,
             reason="The source is hosted on the verified official website.",
-        )
+        ), _trusted_resolution(target)
 
-    source_text = " ".join(value for value in (source.title, source.excerpt) if value).casefold()
-    company_name = target.company_name.casefold()
-    if company_name not in source_text:
-        return SourceAdmission(
-            source=source,
-            state=SourceAdmissionState.EXCLUDED,
-            reason="The source does not identify the resolved target by name.",
-        )
+    resolution = resolve_source_identity(
+        candidate_name=target.company_name,
+        candidate_location=target.location,
+        candidate_phone=target.phone_number,
+        source_url=source.url,
+        source_name=source.title or "",
+        source_text=source.excerpt or "",
+        identity_verified=target.identity_verified,
+    )
 
-    if target.location and target.location.casefold() not in source_text:
-        return SourceAdmission(
-            source=source,
-            state=SourceAdmissionState.NEEDS_REVIEW,
-            reason="The source names the business but does not support the resolved location.",
-        )
+    if resolution.status is IdentityStatus.CONFIRMED:
+        state = SourceAdmissionState.ACCEPTED
+    elif resolution.status is IdentityStatus.REJECTED:
+        state = SourceAdmissionState.EXCLUDED
+    else:
+        state = SourceAdmissionState.NEEDS_REVIEW
 
     return SourceAdmission(
         source=source,
-        state=SourceAdmissionState.NEEDS_REVIEW,
-        reason="The source names the target but is not traceably linked to its verified identity.",
+        state=state,
+        reason=" ".join(resolution.reasons) or resolution.status.value,
+    ), resolution
+
+
+def _trusted_resolution(target: EvidenceGateTarget) -> IdentityResolution:
+    return IdentityResolution(
+        status=IdentityStatus.CONFIRMED,
+        name_score=100,
+        domain_match=True,
+        location_match=None,
+        contact_match=None,
+        reasons=["Traceable identity evidence captured during resolution."],
     )
 
 
@@ -148,8 +220,19 @@ def _selection_confirms_identity(selection: CampaignCandidateSelection) -> bool:
         isinstance(signal, dict)
         and signal.get("signal_type") == "business_identity_confirmed"
         and isinstance(signal.get("source"), dict)
-        and _normalized_url(signal["source"].get("source_url")) is not None
+        and (
+            _normalized_url(signal["source"].get("source_url")) is not None
+            or _text(signal["source"].get("provider_record_id")) is not None
+        )
         for signal in selection.evidence_snapshot
+    )
+
+
+def _selection_has_no_listed_website(selection: CampaignCandidateSelection) -> bool:
+    candidate = selection.candidate_snapshot
+    return (
+        candidate.get("website") is None
+        and "local_places" in candidate.get("discovery_source_types", [])
     )
 
 

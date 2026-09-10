@@ -1,3 +1,6 @@
+import re
+from urllib.parse import urlparse
+
 from sqlalchemy.orm import Session
 
 from app.models.campaign_candidate_selection import CampaignCandidateSelection
@@ -32,6 +35,13 @@ from app.services.evidence_gate import target_from_research_request
 
 
 MAX_BRIEF_SOURCES = 12
+EMAIL_PATTERN = re.compile(r"(?<![\w.+-])([\w.+-]+@[\w-]+(?:\.[\w-]+)+)(?![\w.-])", re.IGNORECASE)
+SOCIAL_CONTACT_TYPES = {
+    "facebook.com": ContactPathType.FACEBOOK,
+    "instagram.com": ContactPathType.INSTAGRAM,
+    "linkedin.com": ContactPathType.LINKEDIN,
+    "linkedin.cn": ContactPathType.LINKEDIN,
+}
 
 
 class ProspectEvidenceBriefContextError(ValueError):
@@ -59,7 +69,14 @@ def build_prospect_evidence_brief_handoffs(
     )
     qualifications = _brief_qualifications(db, research_request)
     sources = _brief_sources(db, research_request)
-    contacts = _brief_contacts(db, research_request, selection, target.official_website, evidence)
+    contacts = _brief_contacts(
+        db,
+        research_request,
+        selection,
+        target.official_website,
+        evidence,
+        sources,
+    )
     context = ProspectEvidenceBriefContext(
         objective=objective,
         prospect=BriefProspect(
@@ -329,9 +346,26 @@ def _brief_contacts(
     selection: CampaignCandidateSelection | None,
     official_website: str | None,
     evidence: list[BriefEvidence],
+    sources: list[BriefSource],
 ) -> list[BriefContactPath]:
     contacts = []
     evidence_keys = {item.key for item in evidence}
+    contact_type_by_signal = {
+        EvidenceSignalType.PUBLIC_EMAIL_OBSERVED: ContactPathType.EMAIL,
+        EvidenceSignalType.PUBLIC_PHONE_OBSERVED: ContactPathType.PHONE,
+        EvidenceSignalType.PUBLIC_WHATSAPP_OBSERVED: ContactPathType.WHATSAPP,
+        EvidenceSignalType.WEBSITE_CONTACT_FORM_OBSERVED: ContactPathType.CONTACT_FORM,
+    }
+    contacts.extend(
+        BriefContactPath(
+            contact_type=contact_type_by_signal[item.signal_type],
+            value=item.supporting_value,
+            state=ContactEvidenceState.VERIFIED,
+            source_keys=[item.key],
+        )
+        for item in evidence
+        if item.signal_type in contact_type_by_signal
+    )
     if official_website and "resolved_target:official_website" in evidence_keys:
         contacts.append(
             BriefContactPath(
@@ -377,15 +411,80 @@ def _brief_contacts(
             == observation.profile_url.rstrip("/").casefold()
         ]
         if matching_evidence_keys:
+            contact_type = _social_contact_type(observation.profile_url)
             contacts.append(
                 BriefContactPath(
-                    contact_type=ContactPathType.SOCIAL_PROFILE,
+                    contact_type=contact_type or ContactPathType.SOCIAL_PROFILE,
                     value=observation.profile_url,
                     state=ContactEvidenceState.VERIFIED,
                     source_keys=matching_evidence_keys,
                 )
             )
-    return contacts
+            contacts.extend(
+                BriefContactPath(
+                    contact_type=ContactPathType.EMAIL,
+                    value=email,
+                    state=ContactEvidenceState.VERIFIED,
+                    source_keys=matching_evidence_keys,
+                )
+                for email in (observation.public_emails or [])
+            )
+            contacts.extend(
+                BriefContactPath(
+                    contact_type=ContactPathType.PHONE,
+                    value=phone,
+                    state=ContactEvidenceState.VERIFIED,
+                    source_keys=matching_evidence_keys,
+                )
+                for phone in (observation.public_phones or [])
+            )
+    for source in sources:
+        source_text = " ".join(value for value in (source.title, source.excerpt) if value)
+        for email in EMAIL_PATTERN.findall(source_text):
+            contacts.append(
+                BriefContactPath(
+                    contact_type=ContactPathType.EMAIL,
+                    value=email,
+                    state=ContactEvidenceState.OBSERVED,
+                    source_keys=[source.key],
+                )
+            )
+        social_type = _social_contact_type(str(source.source_url))
+        if social_type is not None:
+            contacts.append(
+                BriefContactPath(
+                    contact_type=social_type,
+                    value=str(source.source_url).rstrip("/"),
+                    state=ContactEvidenceState.OBSERVED,
+                    source_keys=[source.key],
+                )
+            )
+    return _unique_contacts(contacts)
+
+
+def _social_contact_type(value: str) -> ContactPathType | None:
+    parsed = urlparse(value)
+    host = (parsed.hostname or "").casefold().removeprefix("www.")
+    contact_type = SOCIAL_CONTACT_TYPES.get(host)
+    segments = [segment for segment in parsed.path.split("/") if segment]
+    if contact_type in {ContactPathType.FACEBOOK, ContactPathType.INSTAGRAM}:
+        return contact_type if len(segments) == 1 else None
+    if contact_type is ContactPathType.LINKEDIN:
+        return contact_type if len(segments) == 2 and segments[0] in {"company", "in"} else None
+    return None
+
+
+def _unique_contacts(contacts: list[BriefContactPath]) -> list[BriefContactPath]:
+    unique = {}
+    for contact in contacts:
+        key = (contact.contact_type, contact.value.strip().rstrip("/").casefold())
+        existing = unique.get(key)
+        if existing is None or (
+            existing.state is ContactEvidenceState.OBSERVED
+            and contact.state is ContactEvidenceState.VERIFIED
+        ):
+            unique[key] = contact
+    return list(unique.values())[:10]
 
 
 def _first_url(values: object) -> str | None:

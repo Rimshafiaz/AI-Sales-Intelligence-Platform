@@ -266,8 +266,13 @@ brief_opportunity_diagnosis_task:
 
 brief_strategy_outreach_task:
   description: >
-    Create a concise pitch angle and optional email and LinkedIn drafts for this
-    exact user offering. Use only supplied evidence keys and contact paths. If no
+    Create a concise pitch angle and optional channel-specific drafts for this
+    exact user offering. Use only supplied evidence keys and contact paths. Supported
+    channels are email, LinkedIn, Instagram, Facebook, WhatsApp, phone, and contact
+    form. Create drafts only for channels represented by a supplied contact path.
+    Email may be longer and requires a subject. Social, WhatsApp, phone, and contact-form
+    drafts must be brief and must not include a subject. A phone draft is a short call
+    opener, not an SMS unless the evidence explicitly identifies messaging support. If no
     qualification state is likely, return pitch_angle=null and outreach_drafts=[].
     Never claim the prospect needs a service, is losing customers, has budget,
     wants a freelancer, has internal problems, or will gain revenue. Drafts are
@@ -281,7 +286,7 @@ brief_strategy_outreach_task:
   expected_output: >
     Data matching BriefStrategyOutput. The pitch angle and each outreach grounding
     must use only supplied evidence_keys. Draft offering must exactly match the
-    objective offering.
+    objective offering. Return at most one draft per available outreach channel.
 
 brief_evidence_quality_review_task:
   description: >

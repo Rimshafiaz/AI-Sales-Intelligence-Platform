@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import { Link } from 'react-router-dom'
 import { Notice } from '../components/ui'
 import { api } from '../lib/api'
 import type { CampaignProspect, CampaignResponse } from '../lib/types'
@@ -22,7 +23,9 @@ export default function OutreachPage() {
         const loaded = await Promise.all(
           campaigns.map(async (campaign) => ({
             campaign,
-            prospects: await api<CampaignProspect[]>(`/campaigns/${campaign.id}/prospects`),
+            prospects: (await api<CampaignProspect[]>(`/campaigns/${campaign.id}/prospects`)).filter(
+              (prospect) => ['ready_for_outreach', 'contacted', 'closed'].includes(prospect.workflow_state),
+            ),
           })),
         )
         if (active) setGroups(loaded.filter((group) => group.prospects.length > 0))
@@ -41,8 +44,8 @@ export default function OutreachPage() {
   return (
     <main className="workspace-page">
       <header className="border-b border-line pb-6">
-        <h1 className="text-headline-xl font-semibold tracking-tight text-brand">Outreach</h1>
-        <p className="mt-2 max-w-xl text-body-md text-on-surface-variant">Draft, approve, send, and record responses.</p>
+        <h1 className="page-title">Outreach</h1>
+        <p className="page-description">Draft, approve, send, and record responses.</p>
       </header>
 
       {loading && <div className="mt-8 h-44 animate-pulse bg-surface-container-low" />}
@@ -63,6 +66,7 @@ export default function OutreachPage() {
                 <h2 className="mt-1 text-headline-md font-semibold text-on-surface">
                   {String(prospect.candidate_snapshot.company_name ?? 'Unnamed business')}
                 </h2>
+                <Link to={`/campaigns/${campaign.id}/prospects/${prospect.id}`} className="mt-2 inline-flex text-label-md font-semibold text-action hover:text-ink">Open prospect</Link>
               </div>
               <ProspectOutreach campaignId={campaign.id} prospect={prospect} />
             </section>

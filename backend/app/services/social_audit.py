@@ -25,11 +25,76 @@ from app.schemas.social_enrichment import (
     SocialProfileObservation,
 )
 from app.services.evidence_gate import EvidenceGateTarget, target_from_research_request
+from app.services.identity_resolution import domain_stem
 from app.services.social_enrichment import SocialEnrichmentError, enrich_social_profiles
 
 
 class SocialAuditError(ValueError):
     pass
+
+
+AUTO_DISCOVERY_QUERIES = (
+    "{name} {location} Instagram",
+    "{name} {location} Facebook",
+)
+
+
+def _discover_social_profiles(
+    research_request: ResearchRequest,
+    company: Company,
+    selection: CampaignCandidateSelection | None,
+) -> list[str]:
+    """Find the prospect's public social profiles with deterministic web
+    searches and the platform URL classifier. The user never has to supply
+    links; a manual URL stays available as an override."""
+    from app.integrations.search_provider import create_tavily_search_provider
+    from app.integrations.social_enrichment import social_profile_target
+
+    target = target_from_research_request(research_request, company, selection)
+    location = target.location or ""
+    query = " ".join(part for part in (target.company_name, location) if part)
+    if not query.strip():
+        return []
+
+    try:
+        search_provider = create_tavily_search_provider(settings.tavily_api_key)
+        discovered: dict[str, str] = {}
+        for platform_hint in ("Instagram", "Facebook", "TikTok"):
+            try:
+                results = search_provider.search(
+                    f"{query} {platform_hint}",
+                    max_results=6,
+                )
+            except Exception:
+                continue
+            for result in results:
+                candidate = social_profile_target(result.url)
+                if candidate is None:
+                    continue
+                # A profile only counts when its handle carries the business
+                # identity, not just any profile in the results.
+                if not _handle_matches_business(
+                    candidate.handle, target.company_name
+                ):
+                    continue
+                discovered.setdefault(candidate.profile_url, candidate.handle)
+        return list(discovered.keys())[:3]
+    except Exception:
+        return []
+
+
+def _handle_matches_business(handle: str, company_name: str) -> bool:
+    compact = "".join(
+        character for character in handle.casefold() if character.isalnum()
+    )
+    normalized = re.sub(r"[^a-z0-9]+", " ", company_name.casefold()).strip()
+    if not compact or not normalized:
+        return False
+    tokens = [token for token in normalized.split() if len(token) >= 3]
+    if not tokens:
+        return compact in normalized or normalized in compact
+    matched = sum(1 for token in tokens if token in compact)
+    return matched >= 2 or compact in normalized
 
 
 def audit_research_social_profiles(
@@ -46,6 +111,12 @@ def audit_research_social_profiles(
         raise SocialAuditError("Accepted evidence is required before a social audit.")
 
     urls = _profile_urls(selection, profile_urls)
+    if not urls:
+        urls = _discover_social_profiles(
+            research_request=research_request,
+            company=company,
+            selection=selection,
+        )
     if not urls:
         return _save_unavailable(
             db,

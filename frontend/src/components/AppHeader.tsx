@@ -1,4 +1,4 @@
-import { NavLink } from 'react-router-dom'
+import { NavLink, useLocation } from 'react-router-dom'
 import { useAuth } from '../lib/auth'
 
 const NAV_ITEMS = [
@@ -6,11 +6,20 @@ const NAV_ITEMS = [
   { to: '/campaigns', label: 'Campaigns' },
   { to: '/prospects', label: 'Prospects' },
   { to: '/outreach', label: 'Outreach' },
+  { to: '/history', label: 'Reports' },
   { to: '/settings', label: 'Settings' },
 ]
 
 export function AppHeader() {
   const { signOut } = useAuth()
+  const { pathname } = useLocation()
+
+  function isCurrentSection(to: string) {
+    if (to === '/campaigns') return pathname === '/campaigns' || pathname === '/discover'
+    if (to === '/prospects') return pathname === '/prospects' || /^\/campaigns\/[^/]+\/prospects\/[^/]+$/.test(pathname)
+    if (to === '/history') return pathname === '/history' || pathname === '/research' || pathname.startsWith('/research/') || pathname.startsWith('/reports/')
+    return pathname === to
+  }
 
   return (
     <header className="sticky top-0 z-40 border-b border-line bg-canvas/95 backdrop-blur-sm">
@@ -26,9 +35,11 @@ export function AppHeader() {
               <NavLink
                 key={item.to}
                 to={item.to}
-                className={({ isActive }) =>
+                end
+                aria-current={isCurrentSection(item.to) ? 'page' : undefined}
+                className={() =>
                   'flex h-16 shrink-0 items-center border-b-2 px-1.5 font-ui text-[13px] transition-colors sm:px-2.5 ' +
-                  (isActive
+                  (isCurrentSection(item.to)
                     ? 'border-action font-semibold text-action'
                     : 'border-transparent text-ink-faint hover:text-ink')
                 }

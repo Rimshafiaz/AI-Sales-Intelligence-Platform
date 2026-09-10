@@ -5,6 +5,7 @@ import pytest
 from pydantic import ValidationError
 
 from app.models.campaign import Campaign
+from app.models.campaign_prospect import CampaignProspect, CampaignProspectState
 from app.models.campaign_run import CampaignRun
 from app.models.research_request import ResearchStatus
 from app.models.user import User
@@ -46,8 +47,9 @@ NOW = datetime(2026, 9, 8, tzinfo=UTC)
 
 
 class FakeSession:
-    def __init__(self, scalar_results=None, commit_error=None):
+    def __init__(self, scalar_results=None, commit_error=None, scalars_all_results=None):
         self.scalar_results = list(scalar_results or [])
+        self.scalars_all_results = list(scalars_all_results or [])
         self.commit_error = commit_error
         self.added = []
         self.committed = False
@@ -55,6 +57,16 @@ class FakeSession:
 
     def scalar(self, statement):
         return self.scalar_results.pop(0)
+
+    class _Scalars:
+        def __init__(self, items):
+            self._items = items
+
+        def all(self):
+            return self._items
+
+    def scalars(self, statement):
+        return FakeSession._Scalars(self.scalars_all_results.pop(0) if self.scalars_all_results else [])
 
     def add(self, value):
         self.added.append(value)
@@ -307,3 +319,30 @@ class TestCampaignSelectionHandoff:
             create_recommended_research_batch(db, campaign_run(), user, batch)
 
         assert db.added == []
+
+
+def test_recommended_batch_rejects_prospects_already_ruled_out():
+    run = campaign_run()
+    ruled_out_key = (
+        f"{prepared_opportunity('Glow Salon').candidate_input.candidate.source_provider}:"
+        f"{prepared_opportunity('Glow Salon').candidate_input.candidate.source_record_id}"
+    )
+    not_a_fit_prospect = CampaignProspect(
+        campaign_id=run.campaign_id,
+        campaign_run_id=run.id,
+        source_identity_key=ruled_out_key,
+        candidate_index=0,
+        candidate_snapshot={},
+        shortlist_snapshot={},
+        evidence_snapshot=[],
+        workflow_state=CampaignProspectState.NOT_A_FIT,
+    )
+    db = FakeSession(scalars_all_results=[[not_a_fit_prospect]])
+    user = User(id=uuid.uuid4(), email="owner@example.com")
+    batch = CampaignRecommendedBatchCreate(
+        opportunities=[prepared_opportunity("Glow Salon")]
+    )
+
+    with pytest.raises(CampaignWorkflowError, match="ruled out"):
+        create_recommended_research_batch(db, run, user, batch)
+    assert db.committed is False

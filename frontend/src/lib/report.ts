@@ -90,6 +90,16 @@ export interface ProspectEvidenceBriefData {
     supporting_evidence_keys: string[]
     evaluated_at: string
   }
+  qualifications?: Array<{
+    opportunity_model_id: string
+    state: 'likely' | 'insufficient_evidence' | 'not_eligible'
+    reason: string
+    supporting_evidence_keys: string[]
+    evaluated_at: string
+  }>
+  aggregate_verdict?: 'qualified' | 'needs_review' | 'not_a_fit'
+  aggregate_headline?: string
+  modelLabels?: Record<string, string>
   evidence_quality: 'high' | 'medium' | 'needs_review'
   findings: {
     statement: string
@@ -108,7 +118,7 @@ export interface ProspectEvidenceBriefData {
     evidence_keys: string[]
   } | null
   outreach_drafts: {
-    channel: 'email' | 'linkedin'
+    channel: import('./types').OutreachChannel
     subject: string | null
     message: string
     offering: string

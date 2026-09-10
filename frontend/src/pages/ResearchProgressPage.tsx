@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react'
-import { Link, useNavigate, useParams } from 'react-router-dom'
+import { Link, useLocation, useNavigate, useParams } from 'react-router-dom'
 import { Check, ExternalLink, Loader2, XCircle } from 'lucide-react'
 import { api } from '../lib/api'
 import type {
@@ -10,7 +10,7 @@ import type {
   ResearchSocialObservation,
   ResearchSource,
 } from '../lib/types'
-import { Button, Notice, TextField } from '../components/ui'
+import { Button, Notice } from '../components/ui'
 
 type StageState = 'done' | 'active' | 'pending'
 
@@ -72,6 +72,10 @@ function WebsiteAuditPanel({
   const measurement = evidence?.find(
     (item) => item.signal_type === 'website_mobile_performance_measured',
   )
+  const resolvedTarget = request.objective?.resolved_target as
+    | { website?: string | null }
+    | undefined
+  const resolvedWebsite = resolvedTarget?.website ?? null
 
   return (
     <section className="mt-6 rounded-card border border-line-soft bg-card p-5">
@@ -87,13 +91,20 @@ function WebsiteAuditPanel({
                 A factual PageSpeed measurement. It is not a service recommendation.
               </p>
             </>
-          ) : (
+          ) : resolvedWebsite ? (
             <p className="mt-2 max-w-xl text-sm leading-relaxed text-ink-soft">
               {request.website_audit_reason ??
                 'Measure the verified official website before SalesLens assesses a web opportunity.'}
             </p>
+          ) : (
+            <p className="mt-2 max-w-xl text-sm leading-relaxed text-ink-soft">
+              No official website was found for this business, so there is
+              nothing to measure here. That absence is exactly the signal this
+              campaign is looking for — continue to social evidence.
+            </p>
           )}
         </div>
+        {resolvedWebsite && (
         <Button onClick={onAudit} disabled={phase !== 'idle'}>
           {phase === 'running' ? (
             <>
@@ -106,6 +117,7 @@ function WebsiteAuditPanel({
             'Measure mobile performance'
           )}
         </Button>
+        )}
       </div>
       {measurement && (
         <a
@@ -131,18 +143,14 @@ function WebsiteAuditPanel({
 function SocialAuditPanel({
   request,
   observations,
-  profileUrl,
   phase,
   error,
-  onProfileUrlChange,
   onAudit,
 }: {
   request: ResearchRequest
   observations: ResearchSocialObservation[] | null
-  profileUrl: string
   phase: 'idle' | 'running'
   error: string | null
-  onProfileUrlChange: (value: string) => void
   onAudit: () => void
 }) {
   return (
@@ -152,7 +160,7 @@ function SocialAuditPanel({
           <h2 className="label-caps text-ink-soft">Social evidence</h2>
           <p className="mt-2 max-w-xl text-sm leading-relaxed text-ink-soft">
             {request.social_audit_reason ??
-              'Observe public social profiles before SalesLens assesses a social opportunity.'}
+              'SalesLens searches for this business\u2019s public profiles automatically when you observe. Paste a URL only to point it at a specific page.'}
           </p>
         </div>
         <Button onClick={onAudit} disabled={phase !== 'idle'}>
@@ -168,21 +176,13 @@ function SocialAuditPanel({
           )}
         </Button>
       </div>
-      <div className="mt-4 max-w-xl">
-        <TextField
-          label="Public profile URL"
-          hint="Optional"
-          placeholder="https://instagram.com/business"
-          value={profileUrl}
-          onChange={(event) => onProfileUrlChange(event.target.value)}
-        />
-        <p className="mt-1.5 text-xs leading-relaxed text-ink-faint">
-          SalesLens also uses any public profile links discovered with this prospect. Supported:
-          Instagram, Facebook, and TikTok.
-        </p>
-      </div>
       {request.social_audit_state === 'unavailable' && (
-        <p className="mt-3 text-sm text-ink-soft">No negative social conclusion was made.</p>
+        <p className="mt-3 text-sm text-ink-soft">
+          No public profile was found automatically. Search for this
+          business&rsquo;s Instagram or Facebook page yourself to check its
+          public presence; observing again after new public links surface will
+          pick them up.
+        </p>
       )}
       {observations && observations.length > 0 && (
         <ul className="mt-4 divide-y divide-line-soft">
@@ -218,9 +218,101 @@ function SocialAuditPanel({
   )
 }
 
+function BatchStrip({
+  batchRequestIds,
+  currentRequestId,
+}: {
+  batchRequestIds: string[]
+  currentRequestId: string | null
+}) {
+  const navigate = useNavigate()
+  const [members, setMembers] = useState<
+    Record<string, { name: string; status: string; gate: string | null }>
+  >({})
+
+  useEffect(() => {
+    const others = batchRequestIds.filter((id) => id !== currentRequestId)
+    if (others.length === 0) return
+    let cancelled = false
+    const load = async () => {
+      const results = await Promise.all(
+        others.map((id) =>
+          api<ResearchRequest>(`/research-requests/${id}`).catch(() => null),
+        ),
+      )
+      if (cancelled) return
+      const next: Record<string, { name: string; status: string; gate: string | null }> = {}
+      results.forEach((data) => {
+        if (!data) return
+        const target = (data.objective as Record<string, unknown> | null)
+          ?.resolved_target as { business_name?: string } | undefined
+        next[data.id] = {
+          name: target?.business_name ?? data.id.slice(0, 8),
+          status: data.status,
+          gate: data.evidence_gate_state ?? null,
+        }
+      })
+      setMembers(next)
+    }
+    void load()
+    const timer = window.setInterval(load, 3000)
+    return () => {
+      cancelled = true
+      window.clearInterval(timer)
+    }
+  }, [batchRequestIds, currentRequestId])
+
+  const others = batchRequestIds.filter((id) => id !== currentRequestId)
+  if (others.length === 0) return null
+
+  const statusLabel = (member: { status: string; gate: string | null } | undefined) => {
+    if (!member) return 'starting...'
+    if (member.status === 'completed')
+      return member.gate === 'ready_for_deeper_research'
+        ? 'evidence ready — review it'
+        : 'finished — needs review'
+    if (member.status === 'running') return 'collecting evidence...'
+    return 'waiting...'
+  }
+
+  return (
+    <section className="mt-6 rounded-card border border-line-soft bg-card p-4">
+      <p className="label-caps text-ink-faint">Research batch</p>
+      <ul className="mt-2 flex flex-wrap gap-2">
+        {batchRequestIds.map((id) => {
+          if (id === currentRequestId) {
+            return (
+              <li
+                key={id}
+                className="rounded-control border border-action px-3 py-1 text-[12px] font-medium text-ink"
+              >
+                Reviewing now
+              </li>
+            )
+          }
+          return (
+            <li key={id}>
+              <button
+                type="button"
+                onClick={() => navigate(`/research/${id}`, { state: { batchRequestIds } })}
+                className="rounded-control border border-line px-3 py-1 text-[12px] text-ink-soft transition-colors hover:border-action hover:text-ink focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-action"
+              >
+                {members[id]?.name ?? 'Prospect'} — {statusLabel(members[id])}
+              </button>
+            </li>
+          )
+        })}
+      </ul>
+    </section>
+  )
+}
+
 export default function ResearchProgressPage() {
   const { requestId } = useParams<{ requestId: string }>()
   const navigate = useNavigate()
+  const location = useLocation()
+  const batchRequestIds =
+    (location.state as { batchRequestIds?: string[] } | null)?.batchRequestIds ?? []
 
   const [request, setRequest] = useState<ResearchRequest | null>(null)
   const [loadError, setLoadError] = useState<string | null>(null)
@@ -236,8 +328,7 @@ export default function ResearchProgressPage() {
   const [auditError, setAuditError] = useState<string | null>(null)
   const [socialAuditPhase, setSocialAuditPhase] = useState<'idle' | 'running'>('idle')
   const [socialAuditError, setSocialAuditError] = useState<string | null>(null)
-  const [socialProfileUrl, setSocialProfileUrl] = useState('')
-  const loadRequest = useCallback(async () => {
+    const loadRequest = useCallback(async () => {
     if (!requestId) return null
     try {
       const data = await api<ResearchRequest>(`/research-requests/${requestId}`)
@@ -295,6 +386,10 @@ export default function ResearchProgressPage() {
     setGenerateError(null)
     setGeneratePhase('starting')
     try {
+      await api<unknown[]>(`/research-requests/${request.id}/qualifications`, {
+        method: 'POST',
+        body: {},
+      })
       await api<{ status: string }>(`/research-requests/${request.id}/reports`, {
         method: 'POST',
       })
@@ -347,10 +442,9 @@ export default function ResearchProgressPage() {
     setSocialAuditPhase('running')
     setSocialAuditError(null)
     try {
-      const profileUrls = socialProfileUrl.trim() ? [socialProfileUrl.trim()] : []
       const updated = await api<ResearchRequest>(`/research-requests/${request.id}/social-audit`, {
         method: 'POST',
-        body: { profile_urls: profileUrls },
+        body: { profile_urls: [] },
       })
       setRequest(updated)
       const storedObservations = await api<ResearchSocialObservation[]>(
@@ -379,7 +473,9 @@ export default function ResearchProgressPage() {
         )
         if (found) {
           setGeneratePhase('idle')
-          navigate(`/reports/${found.id}`)
+          navigate(`/reports/${found.id}`, {
+            state: batchRequestIds.length > 0 ? { batchRequestIds } : undefined,
+          })
           return
         }
       } catch {
@@ -447,7 +543,7 @@ export default function ResearchProgressPage() {
     return (
       <main className="workspace-page">
         <p className="label-caps text-ink-faint">Known prospect confirmed</p>
-        <h1 className="mt-1 font-display text-3xl font-semibold text-brand">{companyTitle}</h1>
+        <h1 className="mt-1 page-title">{companyTitle}</h1>
         <section className="mt-6 rounded-card border border-line-soft bg-card p-5">
           <span className="rounded-control bg-good-wash px-2.5 py-1 font-mono text-[11px] uppercase text-good-ink">
             Identity verified
@@ -520,10 +616,8 @@ export default function ResearchProgressPage() {
             <SocialAuditPanel
               request={request}
               observations={socialObservations}
-              profileUrl={socialProfileUrl}
               phase={socialAuditPhase}
               error={socialAuditError}
-              onProfileUrlChange={setSocialProfileUrl}
               onAudit={handleSocialAudit}
             />
           </>
@@ -556,7 +650,9 @@ export default function ResearchProgressPage() {
       <p className="label-caps text-ink-faint">
         Research request <span className="font-mono">{request.id.slice(0, 8)}</span>
       </p>
-      <h1 className="mt-1 font-display text-3xl font-semibold text-brand">{companyTitle}</h1>
+      <h1 className="mt-1 page-title">{companyTitle}</h1>
+
+      <BatchStrip batchRequestIds={batchRequestIds} currentRequestId={request.id} />
 
       <section className="mt-6 rounded-card border border-line-soft bg-card p-5">
         <h2 className="label-caps text-ink-soft">Investigation progress</h2>
@@ -592,6 +688,36 @@ export default function ResearchProgressPage() {
           <p className="mt-2 text-sm leading-relaxed text-ink-soft">
             {request.evidence_gate_reason ?? 'Evidence has not passed the target-match gate.'}
           </p>
+          <p className="mt-2 max-w-2xl text-sm leading-relaxed text-ink-soft">
+            This business is not lost. If it has no public web presence, find its
+            Facebook or Instagram page yourself and come back to verify it, or
+            move on to the next prospect in your batch.
+          </p>
+          <div className="mt-4 flex flex-wrap items-center gap-3">
+            {batchRequestIds.filter((id) => id !== requestId).length > 0 && (
+              <Button
+                onClick={() =>
+                  navigate(
+                    `/research/${batchRequestIds.find((id) => id !== requestId)}`,
+                    {
+                      state: { batchRequestIds },
+                    },
+                  )
+                }
+              >
+                Next prospect in batch
+              </Button>
+            )}
+            <Button variant="secondary" onClick={() => navigate(-1)}>
+              Back to prospect queue
+            </Button>
+            <Link
+              to="/campaigns"
+              className="text-label-md font-semibold text-action hover:text-ink"
+            >
+              View campaigns
+            </Link>
+          </div>
         </section>
       )}
 
@@ -607,10 +733,8 @@ export default function ResearchProgressPage() {
           <SocialAuditPanel
             request={request}
             observations={socialObservations}
-            profileUrl={socialProfileUrl}
             phase={socialAuditPhase}
             error={socialAuditError}
-            onProfileUrlChange={setSocialProfileUrl}
             onAudit={handleSocialAudit}
           />
           <section className="mt-6 rounded-card border border-line-soft bg-card p-5">
@@ -646,8 +770,8 @@ export default function ResearchProgressPage() {
             )}
             {generatePhase === 'polling' && (
               <p className="mt-3 font-narrative text-sm leading-relaxed text-ink-soft">
-                Six analysis agents are reviewing the evidence. This takes one to
-                five minutes. The platform never sends outreach on its own.
+                SalesLens is preparing the report from the accepted evidence. The
+                platform never sends outreach without your approval.
               </p>
             )}
             {sources && (

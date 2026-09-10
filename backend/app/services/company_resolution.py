@@ -6,6 +6,11 @@ from urllib.parse import urlparse
 from app.integrations.search_provider import CollectedSource, TavilySearchProvider
 from app.integrations.website_metadata import WebsiteIdentityPage, WebsiteMetadataCollector
 from app.schemas.opportunity_models import EvidenceSource, IdentityState
+from app.services.identity_resolution import (
+    domain_matches_name,
+    domain_stem,
+    significant_tokens,
+)
 
 
 EXCLUDED_WEBSITE_PLATFORMS = {
@@ -99,7 +104,19 @@ class CompanyWebsiteResolver:
         ]
         unique_matches = {match.website: match for match in matches}
 
-        if len(unique_matches) != 1:
+        # Directories and aggregators can corroborate identity, but only a
+        # domain that represents the business name itself can be the official
+        # website. When exactly one such domain exists, it wins; ambiguity
+        # between name-representative domains still needs review.
+        name_tokens = significant_tokens(clean_name)
+        representative_matches = {
+            website: match
+            for website, match in unique_matches.items()
+            if domain_matches_name(domain_stem(website), name_tokens)
+        }
+        candidates = representative_matches or unique_matches
+
+        if len(candidates) != 1:
             return ResolvedCompany(
                 company_name=clean_name,
                 location=clean_location,
@@ -112,7 +129,7 @@ class CompanyWebsiteResolver:
                 ),
             )
 
-        match = next(iter(unique_matches.values()))
+        match = next(iter(candidates.values()))
         if clean_location and not match.location_supported:
             return ResolvedCompany(
                 company_name=clean_name,
@@ -200,8 +217,14 @@ class CompanyWebsiteResolver:
         phone_number: str | None,
     ) -> bool:
         text = page.identity_text
-        company_key = CompanyWebsiteResolver._company_key(company_name)
-        if not company_key or company_key not in CompanyWebsiteResolver._company_key(text):
+        text_lower = text.casefold()
+        name_tokens = significant_tokens(company_name)
+        shared_name_tokens = sum(
+            1
+            for token in name_tokens
+            if token and re.search(rf"\b{re.escape(token)}\b", text_lower)
+        )
+        if shared_name_tokens < 2:
             return False
         location_supported = bool(
             location
@@ -240,10 +263,15 @@ class CompanyWebsiteResolver:
         if hostname is None or CompanyWebsiteResolver._is_excluded_website_platform(hostname):
             return None
 
-        company_key = CompanyWebsiteResolver._company_key(company_name)
-        hostname_labels = hostname.removeprefix("www.").casefold().split(".")
+        name_tokens = significant_tokens(company_name)
+        stem = domain_stem(source.url)
         title = (source.title or "").casefold()
-        if company_key not in hostname_labels or company_name.casefold() not in title:
+        shared_title_tokens = sum(
+            1
+            for token in name_tokens
+            if token and re.search(rf"\b{re.escape(token)}\b", title)
+        )
+        if not domain_matches_name(stem, name_tokens) and shared_title_tokens < 2:
             return None
         return website
 

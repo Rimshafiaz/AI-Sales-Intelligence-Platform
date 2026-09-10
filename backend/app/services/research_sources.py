@@ -26,7 +26,8 @@ def collect_company_search_sources(
     target = " ".join(part for part in (f'"{clean_name}"', clean_location) if part)
     queries = [
         f"{target} official website",
-        f"{target} services contact",
+        f"{target} contact email phone",
+        f"{target} Instagram Facebook LinkedIn",
     ]
     sources: list[CollectedSource] = []
 

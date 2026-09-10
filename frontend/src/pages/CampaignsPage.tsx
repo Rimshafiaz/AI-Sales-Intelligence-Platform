@@ -105,7 +105,7 @@ export default function CampaignsPage() {
                   <p className="text-[12px] text-ink-soft"><span className="md:hidden">Saved: </span>{prospects.length}</p>
                   <p className="text-[12px] text-ink-soft"><span className="md:hidden">Ready: </span>{ready}</p>
                   <time dateTime={campaign.updated_at} className="text-[12px] text-ink-soft">{dateLabel(campaign.updated_at)}</time>
-                  <Link to="/prospects" className="text-[13px] font-semibold text-action hover:text-ink">Open</Link>
+                  <Link to={`/prospects?campaign=${campaign.id}`} className="text-[13px] font-semibold text-action hover:text-ink">View</Link>
                 </article>
               )
             })}

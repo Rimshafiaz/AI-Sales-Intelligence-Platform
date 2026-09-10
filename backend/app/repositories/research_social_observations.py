@@ -35,6 +35,8 @@ def upsert_social_observation(
         "recent_public_post_dates": [
             value.isoformat() for value in observation.recent_public_post_dates
         ],
+        "public_emails": observation.public_emails,
+        "public_phones": observation.public_phones,
         "source_provider": observation.source.provider,
         "source_record_id": observation.source.provider_record_id,
         "source_url": str(observation.source.source_url).rstrip("/"),

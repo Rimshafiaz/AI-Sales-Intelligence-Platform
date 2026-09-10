@@ -76,8 +76,12 @@ class FakeSession:
 
 
 def brief_payload(channel="email"):
-    recipient = "owner@glowsalon.example" if channel == "email" else "https://linkedin.com/company/glow-salon"
-    contact_type = "email" if channel == "email" else "social_profile"
+    recipients = {
+        "email": ("owner@glowsalon.example", "email"),
+        "linkedin": ("https://linkedin.com/company/glow-salon", "linkedin"),
+        "facebook": ("https://facebook.com/glowsalon", "facebook"),
+    }
+    recipient, contact_type = recipients[channel]
     return {
         "objective": {
             "goal": "Find salons worth pitching for website improvements.",
@@ -97,6 +101,17 @@ def brief_payload(channel="email"):
             "supporting_evidence_keys": ["evidence:mobile"],
             "evaluated_at": NOW.isoformat(),
         },
+        "qualifications": [
+            {
+                "opportunity_model_id": "web_conversion.mobile_performance",
+                "state": "likely",
+                "reason": "The measured mobile score is below the threshold.",
+                "supporting_evidence_keys": ["evidence:mobile"],
+                "evaluated_at": NOW.isoformat(),
+            }
+        ],
+        "aggregate_verdict": "qualified",
+        "aggregate_headline": "Qualified opportunity",
         "evidence_quality": "high",
         "findings": [],
         "contacts": [
@@ -239,6 +254,33 @@ def test_creates_gmail_draft_only_from_matching_grounded_brief():
     assert saved.contact_source_keys == ["source:official"]
     assert saved.provider_message_id is None
     assert db.committed is True
+
+
+def test_creates_and_records_a_manual_facebook_attempt():
+    owner, campaign_id, prospect, request, report, selection, run = linked_records("facebook")
+    db = FakeSession(
+        scalar_results=[prospect, report, None],
+        get_results=[request, selection, run],
+    )
+    saved = create_outreach_attempt(
+        db,
+        campaign_id,
+        prospect.id,
+        owner,
+        OutreachAttemptCreate(
+            research_report_id=report.id,
+            channel=OutreachChannel.FACEBOOK,
+            recipient="https://facebook.com/glowsalon",
+        ),
+    )
+    db.scalar_results.extend([saved, saved])
+
+    approve_outreach_attempt(db, saved.id, owner)
+    sent = record_manual_linkedin_send(db, saved.id, owner)
+
+    assert sent.send_method is OutreachSendMethod.MANUAL
+    assert sent.status is OutreachStatus.SENT
+    assert sent.sent_at is not None
 
 
 def test_rejects_a_whitespace_only_draft_body():

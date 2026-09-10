@@ -45,6 +45,7 @@ from app.schemas.prospect_evidence_brief import (
     ContactPathType,
     ProspectEvidenceBrief,
 )
+from app.services.aggregate_verdict import AggregateVerdict
 from app.services.gmail_connections import configured_gmail_dependencies
 from app.services.gmail_token_vault import GmailTokenVaultError, decrypt_refresh_token
 
@@ -76,8 +77,11 @@ def create_outreach_attempt(
         brief = ProspectEvidenceBrief.model_validate(report.report_data)
     except ValueError as error:
         raise OutreachAttemptError("The saved Prospect Evidence Brief is invalid.") from error
-    if brief.verdict.state is not OpportunityQualificationState.LIKELY:
-        raise OutreachAttemptError("Only a likely opportunity may create outreach.")
+    if brief.aggregate_verdict is not AggregateVerdict.QUALIFIED:
+        raise OutreachAttemptError(
+            "Outreach requires a qualified prospect; this research ended "
+            f"with: {brief.aggregate_verdict.value.replace('_', ' ')}."
+        )
     draft = next((item for item in brief.outreach_drafts if item.channel.value == request.channel.value), None)
     if draft is None:
         raise OutreachAttemptError("The brief has no grounded draft for this channel.")
@@ -231,8 +235,8 @@ def update_outreach_draft(
         raise OutreachAttemptError("Sent, replied, or closed outreach cannot be edited.")
     if attempt.channel is OutreachChannel.EMAIL and request.subject is None:
         raise OutreachAttemptError("Email outreach requires a subject.")
-    if attempt.channel is OutreachChannel.LINKEDIN and request.subject is not None:
-        raise OutreachAttemptError("LinkedIn outreach cannot have an email subject.")
+    if attempt.channel is not OutreachChannel.EMAIL and request.subject is not None:
+        raise OutreachAttemptError("Only email outreach may have a subject.")
     attempt.subject = request.subject
     attempt.body = request.body
     attempt.edited_by_user = True
@@ -401,7 +405,7 @@ def check_gmail_reply(
     return attempt
 
 
-def record_manual_linkedin_send(
+def record_manual_send(
     db: Session,
     attempt_id: UUID,
     current_user: User,
@@ -409,15 +413,18 @@ def record_manual_linkedin_send(
     attempt = _attempt_for_user(db, attempt_id, current_user.id)
     if attempt is None:
         raise OutreachAttemptError("Outreach attempt not found.")
-    if attempt.channel is not OutreachChannel.LINKEDIN or attempt.send_method is not OutreachSendMethod.MANUAL:
+    if attempt.send_method is not OutreachSendMethod.MANUAL:
         raise OutreachAttemptError("Email sent state must come from the Gmail provider.")
     if attempt.status is not OutreachStatus.APPROVED:
-        raise OutreachAttemptError("Approve the LinkedIn message before recording it as sent.")
+        raise OutreachAttemptError("Approve the message before recording it as sent.")
     attempt.status = OutreachStatus.SENT
     attempt.sent_at = datetime.now(UTC)
     db.commit()
     db.refresh(attempt)
     return attempt
+
+
+record_manual_linkedin_send = record_manual_send
 
 
 def record_manual_outcome(
@@ -434,7 +441,7 @@ def record_manual_outcome(
     if attempt.status not in {OutreachStatus.SENT, OutreachStatus.REPLIED}:
         raise OutreachAttemptError("Only sent outreach may receive an outcome.")
     if request.outcome is OutreachOutcome.BOUNCED:
-        raise OutreachAttemptError("A manual LinkedIn attempt cannot be marked as bounced.")
+        raise OutreachAttemptError("Manual outreach cannot be marked as bounced.")
     if request.replied and request.outcome is OutreachOutcome.NO_RESPONSE:
         raise OutreachAttemptError("A replied attempt cannot have a no-response outcome.")
     if not request.replied and request.outcome in {
@@ -533,13 +540,25 @@ def _contacts_for_channel(
             for contact in brief.contacts
             if contact.contact_type is ContactPathType.EMAIL
         ]
-    return [
-        contact
-        for contact in brief.contacts
-        if contact.contact_type is ContactPathType.SOCIAL_PROFILE
-        and (urlparse(contact.value).hostname or "").casefold().removeprefix("www.")
-        in {"linkedin.com", "linkedin.cn"}
-    ]
+    contact_type_by_channel = {
+        OutreachChannel.LINKEDIN: ContactPathType.LINKEDIN,
+        OutreachChannel.INSTAGRAM: ContactPathType.INSTAGRAM,
+        OutreachChannel.FACEBOOK: ContactPathType.FACEBOOK,
+        OutreachChannel.WHATSAPP: ContactPathType.WHATSAPP,
+        OutreachChannel.PHONE: ContactPathType.PHONE,
+        OutreachChannel.CONTACT_FORM: ContactPathType.CONTACT_FORM,
+    }
+    expected_type = contact_type_by_channel[channel]
+    contacts = [contact for contact in brief.contacts if contact.contact_type is expected_type]
+    if channel is OutreachChannel.LINKEDIN:
+        contacts.extend(
+            contact
+            for contact in brief.contacts
+            if contact.contact_type is ContactPathType.SOCIAL_PROFILE
+            and (urlparse(contact.value).hostname or "").casefold().removeprefix("www.")
+            in {"linkedin.com", "linkedin.cn"}
+        )
+    return contacts
 
 
 def _first_incoming_message_after(thread: dict, original_message_id: str) -> dict | None:

@@ -262,6 +262,8 @@ def candidate_state(
     states = {evaluation.state for evaluation in evaluations}
     if states == {DiscoveryShortlistState.EXCLUDED}:
         return DiscoveryShortlistState.EXCLUDED
+    if DiscoveryShortlistState.ELIGIBLE_FOR_DEEPER_RESEARCH in states:
+        return DiscoveryShortlistState.ELIGIBLE_FOR_DEEPER_RESEARCH
     if DiscoveryShortlistState.NEEDS_IDENTITY_REVIEW in states:
         return DiscoveryShortlistState.NEEDS_IDENTITY_REVIEW
     if DiscoveryShortlistState.NEEDS_EVIDENCE in states:
