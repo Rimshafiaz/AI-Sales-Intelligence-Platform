@@ -10,11 +10,8 @@ from app.models.outreach_attempt import (
 )
 from app.models.user import User
 from app.repositories.dashboard import (
-    list_actionable_outreach,
-    list_actionable_prospects,
-    list_follow_ups_due,
-    list_recent_outreach,
-    list_recent_prospects,
+    list_dashboard_outreach,
+    list_dashboard_prospects,
     pipeline_counts_for_user,
 )
 from app.schemas.dashboard import (
@@ -48,19 +45,29 @@ def get_dashboard_summary_for_user(
 ) -> DashboardSummaryResponse:
     current_time = now or datetime.now(UTC)
     counts = pipeline_counts_for_user(db, current_user.id)
-    prospect_rows = list_actionable_prospects(db, current_user.id, FETCH_LIMIT)
-    outreach_rows = list_actionable_outreach(db, current_user.id, FETCH_LIMIT)
-    due_rows = list_follow_ups_due(
+    prospect_rows = list_dashboard_prospects(
+        db, current_user.id, FETCH_LIMIT, ACTIVITY_LIMIT
+    )
+    outreach_rows = list_dashboard_outreach(
         db,
         current_user.id,
         current_time - timedelta(days=FOLLOW_UP_AFTER_DAYS),
+        FETCH_LIMIT,
         ACTION_LIMIT,
+        ACTIVITY_LIMIT,
     )
+    actionable_prospects = [row[1:] for row in prospect_rows if row[0] == "actionable"]
+    recent_prospects = [row[1:] for row in prospect_rows if row[0] == "recent"]
+    actionable_outreach = [row[1:] for row in outreach_rows if row[0] == "actionable"]
+    due_rows = [row[1:] for row in outreach_rows if row[0] == "follow_up"]
+    recent_outreach = [row[1:] for row in outreach_rows if row[0] == "recent"]
 
-    prospects_with_active_outreach = {attempt.campaign_prospect_id for attempt, _, _ in outreach_rows}
+    prospects_with_active_outreach = {
+        attempt.campaign_prospect_id for attempt, _, _ in actionable_outreach
+    }
     prospect_actions = [
         _prospect_action(prospect, campaign_title)
-        for prospect, campaign_title in prospect_rows
+        for prospect, campaign_title in actionable_prospects
         if not (
             prospect.next_action is CampaignProspectNextAction.PREPARE_OUTREACH
             and prospect.id in prospects_with_active_outreach
@@ -68,7 +75,7 @@ def get_dashboard_summary_for_user(
     ]
     outreach_actions = [
         _outreach_action(attempt, prospect, campaign_title)
-        for attempt, prospect, campaign_title in outreach_rows
+        for attempt, prospect, campaign_title in actionable_outreach
     ]
     needs_attention = sorted(
         [*prospect_actions, *outreach_actions],
@@ -84,7 +91,7 @@ def get_dashboard_summary_for_user(
         default=None,
     )
 
-    recent_activity = _recent_activity(db, current_user)
+    recent_activity = _recent_activity(recent_prospects, recent_outreach)
     return DashboardSummaryResponse(
         pipeline=PipelineSummary(
             prospects_saved=counts[0],
@@ -166,7 +173,10 @@ def _follow_up_action(
     )
 
 
-def _recent_activity(db: Session, current_user: User) -> list[ActivityEvent]:
+def _recent_activity(
+    prospect_rows: list[tuple[CampaignProspect, str]],
+    outreach_rows: list[tuple[OutreachAttempt, CampaignProspect, str]],
+) -> list[ActivityEvent]:
     events = [
         ActivityEvent(
             event_type="prospect_saved",
@@ -175,15 +185,11 @@ def _recent_activity(db: Session, current_user: User) -> list[ActivityEvent]:
             prospect_name=_prospect_name(prospect),
             occurred_at=prospect.created_at,
         )
-        for prospect, campaign_title in list_recent_prospects(
-            db, current_user.id, ACTIVITY_LIMIT
-        )
+        for prospect, campaign_title in prospect_rows
     ]
     events.extend(
         _outreach_activity(attempt, prospect, campaign_title)
-        for attempt, prospect, campaign_title in list_recent_outreach(
-            db, current_user.id, ACTIVITY_LIMIT
-        )
+        for attempt, prospect, campaign_title in outreach_rows
     )
     return sorted(events, key=lambda event: event.occurred_at, reverse=True)[:ACTIVITY_LIMIT]
 

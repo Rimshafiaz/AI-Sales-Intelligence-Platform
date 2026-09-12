@@ -4,7 +4,11 @@ from uuid import UUID
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query, status
 from sqlalchemy.orm import Session
 
-from app.api.dependencies.current_user import get_current_user
+from app.api.dependencies.current_user import (
+    AuthenticatedIdentity,
+    get_authenticated_identity,
+    get_current_user,
+)
 from app.db.session import get_db
 from app.models.research_report import ReportReviewStatus
 from app.models.research_request import ResearchStatus
@@ -57,7 +61,7 @@ def list_reports_endpoint(
     max_score: int | None = Query(default=None, ge=0, le=100),
     report_status: ReportReviewStatus | None = Query(default=None),
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: AuthenticatedIdentity = Depends(get_authenticated_identity),
 ):
     try:
         return list_report_history_for_user(
@@ -156,7 +160,7 @@ def create_report_endpoint(
 def get_report_endpoint(
     report_id: UUID,
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: AuthenticatedIdentity = Depends(get_authenticated_identity),
 ):
     report_detail = get_report_detail_for_user(
         db=db,

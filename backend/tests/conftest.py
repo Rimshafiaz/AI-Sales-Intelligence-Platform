@@ -5,7 +5,11 @@ import pytest
 from fastapi.testclient import TestClient
 from sqlalchemy import delete, select
 
-from app.api.dependencies.current_user import get_current_user
+from app.api.dependencies.current_user import (
+    AuthenticatedIdentity,
+    get_authenticated_identity,
+    get_current_user,
+)
 from app.db.session import SessionLocal
 from app.integrations.search_provider import CollectedSource
 from app.main import app
@@ -144,18 +148,26 @@ def _delete_user_data(user_id: uuid.UUID) -> None:
 @pytest.fixture
 def auth_client(test_user):
     app.dependency_overrides[get_current_user] = lambda: test_user
+    app.dependency_overrides[get_authenticated_identity] = lambda: AuthenticatedIdentity(
+        id=test_user.id, email=test_user.email
+    )
     client = TestClient(app, raise_server_exceptions=False)
     yield client
     app.dependency_overrides.pop(get_current_user, None)
+    app.dependency_overrides.pop(get_authenticated_identity, None)
 
 
 @pytest.fixture
 def foreign_client():
     foreign_user = User(id=uuid.uuid4(), email=f"foreign-{uuid.uuid4().hex}@example.com")
     app.dependency_overrides[get_current_user] = lambda: foreign_user
+    app.dependency_overrides[get_authenticated_identity] = lambda: AuthenticatedIdentity(
+        id=foreign_user.id, email=foreign_user.email
+    )
     client = TestClient(app, raise_server_exceptions=False)
     yield client
     app.dependency_overrides.pop(get_current_user, None)
+    app.dependency_overrides.pop(get_authenticated_identity, None)
 
 
 @pytest.fixture

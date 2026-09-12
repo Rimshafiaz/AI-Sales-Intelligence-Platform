@@ -1,7 +1,7 @@
 from fastapi import APIRouter, Depends, status
 from sqlalchemy.orm import Session
 
-from app.api.dependencies.current_user import get_current_user
+from app.api.dependencies.current_user import AuthenticatedIdentity, get_authenticated_identity
 from app.db.session import get_db
 from app.models.user import User
 from app.schemas.dashboard import DashboardSummaryResponse
@@ -19,6 +19,6 @@ router = APIRouter(tags=["Dashboard"])
 )
 def get_dashboard_summary_endpoint(
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: AuthenticatedIdentity = Depends(get_authenticated_identity),
 ) -> DashboardSummaryResponse:
     return get_dashboard_summary_for_user(db=db, current_user=current_user)

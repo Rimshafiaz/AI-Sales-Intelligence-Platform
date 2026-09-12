@@ -3,10 +3,13 @@ from datetime import UTC, datetime
 
 import pytest
 from pydantic import ValidationError
+from sqlalchemy import event
 
+from app.models.campaign import Campaign
 from app.models.campaign_candidate_selection import CampaignCandidateSelection
-from app.models.campaign_prospect import CampaignProspect
+from app.models.campaign_prospect import CampaignProspect, CampaignProspectState
 from app.models.campaign_run import CampaignRun
+from app.models.company import Company
 from app.models.outreach_attempt import (
     OutreachAttempt,
     OutreachChannel,
@@ -31,6 +34,7 @@ from app.services.outreach_attempts import (
     record_manual_outcome,
     update_outreach_draft,
 )
+from app.services.outreach_workbench import outreach_workbench
 
 
 NOW = datetime(2026, 9, 9, tzinfo=UTC)
@@ -328,6 +332,169 @@ def test_lists_only_source_backed_options_from_the_latest_usable_brief():
     assert len(options) == 1
     assert options[0].research_report_id == report.id
     assert options[0].recipient == "owner@glowsalon.example"
+
+
+def test_workbench_bulk_loads_and_isolates_users(db):
+    owner = User(id=uuid.uuid4(), email=f"owner-{uuid.uuid4().hex}@example.com")
+    foreign = User(id=uuid.uuid4(), email=f"foreign-{uuid.uuid4().hex}@example.com")
+    db.add_all([owner, foreign])
+
+    def add_prospect(
+        user,
+        suffix,
+        with_attempt=False,
+        workflow_state=CampaignProspectState.READY_FOR_OUTREACH,
+        aggregate_verdict="qualified",
+    ):
+        campaign = Campaign(
+            user_id=user.id,
+            title=f"Campaign {suffix}",
+            discovery_criteria={},
+            model_selection={},
+        )
+        company = Company(user_id=user.id, name=f"Company {suffix}")
+        db.add_all([campaign, company])
+        db.flush()
+        run = CampaignRun(
+            campaign_id=campaign.id,
+            criteria_snapshot={},
+            model_selection_snapshot={},
+            provider_summary={},
+            discovered_candidate_count=1,
+        )
+        db.add(run)
+        db.flush()
+        identity = f"provider:{suffix}"
+        prospect = CampaignProspect(
+            campaign_id=campaign.id,
+            campaign_run_id=run.id,
+            source_identity_key=identity,
+            candidate_index=0,
+            candidate_snapshot={"company_name": f"Company {suffix}"},
+            shortlist_snapshot={},
+            evidence_snapshot=[],
+            workflow_state=workflow_state,
+        )
+        selection = CampaignCandidateSelection(
+            campaign_run_id=run.id,
+            company_id=company.id,
+            source_identity_key=identity,
+            candidate_snapshot={},
+            shortlist_snapshot={},
+            evidence_snapshot=[],
+        )
+        db.add_all([prospect, selection])
+        db.flush()
+        request = ResearchRequest(
+            company_id=company.id,
+            user_id=user.id,
+            campaign_candidate_selection_id=selection.id,
+        )
+        db.add(request)
+        db.flush()
+        report_data = brief_payload()
+        report_data["aggregate_verdict"] = aggregate_verdict
+        report = ResearchReport(
+            research_request_id=request.id,
+            company_id=company.id,
+            user_id=user.id,
+            report_data=report_data,
+            report_kind=ReportKind.PROSPECT_EVIDENCE_BRIEF,
+            generated_at=NOW,
+        )
+        db.add(report)
+        db.flush()
+        if with_attempt:
+            db.add(
+                OutreachAttempt(
+                    campaign_prospect_id=prospect.id,
+                    research_report_id=report.id,
+                    user_id=user.id,
+                    channel=OutreachChannel.EMAIL,
+                    send_method=OutreachSendMethod.GMAIL,
+                    recipient="owner@glowsalon.example",
+                    subject="Existing draft",
+                    body="Existing grounded draft",
+                    offering="Website redesign",
+                    grounding_evidence_keys=["evidence:mobile"],
+                    contact_source_keys=["source:official"],
+                    status=OutreachStatus.DRAFT,
+                )
+            )
+        return campaign, prospect, report
+
+    owner_campaign, owner_prospect, _ = add_prospect(owner, "owner", with_attempt=True)
+    option_campaign, option_prospect, option_report = add_prospect(owner, "option")
+    contacted_campaign, contacted_prospect, _ = add_prospect(
+        owner, "contacted", workflow_state=CampaignProspectState.CONTACTED
+    )
+    closed_campaign, closed_prospect, _ = add_prospect(
+        owner, "closed", workflow_state=CampaignProspectState.CLOSED
+    )
+    needs_review_campaign, needs_review_prospect, _ = add_prospect(
+        owner, "needs-review", aggregate_verdict="needs_review"
+    )
+    not_a_fit_campaign, not_a_fit_prospect, _ = add_prospect(
+        owner, "not-a-fit", aggregate_verdict="not_a_fit"
+    )
+    foreign_campaign, foreign_prospect, foreign_report = add_prospect(
+        foreign, "foreign", with_attempt=True
+    )
+    db.flush()
+    owner_campaign_id, owner_prospect_id = owner_campaign.id, owner_prospect.id
+    option_campaign_id, option_prospect_id, option_report_id = (
+        option_campaign.id,
+        option_prospect.id,
+        option_report.id,
+    )
+    foreign_campaign_id, foreign_prospect_id, foreign_report_id = (
+        foreign_campaign.id,
+        foreign_prospect.id,
+        foreign_report.id,
+    )
+    visible_historical_campaign_ids = {contacted_campaign.id, closed_campaign.id}
+    visible_historical_prospect_ids = {contacted_prospect.id, closed_prospect.id}
+    excluded_campaign_ids = {needs_review_campaign.id, not_a_fit_campaign.id}
+    excluded_prospect_ids = {needs_review_prospect.id, not_a_fit_prospect.id}
+
+    query_count = 0
+
+    def count_query(*_):
+        nonlocal query_count
+        query_count += 1
+
+    event.listen(db.bind, "before_cursor_execute", count_query)
+    try:
+        groups = outreach_workbench(db, owner)
+    finally:
+        event.remove(db.bind, "before_cursor_execute", count_query)
+        db.rollback()
+
+    assert query_count == 4
+    group_ids = {group.campaign_id for group in groups}
+    assert group_ids == {
+        owner_campaign_id,
+        option_campaign_id,
+        *visible_historical_campaign_ids,
+    }
+    items = {item.prospect.id: item for group in groups for item in group.prospects}
+    assert visible_historical_prospect_ids <= items.keys()
+    assert excluded_campaign_ids.isdisjoint(group_ids)
+    assert excluded_prospect_ids.isdisjoint(items)
+    assert len(items[owner_prospect_id].attempts) == 1
+    assert items[owner_prospect_id].options == []
+    assert items[owner_prospect_id].qualification_headline == "Qualified opportunity"
+    assert items[owner_prospect_id].opportunity_reason
+    assert items[owner_prospect_id].pitch_angle
+    assert len(items[option_prospect_id].options) == 1
+    assert items[option_prospect_id].options[0].research_report_id == option_report_id
+    assert foreign_campaign_id not in {group.campaign_id for group in groups}
+    assert foreign_prospect_id not in items
+    assert all(
+        attempt.research_report_id != foreign_report_id
+        for item in items.values()
+        for attempt in item.attempts
+    )
 
 
 def test_editing_an_approved_draft_resets_approval_and_marks_user_edit():

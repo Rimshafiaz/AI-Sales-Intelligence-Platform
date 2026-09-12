@@ -3,7 +3,11 @@ from app.schemas.company import CompanyResponse,CompanyCreate
 from sqlalchemy.orm import Session
 from app.db.session import get_db
 from app.services.companies import create_company,list_companies_for_user,get_company_by_id,delete_company_for_user
-from app.api.dependencies.current_user import get_current_user
+from app.api.dependencies.current_user import (
+    AuthenticatedIdentity,
+    get_authenticated_identity,
+    get_current_user,
+)
 from app.models.user import User
 import uuid
 
@@ -36,7 +40,8 @@ async def create_company_endpoint(
 )
 async def list_companies_endpoint(
     db:Session=Depends(get_db),
-    current_user:User=Depends(get_current_user),):
+    current_user: AuthenticatedIdentity = Depends(get_authenticated_identity),
+):
     companies = list_companies_for_user(db,current_user.id)
     return companies
 
@@ -49,7 +54,7 @@ async def list_companies_endpoint(
 async def get_company_endpoint(
     company_id: uuid.UUID,
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: AuthenticatedIdentity = Depends(get_authenticated_identity),
 ):
     company = get_company_by_id(db,company_id,current_user.id)
     if company is None:

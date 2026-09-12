@@ -5,7 +5,11 @@ from uuid import UUID
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 
-from app.api.dependencies.current_user import get_current_user
+from app.api.dependencies.current_user import (
+    AuthenticatedIdentity,
+    get_authenticated_identity,
+    get_current_user,
+)
 from app.db.session import get_db
 from app.models.user import User
 from app.models.outreach_attempt import OutreachAttempt
@@ -29,9 +33,22 @@ from app.services.outreach_attempts import (
     send_approved_email,
     update_outreach_draft,
 )
+from app.services.outreach_workbench import WorkbenchGroup, outreach_workbench
 
 
 router = APIRouter(tags=["Outreach"])
+
+
+@router.get(
+    "/outreach-workbench",
+    response_model=list[WorkbenchGroup],
+    summary="Aggregated outreach workbench: relevant prospects per campaign with attempts and draft options",
+)
+def outreach_workbench_endpoint(
+    db: Session = Depends(get_db),
+    current_user: AuthenticatedIdentity = Depends(get_authenticated_identity),
+) -> list[WorkbenchGroup]:
+    return outreach_workbench(db, current_user)
 
 
 @router.get(
@@ -42,7 +59,7 @@ def list_outreach_options_endpoint(
     campaign_id: UUID,
     prospect_id: UUID,
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: AuthenticatedIdentity = Depends(get_authenticated_identity),
 ) -> list[OutreachDraftOptionResponse]:
     try:
         return list_outreach_draft_options(db, campaign_id, prospect_id, current_user)
@@ -78,7 +95,7 @@ def list_outreach_attempts_endpoint(
     campaign_id: UUID,
     prospect_id: UUID,
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: AuthenticatedIdentity = Depends(get_authenticated_identity),
 ) -> list[OutreachAttemptResponse]:
     try:
         attempts = list_outreach_attempts(db, campaign_id, prospect_id, current_user)

@@ -71,6 +71,19 @@ async def request_context_middleware(request: Request, call_next):
 register_exception_handlers(app)
 
 
+@app.on_event("startup")
+def warm_database_connection() -> None:
+
+    from app.db.session import SessionLocal
+    from sqlalchemy import text
+
+    db = SessionLocal()
+    try:
+        db.execute(text("select 1"))
+    finally:
+        db.close()
+
+
 @app.get("/", summary="Welcome message")
 def root():
     return {"message" : "Welcome to AI Sales Intelligence Platform"}

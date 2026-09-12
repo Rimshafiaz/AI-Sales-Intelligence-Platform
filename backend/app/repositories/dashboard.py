@@ -1,7 +1,7 @@
 from datetime import datetime
 from uuid import UUID
 
-from sqlalchemy import func, select
+from sqlalchemy import func, literal, select, union_all
 from sqlalchemy.orm import Session
 
 from app.models.campaign import Campaign
@@ -75,13 +75,20 @@ def pipeline_counts_for_user(db: Session, user_id: UUID) -> tuple[int, int, int,
     return tuple(int(value or 0) for value in row)
 
 
-def list_actionable_prospects(
+def list_dashboard_prospects(
     db: Session,
     user_id: UUID,
-    limit: int,
-) -> list[tuple[CampaignProspect, str]]:
-    statement = (
-        select(CampaignProspect, Campaign.title)
+    actionable_limit: int,
+    recent_limit: int,
+) -> list[tuple[str, CampaignProspect, str]]:
+    actionable = (
+        select(
+            CampaignProspect.id.label("prospect_id"),
+            literal("actionable").label("purpose"),
+            func.row_number()
+            .over(order_by=CampaignProspect.updated_at.desc())
+            .label("position"),
+        )
         .join(Campaign)
         .where(
             Campaign.user_id == user_id,
@@ -94,18 +101,47 @@ def list_actionable_prospects(
             ),
         )
         .order_by(CampaignProspect.updated_at.desc())
-        .limit(limit)
+        .limit(actionable_limit)
+    )
+    recent = (
+        select(
+            CampaignProspect.id.label("prospect_id"),
+            literal("recent").label("purpose"),
+            func.row_number()
+            .over(order_by=CampaignProspect.created_at.desc())
+            .label("position"),
+        )
+        .join(Campaign)
+        .where(Campaign.user_id == user_id)
+        .order_by(CampaignProspect.created_at.desc())
+        .limit(recent_limit)
+    )
+    selected = union_all(actionable, recent).subquery()
+    statement = (
+        select(selected.c.purpose, CampaignProspect, Campaign.title)
+        .join(CampaignProspect, CampaignProspect.id == selected.c.prospect_id)
+        .join(Campaign, CampaignProspect.campaign_id == Campaign.id)
+        .order_by(selected.c.purpose, selected.c.position)
     )
     return list(db.execute(statement).all())
 
 
-def list_actionable_outreach(
+def list_dashboard_outreach(
     db: Session,
     user_id: UUID,
-    limit: int,
-) -> list[tuple[OutreachAttempt, CampaignProspect, str]]:
-    statement = (
-        select(OutreachAttempt, CampaignProspect, Campaign.title)
+    sent_before: datetime,
+    actionable_limit: int,
+    follow_up_limit: int,
+    recent_limit: int,
+) -> list[tuple[str, OutreachAttempt, CampaignProspect, str]]:
+    actionable = (
+        select(
+            OutreachAttempt.id.label("attempt_id"),
+            literal("actionable").label("purpose"),
+            func.row_number()
+            .over(order_by=OutreachAttempt.updated_at.desc())
+            .label("position"),
+        )
         .join(CampaignProspect, OutreachAttempt.campaign_prospect_id == CampaignProspect.id)
         .join(Campaign, CampaignProspect.campaign_id == Campaign.id)
         .where(
@@ -113,19 +149,16 @@ def list_actionable_outreach(
             OutreachAttempt.status.in_([OutreachStatus.DRAFT, OutreachStatus.APPROVED]),
         )
         .order_by(OutreachAttempt.updated_at.desc())
-        .limit(limit)
+        .limit(actionable_limit)
     )
-    return list(db.execute(statement).all())
-
-
-def list_follow_ups_due(
-    db: Session,
-    user_id: UUID,
-    sent_before: datetime,
-    limit: int,
-) -> list[tuple[OutreachAttempt, CampaignProspect, str]]:
-    statement = (
-        select(OutreachAttempt, CampaignProspect, Campaign.title)
+    follow_up = (
+        select(
+            OutreachAttempt.id.label("attempt_id"),
+            literal("follow_up").label("purpose"),
+            func.row_number()
+            .over(order_by=OutreachAttempt.sent_at.asc())
+            .label("position"),
+        )
         .join(CampaignProspect, OutreachAttempt.campaign_prospect_id == CampaignProspect.id)
         .join(Campaign, CampaignProspect.campaign_id == Campaign.id)
         .where(
@@ -136,37 +169,33 @@ def list_follow_ups_due(
             OutreachAttempt.outcome.is_(None),
         )
         .order_by(OutreachAttempt.sent_at.asc())
-        .limit(limit)
+        .limit(follow_up_limit)
     )
-    return list(db.execute(statement).all())
-
-
-def list_recent_prospects(
-    db: Session,
-    user_id: UUID,
-    limit: int,
-) -> list[tuple[CampaignProspect, str]]:
-    statement = (
-        select(CampaignProspect, Campaign.title)
-        .join(Campaign)
-        .where(Campaign.user_id == user_id)
-        .order_by(CampaignProspect.created_at.desc())
-        .limit(limit)
-    )
-    return list(db.execute(statement).all())
-
-
-def list_recent_outreach(
-    db: Session,
-    user_id: UUID,
-    limit: int,
-) -> list[tuple[OutreachAttempt, CampaignProspect, str]]:
-    statement = (
-        select(OutreachAttempt, CampaignProspect, Campaign.title)
+    recent = (
+        select(
+            OutreachAttempt.id.label("attempt_id"),
+            literal("recent").label("purpose"),
+            func.row_number()
+            .over(order_by=OutreachAttempt.updated_at.desc())
+            .label("position"),
+        )
         .join(CampaignProspect, OutreachAttempt.campaign_prospect_id == CampaignProspect.id)
         .join(Campaign, CampaignProspect.campaign_id == Campaign.id)
         .where(OutreachAttempt.user_id == user_id)
         .order_by(OutreachAttempt.updated_at.desc())
-        .limit(limit)
+        .limit(recent_limit)
+    )
+    selected = union_all(actionable, follow_up, recent).subquery()
+    statement = (
+        select(
+            selected.c.purpose,
+            OutreachAttempt,
+            CampaignProspect,
+            Campaign.title,
+        )
+        .join(OutreachAttempt, OutreachAttempt.id == selected.c.attempt_id)
+        .join(CampaignProspect, OutreachAttempt.campaign_prospect_id == CampaignProspect.id)
+        .join(Campaign, CampaignProspect.campaign_id == Campaign.id)
+        .order_by(selected.c.purpose, selected.c.position)
     )
     return list(db.execute(statement).all())

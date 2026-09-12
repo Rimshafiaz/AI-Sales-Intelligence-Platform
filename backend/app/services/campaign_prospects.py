@@ -77,6 +77,22 @@ def list_campaign_prospects(
     return list(db.scalars(statement).all())
 
 
+def list_campaign_prospects_for_user(
+    db: Session,
+    current_user: User,
+    campaign_id: UUID | None = None,
+) -> list[CampaignProspect]:
+    statement = (
+        select(CampaignProspect)
+        .join(Campaign)
+        .where(Campaign.user_id == current_user.id)
+        .order_by(CampaignProspect.created_at.desc())
+    )
+    if campaign_id is not None:
+        statement = statement.where(CampaignProspect.campaign_id == campaign_id)
+    return list(db.scalars(statement).all())
+
+
 def update_campaign_prospect(
     db: Session,
     campaign_id: UUID,

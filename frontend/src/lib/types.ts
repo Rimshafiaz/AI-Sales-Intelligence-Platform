@@ -114,6 +114,8 @@ export interface CampaignResponse {
   model_selection: Record<string, unknown>
   created_at: string
   updated_at: string
+  saved_prospect_count: number
+  ready_prospect_count: number
 }
 
 export interface CampaignRunResponse {
@@ -125,6 +127,19 @@ export interface CampaignRunResponse {
   provider_summary: Record<string, number>
   discovered_candidate_count: number
   created_at: string
+}
+
+export interface OutreachWorkbenchGroup {
+  campaign_id: string
+  campaign_title: string
+  prospects: {
+    prospect: CampaignProspect
+    qualification_headline: string
+    opportunity_reason: string
+    pitch_angle: string | null
+    attempts: OutreachAttempt[]
+    options: OutreachDraftOption[]
+  }[]
 }
 
 export interface CampaignRecommendedBatchResponse {

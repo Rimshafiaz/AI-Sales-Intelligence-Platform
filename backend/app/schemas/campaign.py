@@ -124,6 +124,8 @@ class CampaignResponse(BaseModel):
     model_selection: dict
     created_at: datetime
     updated_at: datetime
+    saved_prospect_count: int = 0
+    ready_prospect_count: int = 0
 
 
 class CampaignRunResponse(BaseModel):

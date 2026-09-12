@@ -1,6 +1,6 @@
 import uuid
 
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.orm import Session, selectinload
 
 from app.models.campaign_prospect import (
@@ -56,6 +56,27 @@ def list_campaigns_for_user(db: Session, user_id: uuid.UUID) -> list[Campaign]:
         .order_by(Campaign.created_at.desc())
     )
     return list(db.scalars(statement).all())
+
+
+def list_campaign_summaries_for_user(
+    db: Session,
+    user_id: uuid.UUID,
+) -> list[tuple[Campaign, int, int]]:
+    statement = (
+        select(
+            Campaign,
+            func.count(CampaignProspect.id),
+            func.count(CampaignProspect.id).filter(
+                CampaignProspect.workflow_state
+                == CampaignProspectState.READY_FOR_OUTREACH
+            ),
+        )
+        .outerjoin(CampaignProspect, CampaignProspect.campaign_id == Campaign.id)
+        .where(Campaign.user_id == user_id)
+        .group_by(Campaign.id)
+        .order_by(Campaign.created_at.desc())
+    )
+    return [(campaign, saved, ready) for campaign, saved, ready in db.execute(statement)]
 
 
 def get_campaign_for_user(
@@ -305,7 +326,11 @@ def list_campaign_selections_for_user(
     ]
 
 
-def campaign_response(campaign: Campaign) -> CampaignResponse:
+def campaign_response(
+    campaign: Campaign,
+    saved_prospect_count: int = 0,
+    ready_prospect_count: int = 0,
+) -> CampaignResponse:
     return CampaignResponse(
         id=campaign.id,
         title=campaign.title,
@@ -314,6 +339,8 @@ def campaign_response(campaign: Campaign) -> CampaignResponse:
         model_selection=campaign.model_selection,
         created_at=campaign.created_at,
         updated_at=campaign.updated_at,
+        saved_prospect_count=saved_prospect_count,
+        ready_prospect_count=ready_prospect_count,
     )
 
 

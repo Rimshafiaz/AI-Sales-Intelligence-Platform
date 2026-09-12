@@ -3,7 +3,11 @@ from uuid import UUID
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query, status
 from sqlalchemy.orm import Session
 
-from app.api.dependencies.current_user import get_current_user
+from app.api.dependencies.current_user import (
+    AuthenticatedIdentity,
+    get_authenticated_identity,
+    get_current_user,
+)
 from app.db.session import get_db
 from app.models.research_request import ResearchStatus
 from app.models.user import User
@@ -157,7 +161,7 @@ async def create_research_request_endpoint(
 async def get_research_request_endpoint(
     request_id: UUID,
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: AuthenticatedIdentity = Depends(get_authenticated_identity),
 ):
     research_request = get_research_request_for_user(
         db=db,
@@ -379,7 +383,7 @@ async def list_research_sources_endpoint(
     request_id: UUID,
     limit: int = Query(default=25, ge=1, le=50),
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: AuthenticatedIdentity = Depends(get_authenticated_identity),
 ):
     research_request = get_research_request_for_user(
         db=db,
@@ -410,7 +414,7 @@ async def list_research_sources_endpoint(
 def list_research_evidence_endpoint(
     request_id: UUID,
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: AuthenticatedIdentity = Depends(get_authenticated_identity),
 ):
     research_request = get_research_request_for_user(
         db=db,
@@ -436,7 +440,7 @@ def list_opportunity_qualifications_endpoint(
     request_id: UUID,
     include_not_eligible: bool = Query(default=False),
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: AuthenticatedIdentity = Depends(get_authenticated_identity),
 ):
     research_request = get_research_request_for_user(
         db=db,
@@ -466,7 +470,7 @@ def list_opportunity_qualifications_endpoint(
 def list_social_observations_endpoint(
     request_id: UUID,
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: AuthenticatedIdentity = Depends(get_authenticated_identity),
 ):
     research_request = get_research_request_for_user(
         db=db,

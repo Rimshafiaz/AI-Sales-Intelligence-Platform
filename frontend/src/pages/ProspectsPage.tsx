@@ -28,13 +28,17 @@ export default function ProspectsPage() {
     let active = true
     async function load() {
       try {
-        const campaigns = await api<CampaignResponse[]>('/campaigns')
-        const loaded = await Promise.all(
-          campaigns.map(async (campaign) => ({
-            campaign,
-            prospects: await api<CampaignProspect[]>(`/campaigns/${campaign.id}/prospects`),
-          })),
-        )
+        const campaignId = searchParams.get('campaign') ?? undefined
+        const [campaigns, prospects] = await Promise.all([
+          api<CampaignResponse[]>('/campaigns'),
+          api<CampaignProspect[]>('/campaigns/prospects/bulk', {
+            params: { campaign_id: campaignId },
+          }),
+        ])
+        const loaded = campaigns.map((campaign) => ({
+          campaign,
+          prospects: prospects.filter((prospect) => prospect.campaign_id === campaign.id),
+        }))
         if (active) setGroups(loaded.filter((group) => group.prospects.length > 0))
       } catch (requestError) {
         if (active) setError(requestError instanceof Error ? requestError.message : 'Could not load prospects.')
@@ -46,7 +50,7 @@ export default function ProspectsPage() {
     return () => {
       active = false
     }
-  }, [])
+  }, [searchParams])
 
   const campaignFilter = searchParams.get('campaign')
   const visibleGroups = campaignFilter
@@ -100,33 +104,11 @@ export default function ProspectsPage() {
   )
 }
 
-export function ProspectOutreach({ campaignId, prospect }: { campaignId: string; prospect: CampaignProspect }) {
-  const [attempts, setAttempts] = useState<OutreachAttempt[]>([])
-  const [options, setOptions] = useState<OutreachDraftOption[]>([])
+export function ProspectOutreach({ campaignId, prospect, initialAttempts, initialOptions }: { campaignId: string; prospect: CampaignProspect; initialAttempts?: OutreachAttempt[]; initialOptions?: OutreachDraftOption[] }) {
+  const [attempts, setAttempts] = useState<OutreachAttempt[]>(initialAttempts ?? [])
+  const [options, setOptions] = useState<OutreachDraftOption[]>(initialOptions ?? [])
   const [working, setWorking] = useState(false)
   const [error, setError] = useState<string | null>(null)
-
-  useEffect(() => {
-    let active = true
-    async function load() {
-      try {
-        const [savedAttempts, draftOptions] = await Promise.all([
-          api<OutreachAttempt[]>(`/campaigns/${campaignId}/prospects/${prospect.id}/outreach-attempts`),
-          api<OutreachDraftOption[]>(`/campaigns/${campaignId}/prospects/${prospect.id}/outreach-options`),
-        ])
-        if (active) {
-          setAttempts(savedAttempts)
-          setOptions(draftOptions)
-        }
-      } catch (requestError) {
-        if (active) setError(requestError instanceof Error ? requestError.message : 'Could not load outreach.')
-      }
-    }
-    void load()
-    return () => {
-      active = false
-    }
-  }, [campaignId, prospect.id])
 
   async function createDraft(option: OutreachDraftOption) {
     setWorking(true)

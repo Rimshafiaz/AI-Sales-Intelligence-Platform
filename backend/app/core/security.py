@@ -4,10 +4,12 @@ from jwt import PyJWKClient
 from app.core.config import settings
 
 
-def verify_supabase_token(token: str) -> dict:
-    jwks_client = PyJWKClient(settings.supabase_jwks_url)
 
-    signing_key = jwks_client.get_signing_key_from_jwt(token)
+_jwks_client = PyJWKClient(settings.supabase_jwks_url)
+
+
+def verify_supabase_token(token: str) -> dict:
+    signing_key = _jwks_client.get_signing_key_from_jwt(token)
 
     claims = jwt.decode(
         token,

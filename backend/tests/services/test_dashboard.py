@@ -83,25 +83,23 @@ def test_builds_operational_dashboard_and_prioritizes_research(monkeypatch):
     monkeypatch.setattr(dashboard, "pipeline_counts_for_user", lambda *args: (6, 4, 2, 3, 1, 1))
     monkeypatch.setattr(
         dashboard,
-        "list_actionable_prospects",
-        lambda *args: [(research_prospect, "Lahore salons"), (outreach_prospect, "Lahore salons")],
-    )
-    monkeypatch.setattr(
-        dashboard,
-        "list_actionable_outreach",
+        "list_dashboard_prospects",
         lambda *args: [
-            (draft, outreach_prospect, "Lahore salons"),
-            (approved_linkedin, outreach_prospect, "Lahore salons"),
-            (approved_email, outreach_prospect, "Lahore salons"),
+            ("actionable", research_prospect, "Lahore salons"),
+            ("actionable", outreach_prospect, "Lahore salons"),
         ],
     )
-    def due_rows(*args):
-        captured["sent_before"] = args[2]
-        return [(sent, outreach_prospect, "Lahore salons")]
 
-    monkeypatch.setattr(dashboard, "list_follow_ups_due", due_rows)
-    monkeypatch.setattr(dashboard, "list_recent_prospects", lambda *args: [])
-    monkeypatch.setattr(dashboard, "list_recent_outreach", lambda *args: [])
+    def outreach_rows(*args):
+        captured["sent_before"] = args[2]
+        return [
+            ("actionable", draft, outreach_prospect, "Lahore salons"),
+            ("actionable", approved_linkedin, outreach_prospect, "Lahore salons"),
+            ("actionable", approved_email, outreach_prospect, "Lahore salons"),
+            ("follow_up", sent, outreach_prospect, "Lahore salons"),
+        ]
+
+    monkeypatch.setattr(dashboard, "list_dashboard_outreach", outreach_rows)
 
     result = dashboard.get_dashboard_summary_for_user(object(), owner, NOW)
 
@@ -120,11 +118,8 @@ def test_builds_operational_dashboard_and_prioritizes_research(monkeypatch):
 def test_returns_an_empty_operational_dashboard(monkeypatch):
     owner = User(id=uuid.uuid4(), email="owner@example.com")
     monkeypatch.setattr(dashboard, "pipeline_counts_for_user", lambda *args: (0, 0, 0, 0, 0, 0))
-    monkeypatch.setattr(dashboard, "list_actionable_prospects", lambda *args: [])
-    monkeypatch.setattr(dashboard, "list_actionable_outreach", lambda *args: [])
-    monkeypatch.setattr(dashboard, "list_follow_ups_due", lambda *args: [])
-    monkeypatch.setattr(dashboard, "list_recent_prospects", lambda *args: [])
-    monkeypatch.setattr(dashboard, "list_recent_outreach", lambda *args: [])
+    monkeypatch.setattr(dashboard, "list_dashboard_prospects", lambda *args: [])
+    monkeypatch.setattr(dashboard, "list_dashboard_outreach", lambda *args: [])
 
     result = dashboard.get_dashboard_summary_for_user(object(), owner, NOW)
 

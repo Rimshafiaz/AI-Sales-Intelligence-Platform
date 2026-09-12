@@ -5,7 +5,7 @@ from app.core.security import verify_supabase_token
 
 security = HTTPBearer()
 
-async def get_verified_claims(credentials: HTTPAuthorizationCredentials = Depends(security))->dict:
+def get_verified_claims(credentials: HTTPAuthorizationCredentials = Depends(security))->dict:
     try:
         token = credentials.credentials
         claims = verify_supabase_token(token)

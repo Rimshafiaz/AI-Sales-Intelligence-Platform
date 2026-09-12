@@ -4,7 +4,11 @@ from fastapi import APIRouter, Depends, HTTPException, Query, status
 from fastapi.responses import RedirectResponse
 from sqlalchemy.orm import Session
 
-from app.api.dependencies.current_user import get_current_user
+from app.api.dependencies.current_user import (
+    AuthenticatedIdentity,
+    get_authenticated_identity,
+    get_current_user,
+)
 from app.core.config import settings
 from app.db.session import get_db
 from app.models.user import User
@@ -28,7 +32,7 @@ router = APIRouter(prefix="/integrations/gmail", tags=["Integrations"])
 @router.get("", response_model=GmailConnectionResponse)
 def gmail_connection_status_endpoint(
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: AuthenticatedIdentity = Depends(get_authenticated_identity),
 ) -> GmailConnectionResponse:
     return get_gmail_connection_status(db, current_user)
 
