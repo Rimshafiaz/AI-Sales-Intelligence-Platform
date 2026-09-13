@@ -6,11 +6,17 @@ from pydantic import ValidationError
 from app.ai.config_loader import get_task_config, render_task_config
 from app.ai.context import MAX_EVIDENCE_EXCERPT_LENGTH, build_research_evidence_context
 from app.models.research_source import ResearchSource
-from app.schemas.evidence_gate import SourceAdmissionState
+from app.schemas.agent_outputs import (
+    BriefReviewOutput,
+    OpportunityOutreachOutput,
+    SocialResearchOutput,
+    WebsiteResearchOutput,
+)
 from app.schemas.company_discovery import (
     CompanyDiscoveryRequest,
     DiscoveryObjective,
 )
+from app.schemas.evidence_gate import SourceAdmissionState
 from app.schemas.research_request import (
     KnownProspectResearchRequest,
     ResearchRequestStartRequest,
@@ -48,6 +54,53 @@ class TestReportSchemaValidation:
         with pytest.raises(ValidationError):
             SalesIntelligenceReport.model_validate(data)
 
+
+class TestProspectEvidenceBriefAgentOutputs:
+    finding = {
+        "statement": "Mobile performance was measured at 31/100.",
+        "claim_kind": "derived_metric",
+        "evidence_keys": ["research_evidence:mobile-score"],
+    }
+
+    def test_distinct_investigation_contracts(self):
+        website = WebsiteResearchOutput(website_status="verified", findings=[self.finding])
+        social = SocialResearchOutput(
+            presence_status="partially_verified",
+            findings=[self.finding],
+        )
+        assert website.website_status == "verified"
+        assert social.presence_status == "partially_verified"
+
+    def test_outreach_requires_pitch_angle_and_personalization_basis(self):
+        payload = {
+            "opportunity_summary": self.finding,
+            "pitch_angle": {
+                "statement": "A mobile-focused booking improvement may be relevant.",
+                "offering": "Website redesign and booking setup",
+                "evidence_keys": ["research_evidence:mobile-score"],
+            },
+            "personalization_basis": [self.finding],
+        }
+        assert OpportunityOutreachOutput.model_validate(payload).pitch_angle.offering
+
+        with pytest.raises(ValidationError):
+            OpportunityOutreachOutput.model_validate(payload | {"personalization_basis": []})
+        with pytest.raises(ValidationError):
+            OpportunityOutreachOutput.model_validate(
+                {key: value for key, value in payload.items() if key != "pitch_angle"}
+            )
+
+    def test_review_issues_are_structured(self):
+        review = BriefReviewOutput(
+            approved=False,
+            issues=[
+                {
+                    "issue_type": "generic_outreach",
+                    "reason": "Message lacks specificity.",
+                }
+            ],
+        )
+        assert review.issues[0].issue_type == "generic_outreach"
 
 class TestEvidenceContext:
     def _source(self, url="https://example.com", excerpt="evidence text"):
