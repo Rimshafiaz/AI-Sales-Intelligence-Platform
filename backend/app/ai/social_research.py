@@ -70,6 +70,9 @@ def validate_social_research_output(
     if len(statements) != len(set(statements)):
         raise SocialResearchError("Social research output duplicated a finding.")
     gaps = " ".join(validated.evidence_gaps).casefold()
+    verification_state = (
+        trace.verification_state or final_state.check_states.verification.state
+    )
     if (
         EvidenceSignalType.BUSINESS_ACTIVITY_CONFIRMED
         in final_state.unresolved_requirements
@@ -77,12 +80,12 @@ def validate_social_research_output(
     ):
         raise SocialResearchError("Missing business activity evidence must remain an explicit gap.")
     if (
-        trace.verification_state is SocialVerificationState.INSUFFICIENT_ACTIVITY_HISTORY
+        verification_state is SocialVerificationState.INSUFFICIENT_ACTIVITY_HISTORY
         and "histor" not in gaps
     ):
         raise SocialResearchError("Insufficient social activity history must remain an explicit gap.")
     if (
-        trace.verification_state is SocialVerificationState.DORMANCY_UNMEASURABLE
+        verification_state is SocialVerificationState.DORMANCY_UNMEASURABLE
         and "dormancy" not in gaps
         and "latest" not in gaps
     ):
@@ -94,18 +97,23 @@ def _presence_status(
     state: GroundedSocialEvidenceResult,
     trace: SocialResearchToolTrace,
 ) -> str:
+    verification_state = (
+        trace.verification_state or state.check_states.verification.state
+    )
+    discovery_state = trace.discovery_state or state.check_states.discovery.state
+    enrichment_state = trace.enrichment_state or state.check_states.enrichment.state
     if any(
         item.signal_type is EvidenceSignalType.OFFICIAL_SOCIAL_PROFILE_CONFIRMED
         for item in state.evidence
     ):
         return "verified"
-    if trace.verification_state is SocialVerificationState.NO_OFFICIAL_PROFILE_VERIFIED:
+    if verification_state is SocialVerificationState.NO_OFFICIAL_PROFILE_VERIFIED:
         return "none_verified"
-    if trace.discovery_state is SocialCandidateDiscoveryState.NO_CANDIDATES:
+    if discovery_state is SocialCandidateDiscoveryState.NO_CANDIDATES:
         return "none_verified"
     if state.observations:
         return "partially_verified"
-    if trace.enrichment_state in {
+    if enrichment_state in {
         SocialEnrichmentResultState.UNAVAILABLE,
         SocialEnrichmentResultState.NOT_PERMITTED,
     }:

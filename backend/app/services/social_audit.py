@@ -19,7 +19,7 @@ from app.repositories.research_evidence import (
     list_research_evidence_for_user,
     upsert_research_evidence,
 )
-from app.repositories.research_requests import save_social_audit_result
+from app.repositories.research_requests import save_social_audit_result, save_social_check_state
 from app.repositories.research_social_observations import (
     list_social_observations_for_user,
     upsert_social_observation,
@@ -37,9 +37,13 @@ from app.schemas.social_audit import (
     SocialCandidateDiscoveryResult,
     SocialCandidateDiscoveryState,
     SocialCandidateEnrichmentResult,
+    SocialCheckStates,
+    SocialDiscoveryExecution,
+    SocialEnrichmentExecution,
     SocialEnrichmentResultState,
     SocialProfileCandidate,
     SocialVerificationResult,
+    SocialVerificationExecution,
     SocialVerificationState,
 )
 from app.schemas.social_enrichment import (
@@ -203,13 +207,28 @@ def discover_social_profile_candidates(
             state=SocialCandidateDiscoveryState.NOT_PERMITTED,
             reason="No selected social opportunity model permits candidate discovery.",
         )
+    saved = SocialCheckStates.model_validate(
+        research_request.social_check_states or {}
+    ).discovery
+    if saved.state in {
+        SocialCandidateDiscoveryState.CANDIDATES_AVAILABLE,
+        SocialCandidateDiscoveryState.NO_CANDIDATES,
+    }:
+        return SocialCandidateDiscoveryResult(
+            state=saved.state,
+            candidates=saved.candidates,
+            reason=saved.reason or "Candidate discovery already completed.",
+        )
     campaign_urls = _profile_urls(selection, [])
     if campaign_urls:
-        return _candidate_result(campaign_urls, "campaign")
-    return _candidate_result(
-        _discover_social_profiles(research_request, company, selection),
-        "bounded_search",
-    )
+        result = _candidate_result(campaign_urls, "campaign")
+    else:
+        result = _candidate_result(
+            _discover_social_profiles(research_request, company, selection),
+            "bounded_search",
+        )
+    _record_discovery(db, research_request, expected_user_id, result)
+    return result
 
 
 def enrich_social_profile_candidates(
@@ -235,19 +254,19 @@ def enrich_social_profile_candidates(
         if social_profile_target(str(candidate.profile_url)) is not None
     ]
     if not canonical:
-        return SocialCandidateEnrichmentResult(
+        return _record_enrichment(db, research_request, expected_user_id, SocialCandidateEnrichmentResult(
             state=SocialEnrichmentResultState.NO_CANDIDATES,
             reason="No server-controlled social profile candidates are available.",
-        )
+        ))
     existing = list_social_observations_for_user(db, research_request.id, expected_user_id)
     existing_by_key = {item.profile_identity_key: item for item in existing}
     candidate_keys = [social_profile_key(str(item.profile_url)) for item in canonical]
     if all(key in existing_by_key for key in candidate_keys):
-        return SocialCandidateEnrichmentResult(
+        return _record_enrichment(db, research_request, expected_user_id, SocialCandidateEnrichmentResult(
             state=SocialEnrichmentResultState.ALREADY_AVAILABLE,
             observations=[_observation_from_record(existing_by_key[key]) for key in candidate_keys],
             reason="Owned social observations are already available for all candidates.",
-        )
+        ))
     try:
         enrichment_request = SocialEnrichmentRequest(
             profile_urls=[item.profile_url for item in canonical]
@@ -260,18 +279,17 @@ def enrich_social_profile_candidates(
         )
         observations = enrich_social_profiles(enrichment_request, audit_provider).observations
     except (ApifySocialProviderError, SocialEnrichmentError, ValueError) as error:
-        return SocialCandidateEnrichmentResult(
+        return _record_enrichment(db, research_request, expected_user_id, SocialCandidateEnrichmentResult(
             state=SocialEnrichmentResultState.UNAVAILABLE,
             reason=str(error),
-        )
+        ))
     for observation in observations:
         upsert_social_observation(db, research_request.id, observation)
-    db.commit()
-    return SocialCandidateEnrichmentResult(
+    return _record_enrichment(db, research_request, expected_user_id, SocialCandidateEnrichmentResult(
         state=SocialEnrichmentResultState.OBSERVATIONS_AVAILABLE,
         observations=observations,
         reason=f"Persisted {len(observations)} normalized social observation(s).",
-    )
+    ))
 
 
 def verify_social_profiles_and_measure_activity(
@@ -290,6 +308,18 @@ def verify_social_profiles_and_measure_activity(
             state=SocialVerificationState.NOT_PERMITTED,
             reason="No selected social opportunity model permits profile verification.",
         )
+    saved = SocialCheckStates.model_validate(
+        research_request.social_check_states or {}
+    ).verification
+    if saved.state in {
+        SocialVerificationState.NO_OFFICIAL_PROFILE_VERIFIED,
+        SocialVerificationState.INSUFFICIENT_ACTIVITY_HISTORY,
+        SocialVerificationState.DORMANCY_UNMEASURABLE,
+    }:
+        return SocialVerificationResult(
+            state=saved.state,
+            reason=saved.reason or "Social verification already completed.",
+        )
     observed = (
         [
             item
@@ -306,10 +336,10 @@ def verify_social_profiles_and_measure_activity(
         ]
     )
     if not observed:
-        return SocialVerificationResult(
+        return _record_verification(db, research_request, expected_user_id, SocialVerificationResult(
             state=SocialVerificationState.UNAVAILABLE,
             reason="No owned public social observations are available to verify.",
-        )
+        ))
     existing_signals = {
         EvidenceSignalType(item.signal_type)
         for item in list_research_evidence_for_user(db, research_request.id, expected_user_id)
@@ -321,11 +351,10 @@ def verify_social_profiles_and_measure_activity(
         matched += 1
         _save_social_evidence(db, research_request.id, observation, target)
     if matched == 0:
-        return SocialVerificationResult(
+        return _record_verification(db, research_request, expected_user_id, SocialVerificationResult(
             state=SocialVerificationState.NO_OFFICIAL_PROFILE_VERIFIED,
             reason=f"Observed {len(observed)} public profile(s); 0 matched the verified business identity.",
-        )
-    db.commit()
+        ))
     signals = {
         EvidenceSignalType(item.signal_type)
         for item in list_research_evidence_for_user(db, research_request.id, expected_user_id)
@@ -341,12 +370,72 @@ def verify_social_profiles_and_measure_activity(
             if created
             else SocialVerificationState.ALREADY_AVAILABLE
         )
-    return SocialVerificationResult(
+    return _record_verification(db, research_request, expected_user_id, SocialVerificationResult(
         state=state,
         reason=f"Observed {len(observed)} public profile(s); {matched} matched the verified business identity.",
         verified_profile_count=matched,
         evidence_signals=sorted(signals, key=lambda item: item.value),
+    ))
+
+
+def persisted_social_candidates(
+    research_request: ResearchRequest,
+) -> SocialCandidateDiscoveryResult | None:
+    discovery = SocialCheckStates.model_validate(
+        research_request.social_check_states or {}
+    ).discovery
+    if discovery.state is SocialCandidateDiscoveryState.NOT_RUN:
+        return None
+    return SocialCandidateDiscoveryResult(
+        state=discovery.state,
+        candidates=discovery.candidates,
+        reason=discovery.reason or "Candidate discovery already completed.",
     )
+
+
+def _record_discovery(db, research_request, expected_user_id, result):
+    save_social_check_state(
+        db,
+        research_request,
+        expected_user_id,
+        "discovery",
+        SocialDiscoveryExecution(
+            state=result.state,
+            reason=result.reason,
+            checked_at=datetime.now(UTC),
+            candidates=result.candidates,
+        ),
+    )
+
+
+def _record_enrichment(db, research_request, expected_user_id, result):
+    save_social_check_state(
+        db,
+        research_request,
+        expected_user_id,
+        "enrichment",
+        SocialEnrichmentExecution(
+            state=result.state,
+            reason=result.reason,
+            checked_at=datetime.now(UTC),
+        ),
+    )
+    return result
+
+
+def _record_verification(db, research_request, expected_user_id, result):
+    save_social_check_state(
+        db,
+        research_request,
+        expected_user_id,
+        "verification",
+        SocialVerificationExecution(
+            state=result.state,
+            reason=result.reason,
+            checked_at=datetime.now(UTC),
+        ),
+    )
+    return result
 
 
 def _guard_social_capability(
@@ -426,6 +515,7 @@ def _observation_from_record(record) -> SocialProfileObservation:
         state=record.state,
         display_name=record.display_name,
         handle=record.handle,
+        biography=record.biography,
         external_url=record.external_url,
         provider_profile_id=record.provider_profile_id,
         is_private=record.is_private,

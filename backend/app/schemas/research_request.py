@@ -11,7 +11,7 @@ from app.schemas.company_discovery import (
 from app.schemas.opportunity_models import EvidenceSource, IdentityState, OpportunityModelSelection
 from app.schemas.evidence_gate import EvidenceGateState
 from app.schemas.website_audit import WebsiteAuditState, WebsiteCheckExecutions
-from app.schemas.social_audit import SocialAuditState
+from app.schemas.social_audit import SocialAuditState, SocialCheckStates
 
 
 class KnownProspectResearchRequest(BaseModel):
@@ -99,6 +99,7 @@ class ResearchRequestResponse(BaseModel):
     opportunity_model_selection: OpportunityModelSelection | None = None
     specialist_outputs: dict | None = None
     website_check_states: WebsiteCheckExecutions | None = None
+    social_check_states: SocialCheckStates | None = None
     evidence_gate_state: EvidenceGateState
     evidence_gate_reason: str | None = None
     evidence_gated_at: datetime | None = None

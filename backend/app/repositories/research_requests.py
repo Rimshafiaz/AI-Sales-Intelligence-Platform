@@ -12,6 +12,7 @@ from app.schemas.website_audit import WebsiteAuditResult
 from app.schemas.website_audit import WebsiteCheckExecution, WebsiteCheckExecutions
 from app.schemas.opportunity_models import OpportunityModelSelection
 from app.schemas.social_audit import SocialAuditResult
+from app.schemas.social_audit import SocialCheckStates
 
 
 def create_research_request(
@@ -66,6 +67,24 @@ def save_website_check_execution(
     states = WebsiteCheckExecutions.model_validate(research_request.website_check_states or {})
     states = states.model_copy(update={capability: execution})
     research_request.website_check_states = states.model_dump(mode="json")
+    db.commit()
+    db.refresh(research_request)
+    return research_request
+
+
+def save_social_check_state(
+    db: Session,
+    research_request: ResearchRequest,
+    expected_user_id: UUID,
+    capability: Literal["discovery", "enrichment", "verification"],
+    execution,
+) -> ResearchRequest:
+    if research_request.user_id != expected_user_id:
+        raise ValueError("Research request is not available to this user.")
+    states = SocialCheckStates.model_validate(research_request.social_check_states or {})
+    research_request.social_check_states = states.model_copy(
+        update={capability: execution}
+    ).model_dump(mode="json")
     db.commit()
     db.refresh(research_request)
     return research_request

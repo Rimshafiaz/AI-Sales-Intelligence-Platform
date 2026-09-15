@@ -28,6 +28,7 @@ def upsert_social_observation(
         "detail": observation.detail,
         "display_name": observation.display_name,
         "handle": observation.handle,
+        "biography": observation.biography,
         "external_url": str(observation.external_url).rstrip("/") if observation.external_url else None,
         "provider_profile_id": observation.provider_profile_id,
         "is_private": observation.is_private,

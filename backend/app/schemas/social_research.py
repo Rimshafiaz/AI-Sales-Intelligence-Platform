@@ -5,7 +5,7 @@ from pydantic import BaseModel, ConfigDict, Field, HttpUrl
 
 from app.schemas.opportunity_models import EvidenceSignalType, OpportunityModelId
 from app.schemas.prospect_evidence_brief import BriefEvidence
-from app.schemas.social_audit import SocialAuditState, SocialProfileCandidate
+from app.schemas.social_audit import SocialAuditState, SocialCheckStates, SocialProfileCandidate
 from app.schemas.social_enrichment import SocialEnrichmentState, SocialPlatform
 
 
@@ -30,6 +30,7 @@ class GroundedSocialObservation(BaseModel):
     state: SocialEnrichmentState
     display_name: str | None = None
     handle: str | None = None
+    biography: str | None = None
     external_url: HttpUrl | None = None
     public_emails: list[str] = Field(default_factory=list)
     public_phones: list[str] = Field(default_factory=list)
@@ -49,6 +50,7 @@ class GroundedSocialEvidenceResult(BaseModel):
     unresolved_requirements: list[EvidenceSignalType]
     audit_state: SocialAuditState
     audit_reason: str | None = None
+    check_states: SocialCheckStates = Field(default_factory=SocialCheckStates)
 
 
 class SocialResearchHandoff(BaseModel):

@@ -224,7 +224,13 @@ class TestOpportunityQualificationPersistence:
                     "findings": [],
                     "evidence_gaps": ["Agent prose must not affect qualification."],
                     "caveats": [],
-                }
+                },
+                "social": {
+                    "presence_status": "unresolved",
+                    "findings": [],
+                    "evidence_gaps": ["Agent prose must not affect qualification."],
+                    "caveats": [],
+                },
             },
         )
         measurement = ResearchEvidence(

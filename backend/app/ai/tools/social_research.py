@@ -25,6 +25,7 @@ from app.schemas.social_audit import (
     SocialCandidateEnrichmentResult,
     SocialEnrichmentResultState,
     SocialProfileCandidate,
+    SocialCheckStates,
     SocialVerificationState,
 )
 from app.schemas.social_research import (
@@ -40,6 +41,7 @@ from app.services.social_audit import (
     discover_social_profile_candidates as discover_candidates,
     enrich_social_profile_candidates as enrich_candidates,
     verify_social_profiles_and_measure_activity as verify_profiles,
+    persisted_social_candidates,
 )
 
 
@@ -69,7 +71,7 @@ def build_social_research_tools(
 ) -> tuple[BaseTool, BaseTool, BaseTool, BaseTool]:
     _require_bound_context(research_request, company, selection, expected_user_id)
     trace = trace or SocialResearchToolTrace()
-    discovered: SocialCandidateDiscoveryResult | None = None
+    discovered = persisted_social_candidates(research_request)
 
     @tool("read_grounded_social_evidence", max_usage_count=3)
     def read_grounded_social_evidence() -> str:
@@ -168,12 +170,19 @@ def build_grounded_social_evidence(
             else SocialIdentityState.UNRESOLVED
         ),
         selected_models=models,
-        candidate_profiles=_campaign_candidates(selection),
+        candidate_profiles=(
+            persisted_social_candidates(research_request).candidates
+            if persisted_social_candidates(research_request) is not None
+            else _campaign_candidates(selection)
+        ),
         observations=[_grounded_observation(item) for item in observations],
         evidence=list(unique.values()),
         unresolved_requirements=sorted(required - available, key=lambda item: item.value),
         audit_state=research_request.social_audit_state,
         audit_reason=research_request.social_audit_reason,
+        check_states=SocialCheckStates.model_validate(
+            research_request.social_check_states or {}
+        ),
     )
 
 
@@ -286,6 +295,7 @@ def _grounded_observation(item) -> GroundedSocialObservation:
         state=item.state,
         display_name=item.display_name,
         handle=item.handle,
+        biography=item.biography,
         external_url=item.external_url,
         public_emails=item.public_emails,
         public_phones=item.public_phones,

@@ -23,6 +23,7 @@ class SocialAuditResult:
 
 
 class SocialCandidateDiscoveryState(str, Enum):
+    NOT_RUN = "not_run"
     CANDIDATES_AVAILABLE = "candidates_available"
     NO_CANDIDATES = "no_candidates"
     UNAVAILABLE = "unavailable"
@@ -47,6 +48,7 @@ class SocialCandidateDiscoveryResult(BaseModel):
 
 
 class SocialEnrichmentResultState(str, Enum):
+    NOT_RUN = "not_run"
     OBSERVATIONS_AVAILABLE = "observations_available"
     ALREADY_AVAILABLE = "already_available"
     UNAVAILABLE = "unavailable"
@@ -63,6 +65,7 @@ class SocialCandidateEnrichmentResult(BaseModel):
 
 
 class SocialVerificationState(str, Enum):
+    NOT_RUN = "not_run"
     EVIDENCE_FOUND = "evidence_found"
     ALREADY_AVAILABLE = "already_available"
     NO_OFFICIAL_PROFILE_VERIFIED = "no_official_profile_verified"
@@ -79,6 +82,39 @@ class SocialVerificationResult(BaseModel):
     reason: str
     verified_profile_count: int = Field(default=0, ge=0)
     evidence_signals: list[EvidenceSignalType] = Field(default_factory=list)
+
+
+class SocialDiscoveryExecution(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    state: SocialCandidateDiscoveryState = SocialCandidateDiscoveryState.NOT_RUN
+    reason: str | None = None
+    checked_at: datetime | None = None
+    candidates: list[SocialProfileCandidate] = Field(default_factory=list, max_length=3)
+
+
+class SocialEnrichmentExecution(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    state: SocialEnrichmentResultState = SocialEnrichmentResultState.NOT_RUN
+    reason: str | None = None
+    checked_at: datetime | None = None
+
+
+class SocialVerificationExecution(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    state: SocialVerificationState = SocialVerificationState.NOT_RUN
+    reason: str | None = None
+    checked_at: datetime | None = None
+
+
+class SocialCheckStates(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    discovery: SocialDiscoveryExecution = Field(default_factory=SocialDiscoveryExecution)
+    enrichment: SocialEnrichmentExecution = Field(default_factory=SocialEnrichmentExecution)
+    verification: SocialVerificationExecution = Field(default_factory=SocialVerificationExecution)
 
 
 class SocialAuditRequest(BaseModel):

@@ -17,6 +17,7 @@ from app.schemas.social_audit import (
     SocialEnrichmentResultState,
     SocialProfileCandidate,
     SocialVerificationState,
+    SocialCheckStates,
 )
 from app.schemas.social_enrichment import (
     SocialEnrichmentState,
@@ -192,6 +193,9 @@ class TestSocialAudit:
         assert "0 matched" in result.social_audit_reason
         assert len(db.added) == 1
         assert isinstance(db.added[0], ResearchSocialObservation)
+        assert SocialCheckStates.model_validate(
+            research_request.social_check_states
+        ).verification.state is SocialVerificationState.NO_OFFICIAL_PROFILE_VERIFIED
 
     def test_private_profile_is_unavailable_not_negative_evidence(self):
         research_request = request()
@@ -303,6 +307,54 @@ class TestSocialCapabilities:
         assert [(item.platform.value, item.handle) for item in result.candidates] == [
             ("instagram", "glow_salon")
         ]
+        reloaded = SocialCheckStates.model_validate(
+            research_request.social_check_states
+        )
+        assert reloaded.discovery.candidates[0].handle == "glow_salon"
+
+        monkeypatch.setattr(
+            "app.integrations.search_provider.create_tavily_search_provider",
+            lambda *_: pytest.fail("persisted discovery must avoid Tavily"),
+        )
+        retried = discover_social_profile_candidates(
+            FakeSession([]),
+            research_request,
+            company(research_request),
+            None,
+            research_request.user_id,
+        )
+        assert retried.candidates == result.candidates
+
+    def test_completed_no_candidate_discovery_survives_retry(self, monkeypatch):
+        class EmptySearch:
+            def search(self, *_args, **_kwargs):
+                return []
+
+        monkeypatch.setattr(
+            "app.integrations.search_provider.create_tavily_search_provider",
+            lambda *_: EmptySearch(),
+        )
+        research_request = request()
+        first = discover_social_profile_candidates(
+            FakeSession([]),
+            research_request,
+            company(research_request),
+            None,
+            research_request.user_id,
+        )
+        monkeypatch.setattr(
+            "app.integrations.search_provider.create_tavily_search_provider",
+            lambda *_: pytest.fail("persisted empty discovery must avoid Tavily"),
+        )
+        second = discover_social_profile_candidates(
+            FakeSession([]),
+            research_request,
+            company(research_request),
+            None,
+            research_request.user_id,
+        )
+
+        assert first.state is second.state is SocialCandidateDiscoveryState.NO_CANDIDATES
 
     def test_enrichment_rejects_non_platform_candidate_and_reuses_observation(self):
         research_request = request()
@@ -349,6 +401,44 @@ class TestSocialCapabilities:
         assert first.state is SocialEnrichmentResultState.OBSERVATIONS_AVAILABLE
         assert second.state is SocialEnrichmentResultState.ALREADY_AVAILABLE
         assert provider.calls == 1
+        assert db.added[0].biography == "Beauty appointments in Lahore"
+
+    def test_persisted_biography_reproduces_identity_match_after_reload(self):
+        research_request = request()
+        owner = company(research_request)
+        candidates = SocialCandidateDiscoveryResult(
+            state=SocialCandidateDiscoveryState.CANDIDATES_AVAILABLE,
+            candidates=[
+                SocialProfileCandidate(
+                    profile_url="https://instagram.com/glowsalon",
+                    platform="instagram",
+                    handle="glowsalon",
+                    source="bounded_search",
+                )
+            ],
+            reason="test",
+        )
+        db = FakeSession([None, None, None, None])
+        enrich_social_profile_candidates(
+            db,
+            research_request,
+            owner,
+            None,
+            research_request.user_id,
+            candidates,
+            StubProvider([observation()]),
+        )
+
+        result = verify_social_profiles_and_measure_activity(
+            db,
+            research_request,
+            owner,
+            None,
+            research_request.user_id,
+        )
+
+        assert result.state is SocialVerificationState.EVIDENCE_FOUND
+        assert result.verified_profile_count == 1
 
     def test_verification_reports_insufficient_history_without_applying_threshold(self):
         research_request = request()
@@ -375,4 +465,30 @@ class TestSocialCapabilities:
         assert signals == {
             "official_social_profile_confirmed",
             "social_dormancy_measured",
+        }
+        assert SocialCheckStates.model_validate(
+            research_request.social_check_states
+        ).verification.state is SocialVerificationState.INSUFFICIENT_ACTIVITY_HISTORY
+
+    def test_missing_latest_post_persists_dormancy_unmeasurable_without_fake_evidence(self):
+        research_request = request()
+        observed = observation()
+        observed.latest_public_post_at = None
+        enrichment = type("Enrichment", (), {"observations": [observed]})()
+        db = FakeSession([None, None])
+
+        result = verify_social_profiles_and_measure_activity(
+            db,
+            research_request,
+            company(research_request),
+            None,
+            research_request.user_id,
+            enrichment,
+        )
+
+        assert result.state is SocialVerificationState.DORMANCY_UNMEASURABLE
+        signals = {item.signal_type for item in db.added if isinstance(item, ResearchEvidence)}
+        assert signals == {
+            "official_social_profile_confirmed",
+            "social_historic_activity_confirmed",
         }

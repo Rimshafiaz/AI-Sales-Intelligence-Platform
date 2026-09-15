@@ -42,6 +42,7 @@ class ResearchSocialObservation(Base):
     detail: Mapped[str | None] = mapped_column(String(500), nullable=True)
     display_name: Mapped[str | None] = mapped_column(String(255), nullable=True)
     handle: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    biography: Mapped[str | None] = mapped_column(String(2000), nullable=True)
     external_url: Mapped[str | None] = mapped_column(String(2048), nullable=True)
     provider_profile_id: Mapped[str | None] = mapped_column(String(255), nullable=True)
     is_private: Mapped[bool | None] = mapped_column(Boolean, nullable=True)
