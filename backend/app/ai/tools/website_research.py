@@ -56,12 +56,12 @@ def build_website_research_tools(
 ) -> tuple[BaseTool, BaseTool, BaseTool, BaseTool]:
     _require_bound_context(research_request, company, selection, expected_user_id)
 
-    @tool("get_verified_website_target")
+    @tool("get_verified_website_target", max_usage_count=1)
     def get_verified_website_target() -> str:
         """Read the already persisted trusted website target and its verification status."""
         return _target_result(research_request, company, selection).model_dump_json()
 
-    @tool("measure_verified_website_mobile_performance")
+    @tool("measure_verified_website_mobile_performance", max_usage_count=1)
     def measure_verified_website_mobile_performance() -> str:
         """Measure mobile performance only when trusted scope and a verified website permit it."""
         result = measure_mobile_performance(
@@ -69,7 +69,7 @@ def build_website_research_tools(
         )
         return WebsiteCapabilityResult.model_validate(result.__dict__).model_dump_json()
 
-    @tool("inspect_verified_website_conversion_paths")
+    @tool("inspect_verified_website_conversion_paths", max_usage_count=1)
     def inspect_verified_website_conversion_paths() -> str:
         """Inspect deterministic conversion paths only when trusted selected scope permits it."""
         result = inspect_conversion_paths(
@@ -77,10 +77,10 @@ def build_website_research_tools(
         )
         return WebsiteCapabilityResult.model_validate(result.__dict__).model_dump_json()
 
-    @tool("read_grounded_website_evidence")
+    @tool("read_grounded_website_evidence", max_usage_count=3)
     def read_grounded_website_evidence() -> str:
         """Read owned canonical website evidence and unresolved selected-model requirements."""
-        return _grounded_evidence_result(
+        return build_grounded_website_evidence(
             db, research_request, company, selection, expected_user_id
         ).model_dump_json()
 
@@ -133,7 +133,7 @@ def _target_result(
     )
 
 
-def _grounded_evidence_result(
+def build_grounded_website_evidence(
     db: Session,
     research_request: ResearchRequest,
     company: Company,

@@ -48,3 +48,13 @@ class GroundedWebsiteEvidenceResult(BaseModel):
     unresolved_requirements: list[EvidenceSignalType]
     audit_state: WebsiteAuditState
     audit_reason: str | None = None
+
+
+class WebsiteResearchHandoff(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    seller_goal: str
+    offering: str
+    company_name: str
+    location: str | None = None
+    starting_state: GroundedWebsiteEvidenceResult

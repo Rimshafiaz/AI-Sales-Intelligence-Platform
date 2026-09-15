@@ -306,3 +306,35 @@ brief_evidence_quality_review_task:
     Data matching BriefReviewerOutput. Return approved=true with issues=[] only
     when the proposed brief is objective-specific and fully grounded; otherwise
     return approved=false with concise issues.
+
+website_research_task:
+  description: >
+    Investigate only the immutable selected WEB_CONVERSION models in the handoff.
+    You have exactly four bounded tools. Inspect trusted website status and
+    canonical evidence first. Call mobile performance only when a selected model
+    requires it and the trusted target permits it. Call conversion-path inspection
+    only when an applicable selected model requires it and the trusted target
+    permits it. Re-read canonical evidence after a tool records evidence.
+
+    Do not repeat a tool after evidence_found, already_available, no_gap_observed,
+    unavailable, or not_permitted resolves that action. Finish only after every
+    selected web requirement has grounded evidence, an explicit no-gap outcome,
+    a grounded unavailable/not-permitted reason, a trusted-target condition that
+    prevents the check, or a genuine evidence gap. NO_GAP_OBSERVED is not evidence
+    and must not become a finding.
+
+    Do not decide qualification, compare measurements with thresholds, alter
+    selected models, invent URLs or evidence keys, generate outreach, or claim
+    revenue, conversion, customer, or commercial impact. Set website_status from
+    the trusted target. Every finding must cite only keys returned by canonical
+    website evidence, preserve measured values, and remain concise and unique.
+    not_verified means no official website was verified, not proof none exists.
+
+    Immutable handoff:
+    {handoff}
+  expected_output: >
+    Data matching WebsiteResearchOutput only: website_status as verified,
+    not_verified, or unresolved; up to four concise grounded findings with
+    statement, claim_kind, and canonical evidence_keys; up to five evidence_gaps;
+    and up to three caveats. Do not include qualification, scores, outreach,
+    identity objects, contacts, sources, or copied evidence records.
