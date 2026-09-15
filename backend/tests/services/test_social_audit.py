@@ -4,18 +4,32 @@ from datetime import UTC, datetime
 import pytest
 
 from app.models.company import Company
+from app.models.campaign_candidate_selection import CampaignCandidateSelection
 from app.models.research_evidence import ResearchEvidence
 from app.models.research_request import ResearchRequest, ResearchStatus
 from app.models.research_social_observation import ResearchSocialObservation
 from app.schemas.evidence_gate import EvidenceGateState
 from app.schemas.opportunity_models import EvidenceSource
-from app.schemas.social_audit import SocialAuditState
+from app.schemas.social_audit import (
+    SocialAuditState,
+    SocialCandidateDiscoveryResult,
+    SocialCandidateDiscoveryState,
+    SocialEnrichmentResultState,
+    SocialProfileCandidate,
+    SocialVerificationState,
+)
 from app.schemas.social_enrichment import (
     SocialEnrichmentState,
     SocialPlatform,
     SocialProfileObservation,
 )
-from app.services.social_audit import SocialAuditError, audit_research_social_profiles
+from app.services.social_audit import (
+    SocialAuditError,
+    audit_research_social_profiles,
+    discover_social_profile_candidates,
+    enrich_social_profile_candidates,
+    verify_social_profiles_and_measure_activity,
+)
 
 
 NOW = datetime(2026, 9, 8, tzinfo=UTC)
@@ -29,6 +43,10 @@ class FakeSession:
 
     def scalar(self, statement):
         return self.scalar_results.pop(0)
+
+    def scalars(self, statement):
+        entity = statement.column_descriptions[0].get("entity")
+        return iter(item for item in self.added if isinstance(item, entity))
 
     def add(self, value):
         self.added.append(value)
@@ -44,8 +62,10 @@ class StubProvider:
     def __init__(self, observations):
         self.observations = observations
         self.targets = []
+        self.calls = 0
 
     def enrich(self, targets):
+        self.calls += 1
         self.targets = targets
         return self.observations
 
@@ -57,6 +77,10 @@ def request():
         user_id=uuid.uuid4(),
         status=ResearchStatus.COMPLETED,
         evidence_gate_state=EvidenceGateState.READY_FOR_DEEPER_RESEARCH,
+        opportunity_model_selection={
+            "model_ids": ["social_presence.dormant_official_presence"],
+            "confirmed_by_user": True,
+        },
         objective={
             "location": "Lahore",
             "resolved_target": {
@@ -75,6 +99,20 @@ def company(research_request):
         user_id=research_request.user_id,
         name="Glow Salon",
     )
+
+
+def campaign_selection(research_request, urls):
+    selection = CampaignCandidateSelection(
+        id=uuid.uuid4(),
+        campaign_run_id=uuid.uuid4(),
+        company_id=research_request.company_id,
+        source_identity_key="places:glow",
+        candidate_snapshot={"social_profile_urls": urls},
+        shortlist_snapshot={},
+        evidence_snapshot=[],
+    )
+    research_request.campaign_candidate_selection_id = selection.id
+    return selection
 
 
 def observation(name="Glow Salon", state=SocialEnrichmentState.OBSERVED):
@@ -137,6 +175,9 @@ class TestSocialAudit:
     def test_keeps_an_unmatched_public_profile_without_official_signals(self):
         research_request = request()
         db = FakeSession([None, research_request])
+        unmatched = observation(name="Different Salon")
+        unmatched.public_emails = ["hello@unrelated.example"]
+        unmatched.public_phones = ["+92 300 0000000"]
 
         result = audit_research_social_profiles(
             db,
@@ -144,7 +185,7 @@ class TestSocialAudit:
             company(research_request),
             None,
             ["https://www.instagram.com/glowsalon/"],
-            StubProvider([observation(name="Different Salon")]),
+            StubProvider([unmatched]),
         )
 
         assert result.social_audit_state is SocialAuditState.COMPLETED
@@ -198,3 +239,140 @@ class TestSocialAudit:
                 ["https://www.instagram.com/glowsalon/"],
                 StubProvider([]),
             )
+
+
+class TestSocialCapabilities:
+    def test_non_social_scope_is_not_permitted(self):
+        research_request = request()
+        research_request.opportunity_model_selection = {
+            "model_ids": ["web_conversion.mobile_performance"],
+            "confirmed_by_user": True,
+        }
+
+        result = discover_social_profile_candidates(
+            FakeSession([]), research_request, company(research_request), None, research_request.user_id
+        )
+
+        assert result.state is SocialCandidateDiscoveryState.NOT_PERMITTED
+
+    def test_campaign_candidates_skip_bounded_search(self, monkeypatch):
+        research_request = request()
+        selection = campaign_selection(
+            research_request, ["https://instagram.com/glowsalon/"]
+        )
+        monkeypatch.setattr(
+            "app.integrations.search_provider.create_tavily_search_provider",
+            lambda *_: pytest.fail("Tavily should not run"),
+        )
+
+        result = discover_social_profile_candidates(
+            FakeSession([]),
+            research_request,
+            company(research_request),
+            selection,
+            research_request.user_id,
+        )
+
+        assert result.state is SocialCandidateDiscoveryState.CANDIDATES_AVAILABLE
+        assert str(result.candidates[0].profile_url).rstrip("/") == "https://instagram.com/glowsalon"
+
+    def test_bounded_autodiscovery_normalizes_and_filters_candidates(self, monkeypatch):
+        class Search:
+            def search(self, *_args, **_kwargs):
+                return [
+                    type("Result", (), {"url": "https://instagram.com/glow_salon/"})(),
+                    type("Result", (), {"url": "https://example.com/not-social"})(),
+                    type("Result", (), {"url": "https://facebook.com/unrelated"})(),
+                ]
+
+        monkeypatch.setattr(
+            "app.integrations.search_provider.create_tavily_search_provider",
+            lambda *_: Search(),
+        )
+
+        research_request = request()
+        result = discover_social_profile_candidates(
+            FakeSession([]),
+            research_request,
+            company(research_request),
+            None,
+            research_request.user_id,
+        )
+
+        assert result.state is SocialCandidateDiscoveryState.CANDIDATES_AVAILABLE
+        assert [(item.platform.value, item.handle) for item in result.candidates] == [
+            ("instagram", "glow_salon")
+        ]
+
+    def test_enrichment_rejects_non_platform_candidate_and_reuses_observation(self):
+        research_request = request()
+        owner = company(research_request)
+        invalid = SocialCandidateDiscoveryResult(
+            state=SocialCandidateDiscoveryState.CANDIDATES_AVAILABLE,
+            candidates=[
+                SocialProfileCandidate(
+                    profile_url="https://example.com/glowsalon",
+                    platform="instagram",
+                    handle="glowsalon",
+                    source="bounded_search",
+                )
+            ],
+            reason="test",
+        )
+        db = FakeSession([None])
+
+        rejected = enrich_social_profile_candidates(
+            db, research_request, owner, None, research_request.user_id, invalid, StubProvider([])
+        )
+        assert rejected.state is SocialEnrichmentResultState.NO_CANDIDATES
+
+        candidates = SocialCandidateDiscoveryResult(
+            state=SocialCandidateDiscoveryState.CANDIDATES_AVAILABLE,
+            candidates=[
+                SocialProfileCandidate(
+                    profile_url="https://instagram.com/glowsalon",
+                    platform="instagram",
+                    handle="glowsalon",
+                    source="bounded_search",
+                )
+            ],
+            reason="test",
+        )
+        provider = StubProvider([observation()])
+        first = enrich_social_profile_candidates(
+            db, research_request, owner, None, research_request.user_id, candidates, provider
+        )
+        second = enrich_social_profile_candidates(
+            db, research_request, owner, None, research_request.user_id, candidates, provider
+        )
+
+        assert first.state is SocialEnrichmentResultState.OBSERVATIONS_AVAILABLE
+        assert second.state is SocialEnrichmentResultState.ALREADY_AVAILABLE
+        assert provider.calls == 1
+
+    def test_verification_reports_insufficient_history_without_applying_threshold(self):
+        research_request = request()
+        observed = observation()
+        observed.recent_public_post_dates = [observed.latest_public_post_at]
+        enrichment = type(
+            "Enrichment",
+            (),
+            {"observations": [observed]},
+        )()
+        db = FakeSession([None, None])
+
+        result = verify_social_profiles_and_measure_activity(
+            db,
+            research_request,
+            company(research_request),
+            None,
+            research_request.user_id,
+            enrichment,
+        )
+
+        assert result.state is SocialVerificationState.INSUFFICIENT_ACTIVITY_HISTORY
+        signals = {item.signal_type for item in db.added if isinstance(item, ResearchEvidence)}
+        assert signals == {
+            "official_social_profile_confirmed",
+            "social_dormancy_measured",
+        }
