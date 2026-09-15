@@ -9,7 +9,6 @@ from app.ai.tasks.technology_task import create_technology_task
 from app.ai.tasks.prospect_evidence_brief_tasks import (
     create_brief_business_context_task,
     create_brief_digital_presence_task,
-    create_brief_evidence_quality_review_task,
     create_brief_public_traction_task,
 )
 from app.schemas.agent_outputs import (
@@ -38,7 +37,6 @@ from app.services.aggregate_verdict import (
     aggregate_headline,
     aggregate_verdict as compute_aggregate_verdict,
 )
-from app.services.prospect_evidence_brief_review import require_approved_prospect_evidence_brief
 
 
 def _extract_pydantic(task, phase_label: str):
@@ -230,14 +228,7 @@ def run_prospect_evidence_brief_crew(
         finding_outputs,
         opportunity_outreach,
     )
-    reviewer = _run_single_agent_crew(
-        create_brief_evidence_quality_review_task(
-            handoffs.evidence_quality_review,
-            brief,
-        ),
-        "Brief evidence quality review",
-    )
-    return require_approved_prospect_evidence_brief(handoffs, brief, reviewer)
+    return brief
 
 
 def assemble_prospect_evidence_brief(

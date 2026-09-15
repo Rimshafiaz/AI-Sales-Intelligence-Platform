@@ -7,7 +7,7 @@ from sqlalchemy.orm import Session
 
 from app.ai.context import MAX_EVIDENCE_SOURCES, build_research_evidence_context
 from app.ai.crew import run_prospect_evidence_brief_crew, run_sales_intelligence_crew
-from app.ai.opportunity_outreach import run_opportunity_outreach_agent
+from app.ai.opportunity_outreach_review import run_reviewed_opportunity_outreach
 from app.core.logging import get_logger
 from app.db.session import SessionLocal
 from app.models.campaign_candidate_selection import CampaignCandidateSelection
@@ -36,6 +36,7 @@ from app.services.company_discovery import build_objective_context
 from app.services.evidence_gate import requires_deep_qualification
 from app.services.prospect_evidence_brief import build_prospect_evidence_brief_handoffs
 from app.services.opportunity_outreach import build_opportunity_outreach_handoff
+from app.services.opportunity_outreach_review import OpportunityOutreachRejectedError
 
 logger = get_logger(__name__)
 
@@ -132,6 +133,15 @@ def run_generation_background(request_id: UUID, user_id: UUID) -> None:
                     company,
                 )
                 break
+            except OpportunityOutreachRejectedError as error:
+                db.rollback()
+                logger.error(
+                    "Generation stopped after the second Opportunity/Outreach review rejection "
+                    "for request %s: %s",
+                    request_id,
+                    error,
+                )
+                return
             except Exception as error:
                 db.rollback()
                 logger.warning(
@@ -352,7 +362,7 @@ def _generate_report(
                 selection,
                 brief_handoffs=handoffs,
             )
-            opportunity_outreach = run_opportunity_outreach_agent(
+            opportunity_outreach = run_reviewed_opportunity_outreach(
                 opportunity_handoff
             )
         return (

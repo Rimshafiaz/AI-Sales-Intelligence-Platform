@@ -2,10 +2,15 @@ from types import SimpleNamespace
 
 import pytest
 
+from app.ai import crew
 from app.models.campaign_prospect import CampaignProspectNextAction, CampaignProspectState
 from app.models.research_report import ReportKind
 from app.schemas.opportunity_qualification import OpportunityQualificationState
+from app.schemas.agent_outputs import BriefFindingsOutput, BriefReviewIssue
+from app.schemas.evidence_gate import EvidenceGateState
+from app.models.research_request import ResearchStatus
 from app.services.aggregate_verdict import AggregateVerdict
+from app.services.opportunity_outreach_review import OpportunityOutreachRejectedError
 from app.services import report_generation
 
 
@@ -41,7 +46,7 @@ def test_deep_qualified_request_uses_prospect_evidence_brief(monkeypatch):
     )
     monkeypatch.setattr(
         report_generation,
-        "run_opportunity_outreach_agent",
+        "run_reviewed_opportunity_outreach",
         lambda received: calls.append("agent") or opportunity_output,
     )
     monkeypatch.setattr(
@@ -95,7 +100,7 @@ def test_nonqualified_brief_skips_opportunity_outreach_agent(monkeypatch, state)
     )
     monkeypatch.setattr(
         report_generation,
-        "run_opportunity_outreach_agent",
+        "run_reviewed_opportunity_outreach",
         lambda *_: calls.append("agent"),
     )
     monkeypatch.setattr(
@@ -130,7 +135,7 @@ def test_invalid_qualified_output_stops_before_report_assembly(monkeypatch):
     )
     monkeypatch.setattr(
         report_generation,
-        "run_opportunity_outreach_agent",
+        "run_reviewed_opportunity_outreach",
         lambda _handoff: (_ for _ in ()).throw(ValueError("invalid grounded output")),
     )
 
@@ -143,6 +148,90 @@ def test_invalid_qualified_output_stops_before_report_assembly(monkeypatch):
     with pytest.raises(ValueError, match="invalid grounded output"):
         report_generation._generate_report(object(), request, object())
     assert assembled is False
+
+
+def test_active_brief_crew_has_no_legacy_reviewer_phase(monkeypatch):
+    handoffs = SimpleNamespace(
+        business_context="business",
+        digital_presence="digital",
+        public_traction="traction",
+    )
+    phases = []
+    monkeypatch.setattr(crew, "create_brief_business_context_task", lambda _: "business-task")
+    monkeypatch.setattr(crew, "create_brief_digital_presence_task", lambda _: "digital-task")
+    monkeypatch.setattr(crew, "create_brief_public_traction_task", lambda _: "traction-task")
+    monkeypatch.setattr(
+        crew,
+        "_run_single_agent_crew",
+        lambda _task, phase: phases.append(phase) or BriefFindingsOutput(),
+    )
+    report = object()
+    monkeypatch.setattr(
+        crew,
+        "assemble_prospect_evidence_brief",
+        lambda received, _findings, opportunity: (
+            report if received is handoffs and opportunity == "approved" else None
+        ),
+    )
+
+    assert crew.run_prospect_evidence_brief_crew(handoffs, "approved") is report
+    assert phases == [
+        "Brief business context",
+        "Brief digital presence",
+        "Brief public traction",
+    ]
+
+
+def test_second_review_rejection_bypasses_broad_generation_retries(monkeypatch):
+    request = SimpleNamespace(
+        id="request",
+        company_id="company",
+        status=ResearchStatus.COMPLETED,
+        evidence_gate_state=EvidenceGateState.READY_FOR_DEEPER_RESEARCH,
+    )
+
+    class Db:
+        rollbacks = 0
+
+        def rollback(self):
+            self.rollbacks += 1
+
+        def close(self):
+            pass
+
+    db = Db()
+    attempts = []
+    monkeypatch.setattr(report_generation, "SessionLocal", lambda: db)
+    monkeypatch.setattr(
+        report_generation, "get_research_request_for_user", lambda **_: request
+    )
+    monkeypatch.setattr(
+        report_generation, "get_research_report_for_user", lambda **_: None
+    )
+    monkeypatch.setattr(
+        report_generation, "get_company_by_id", lambda **_: object()
+    )
+    rejection = OpportunityOutreachRejectedError([
+        BriefReviewIssue(
+            issue_type="overstated_evidence",
+            reason="The commercial-impact claim remains unsupported.",
+        )
+    ])
+    monkeypatch.setattr(
+        report_generation,
+        "_generate_report",
+        lambda *_: attempts.append("generation") or (_ for _ in ()).throw(rejection),
+    )
+    monkeypatch.setattr(
+        report_generation.time,
+        "sleep",
+        lambda *_: pytest.fail("A second review rejection must not trigger broad retry."),
+    )
+
+    report_generation.run_generation_background("request", "user")
+
+    assert attempts == ["generation"]
+    assert db.rollbacks == 1
 
 
 def test_standard_request_keeps_legacy_report_generation(monkeypatch):

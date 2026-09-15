@@ -16,6 +16,18 @@ class OpportunityOutreachReviewError(ValueError):
     pass
 
 
+class OpportunityOutreachRejectedError(OpportunityOutreachReviewError):
+    def __init__(self, issues):
+        self.issues = tuple(issues)
+        details = "; ".join(
+            f"{issue.issue_type}: {issue.reason}" for issue in self.issues
+        )
+        super().__init__(
+            "Opportunity + Outreach review rejected the second candidate"
+            + (f": {details}" if details else ".")
+        )
+
+
 REVIEWABLE_FIELDS = {
     "opportunity_summary",
     "pitch_angle",

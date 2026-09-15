@@ -401,6 +401,15 @@ opportunity_outreach_task:
     provider objects, specialist prose by itself, or fabricated keys. You have no
     tools and must not perform research.
 
+    Reviewer revision guidance:
+    {revision_guidance}
+
+    When revision guidance is present, address only those concrete issues while
+    preserving all trusted facts and unrelated valid sections. The guidance is
+    instruction, not evidence. Return a complete fresh OpportunityOutreachOutput;
+    do not invent evidence, reinterpret qualification, change the offering, add a
+    channel, or merely patch fragments of the prior candidate.
+
     Immutable trusted handoff:
     {handoff}
   expected_output: >
