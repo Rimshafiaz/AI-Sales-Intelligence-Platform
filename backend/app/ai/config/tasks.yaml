@@ -410,3 +410,47 @@ opportunity_outreach_task:
     zero or one grounded draft per verified supported channel; and concise caveats.
     Email requires a subject; non-email drafts must not include one. Do not include
     qualification rows, model scope, evidence records, contacts, or research data.
+
+opportunity_outreach_review_task:
+  description: >
+    Adversarially but fairly review only the trusted context and validated candidate
+    below. Ask whether every important claim and draft can be defended using its
+    cited canonical evidence and fixed deterministic qualification. Approve useful,
+    grounded work; do not manufacture minor complaints.
+
+    Use unsupported_claim when cited evidence does not establish the prose. Use
+    qualification_contradiction when the candidate asserts a problem a fixed
+    qualification rejects. Use generic_outreach when replacing the business name
+    would leave a draft equally suitable for unrelated prospects. Use
+    weak_personalization when technically cited material is not meaningfully
+    prospect-specific. Name, city, category, and generic identity are insufficient.
+    Use duplicate_insight for semantic repetition, not merely exact duplicates. Use
+    irrelevant_finding when true evidence does not materially support the qualified
+    opportunity, offering, pitch, or outreach.
+
+    Use overstated_evidence when an observation becomes unsupported causal or
+    commercial impact: a PageSpeed result does not prove lost sales, social dormancy
+    does not prove lost engagement or revenue, and no verified website does not
+    prove missed leads or customer loss. Use unsupported_channel only if a draft or
+    its wording conflicts with verified channel availability.
+
+    Also check that drafts sound plausible for real freelancer outreach, avoid
+    exaggerated urgency or implied private knowledge, remain precise, and use a
+    low-pressure CTA. Map any material failure to the closest existing issue type.
+    Give the smallest useful issue set. A reason explains what must change but must
+    not supply rewritten copy. Use only supported field paths such as
+    opportunity_summary, pitch_angle, personalization_basis[index],
+    forbidden_claims, outreach_drafts[channel], or caveats; omit field for a
+    candidate-wide issue.
+
+    You have no tools. Do not research, reinterpret qualification, invent facts or keys,
+    change offering/channels, propose a replacement channel, rewrite the candidate,
+    or return corrected drafts.
+
+    Trusted review handoff:
+    {handoff}
+  expected_output: >
+    BriefReviewOutput only. Return approved=true and issues=[] when no material
+    semantic issue remains. Otherwise return approved=false with up to ten issues,
+    each using exactly one supported issue_type, a concise revision reason that does
+    not contain replacement outreach, and an optional supported field reference.
