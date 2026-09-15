@@ -34,6 +34,7 @@ from app.schemas.opportunity_models import (
 from app.schemas.website_audit import (
     WebsiteAuditResult,
     WebsiteAuditState,
+    WebsiteCheckExecutions,
     WebsiteCheckResult,
     WebsiteCheckState,
     WebsiteCheckExecution,
@@ -244,6 +245,9 @@ def inspect_verified_website_conversion_paths(
                 "No verified official website is available to inspect.",
             ),
         )
+    completed = _completed_check_result(research_request, "conversion_paths")
+    if completed is not None:
+        return completed
     for signal in permitted_signals:
         existing = _existing_evidence(db, research_request, expected_user_id, signal)
         if existing is not None:
@@ -340,17 +344,10 @@ def _guard_website_capability(
         raise WebsiteAuditError("Finish the evidence review before auditing a website.")
     if research_request.evidence_gate_state is not EvidenceGateState.READY_FOR_DEEPER_RESEARCH:
         raise WebsiteAuditError("Accepted evidence is required before a website audit.")
-    if (
-        selection is None
-        or research_request.campaign_candidate_selection_id != selection.id
-        or selection.company_id != company.id
-    ):
-        return target_from_research_request(research_request, company, selection), ()
-    run = db.get(CampaignRun, selection.campaign_run_id)
-    if run is None:
-        raise WebsiteAuditError("The selected campaign run is unavailable.")
     try:
-        selected = OpportunityModelSelection.model_validate(run.model_selection_snapshot)
+        selected = OpportunityModelSelection.model_validate(
+            research_request.opportunity_model_selection
+        )
     except ValueError as error:
         raise WebsiteAuditError("The selected opportunity-model scope is invalid.") from error
     return (
@@ -372,6 +369,18 @@ def _selected_industry(
         return resolve_industry(str(run.criteria_snapshot.get("business_category", "")))
     except LocalBusinessDiscoveryError:
         return None
+
+
+def _completed_check_result(
+    research_request: ResearchRequest,
+    capability: Literal["mobile_performance", "conversion_paths"],
+) -> WebsiteCheckResult | None:
+    execution = WebsiteCheckExecutions.model_validate(
+        research_request.website_check_states or {}
+    ).model_dump()[capability]
+    if execution["state"] is WebsiteCheckState.NO_GAP_OBSERVED:
+        return WebsiteCheckResult(execution["state"], execution["reason"] or "Check completed.")
+    return None
 
 
 def _existing_evidence(

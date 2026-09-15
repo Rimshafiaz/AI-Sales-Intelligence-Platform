@@ -44,10 +44,8 @@ from app.repositories.opportunity_qualifications import list_opportunity_qualifi
 from app.core.config import settings
 from app.integrations.search_provider import SearchProviderError, create_tavily_search_provider
 from app.services.company_resolution import CompanyWebsiteResolver, ResolvedCompany
-from app.services.opportunity_qualification import (
-    OpportunityQualificationError,
-    qualify_research_request,
-)
+from app.services.opportunity_qualification import OpportunityQualificationError
+from app.services.research_qualification import research_then_qualify
 
 
 router = APIRouter(tags=["Research Requests"])
@@ -359,7 +357,7 @@ def qualify_opportunities_endpoint(
         else None
     )
     try:
-        qualify_research_request(db, research_request, company, selection, payload)
+        research_then_qualify(db, research_request, company, selection, payload)
     except OpportunityQualificationError as error:
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,

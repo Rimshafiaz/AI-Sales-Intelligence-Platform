@@ -205,6 +205,10 @@ class TestOpportunityQualificationPersistence:
             user_id=uuid.uuid4(),
             status=ResearchStatus.COMPLETED,
             evidence_gate_state=EvidenceGateState.READY_FOR_DEEPER_RESEARCH,
+            opportunity_model_selection={
+                "model_ids": ["web_conversion.mobile_performance"],
+                "confirmed_by_user": True,
+            },
             objective={
                 "mode": "known_prospect",
                 "resolved_target": {

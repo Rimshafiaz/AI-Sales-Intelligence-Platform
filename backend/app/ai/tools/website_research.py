@@ -4,7 +4,6 @@ from crewai.tools import BaseTool, tool
 from sqlalchemy.orm import Session
 
 from app.models.campaign_candidate_selection import CampaignCandidateSelection
-from app.models.campaign_run import CampaignRun
 from app.models.company import Company
 from app.models.research_request import ResearchRequest
 from app.repositories.research_evidence import list_research_evidence_for_user
@@ -143,7 +142,7 @@ def build_grounded_website_evidence(
 ) -> GroundedWebsiteEvidenceResult:
     _require_bound_context(research_request, company, selection, expected_user_id)
     target_result = _target_result(research_request, company, selection)
-    models = _selected_web_models(db, selection)
+    models = _selected_web_models(research_request)
     evidence = _persisted_evidence(db, research_request, expected_user_id)
     evidence.extend(_selection_evidence(selection))
     evidence.extend(_target_evidence(research_request, company, selection))
@@ -169,16 +168,12 @@ def build_grounded_website_evidence(
 
 
 def _selected_web_models(
-    db: Session,
-    selection: CampaignCandidateSelection | None,
+    research_request: ResearchRequest,
 ) -> list[SelectedWebsiteModel]:
-    if selection is None:
-        return []
-    run = db.get(CampaignRun, selection.campaign_run_id)
-    if run is None:
-        raise WebsiteAuditError("The selected campaign run is unavailable.")
     try:
-        selected = OpportunityModelSelection.model_validate(run.model_selection_snapshot)
+        selected = OpportunityModelSelection.model_validate(
+            research_request.opportunity_model_selection
+        )
     except ValueError as error:
         raise WebsiteAuditError("The selected opportunity-model scope is invalid.") from error
     return [

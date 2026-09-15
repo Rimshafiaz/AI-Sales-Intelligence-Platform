@@ -62,6 +62,10 @@ def context(model_ids=("web_conversion.mobile_performance",), verified=True):
         status=ResearchStatus.COMPLETED,
         evidence_gate_state=EvidenceGateState.READY_FOR_DEEPER_RESEARCH,
         website_audit_state=WebsiteAuditState.NOT_RUN,
+        opportunity_model_selection={
+            "model_ids": list(model_ids),
+            "confirmed_by_user": True,
+        },
         objective={
             "resolved_target": {
                 "business_name": company.name,
@@ -94,6 +98,17 @@ def tools_by_name(bound_tools):
 
 
 class TestBoundWebsiteResearchTools:
+    def test_request_level_scope_works_without_campaign_selection(self):
+        db, request, company, _selection, user_id = context()
+
+        result = website_research.build_grounded_website_evidence(
+            db, request, company, None, user_id
+        )
+
+        assert [item.model_id for item in result.selected_models] == [
+            "web_conversion.mobile_performance"
+        ]
+
     def test_tools_have_no_llm_controlled_arguments(self):
         db, request, company, selection, user_id = context()
         tools = website_research.build_website_research_tools(

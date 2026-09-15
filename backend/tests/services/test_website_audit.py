@@ -119,6 +119,7 @@ def campaign_scope(request, model_ids, business_category="restaurants_cafes"):
         evidence_snapshot=[],
     )
     request.campaign_candidate_selection_id = selection.id
+    request.opportunity_model_selection = run.model_selection_snapshot
     return run, selection
 
 
@@ -275,6 +276,18 @@ class TestConversionPathCapability:
         assert states.conversion_paths.state is WebsiteCheckState.NO_GAP_OBSERVED
         assert states.mobile_performance.state is WebsiteCheckState.NOT_RUN
         assert db.added == []
+
+        retried = inspect_verified_website_conversion_paths(
+            db,
+            request,
+            company(request),
+            selection,
+            request.user_id,
+            collector,
+        )
+
+        assert retried.state is WebsiteCheckState.NO_GAP_OBSERVED
+        assert collector.urls == ["https://glow.example/"]
 
 
 class TestWebsiteAuditCompatibility:

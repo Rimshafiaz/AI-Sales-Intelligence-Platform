@@ -108,13 +108,21 @@ def _qualification_scope(
     selection: CampaignCandidateSelection | None,
     request: OpportunityQualificationRunRequest,
 ) -> tuple[OpportunityModelSelection, IndustryOverlayId]:
+    try:
+        model_selection = OpportunityModelSelection.model_validate(
+            research_request.opportunity_model_selection
+        )
+    except ValueError as error:
+        raise OpportunityQualificationError(
+            "A valid persisted Opportunity Model selection is required before qualification."
+        ) from error
     if selection is not None:
         campaign_run = db.get(CampaignRun, selection.campaign_run_id)
         if campaign_run is None:
             raise OpportunityQualificationError("The selected campaign run is unavailable.")
         try:
             return (
-                OpportunityModelSelection.model_validate(campaign_run.model_selection_snapshot),
+                model_selection,
                 resolve_industry(str(campaign_run.criteria_snapshot.get("business_category", ""))),
             )
         except (LocalBusinessDiscoveryError, ValueError) as error:
@@ -125,15 +133,11 @@ def _qualification_scope(
         raise OpportunityQualificationError(
             "Qualification requires a campaign selection or a confirmed known-prospect scope."
         )
-    if request.model_selection is None or not request.model_selection.confirmed_by_user:
-        raise OpportunityQualificationError(
-            "Confirm an Opportunity Model selection before qualifying a known prospect."
-        )
     if request.industry is None:
         raise OpportunityQualificationError(
             "Select the business industry before qualifying a known prospect."
         )
-    return request.model_selection, request.industry
+    return model_selection, request.industry
 
 
 def _qualification_evidence(
