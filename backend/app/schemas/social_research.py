@@ -49,3 +49,13 @@ class GroundedSocialEvidenceResult(BaseModel):
     unresolved_requirements: list[EvidenceSignalType]
     audit_state: SocialAuditState
     audit_reason: str | None = None
+
+
+class SocialResearchHandoff(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    seller_goal: str
+    offering: str
+    company_name: str
+    location: str | None = None
+    starting_state: GroundedSocialEvidenceResult

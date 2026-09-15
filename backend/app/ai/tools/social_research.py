@@ -1,3 +1,4 @@
+from dataclasses import dataclass
 from uuid import UUID
 
 from crewai.tools import BaseTool, tool
@@ -24,6 +25,7 @@ from app.schemas.social_audit import (
     SocialCandidateEnrichmentResult,
     SocialEnrichmentResultState,
     SocialProfileCandidate,
+    SocialVerificationState,
 )
 from app.schemas.social_research import (
     GroundedSocialEvidenceResult,
@@ -50,14 +52,23 @@ SOCIAL_SIGNALS = {
 }
 
 
+@dataclass
+class SocialResearchToolTrace:
+    discovery_state: SocialCandidateDiscoveryState | None = None
+    enrichment_state: SocialEnrichmentResultState | None = None
+    verification_state: SocialVerificationState | None = None
+
+
 def build_social_research_tools(
     db: Session,
     research_request: ResearchRequest,
     company: Company,
     selection: CampaignCandidateSelection | None,
     expected_user_id: UUID,
+    trace: SocialResearchToolTrace | None = None,
 ) -> tuple[BaseTool, BaseTool, BaseTool, BaseTool]:
     _require_bound_context(research_request, company, selection, expected_user_id)
+    trace = trace or SocialResearchToolTrace()
     discovered: SocialCandidateDiscoveryResult | None = None
 
     @tool("read_grounded_social_evidence", max_usage_count=3)
@@ -74,31 +85,37 @@ def build_social_research_tools(
         discovered = discover_candidates(
             db, research_request, company, selection, expected_user_id
         )
+        trace.discovery_state = discovered.state
         return discovered.model_dump_json()
 
     @tool("enrich_social_profile_candidates", max_usage_count=1)
     def enrich_social_profile_candidates() -> str:
         """Enrich only candidates produced by the bound deterministic discovery capability."""
         if discovered is None:
+            trace.enrichment_state = SocialEnrichmentResultState.NO_CANDIDATES
             return SocialCandidateEnrichmentResult(
                 state=SocialEnrichmentResultState.NO_CANDIDATES,
                 reason="Run bounded candidate discovery before enrichment.",
             ).model_dump_json()
-        return enrich_candidates(
+        result = enrich_candidates(
             db,
             research_request,
             company,
             selection,
             expected_user_id,
             discovered,
-        ).model_dump_json()
+        )
+        trace.enrichment_state = result.state
+        return result.model_dump_json()
 
     @tool("verify_social_profiles_and_measure_activity", max_usage_count=1)
     def verify_social_profiles_and_measure_activity() -> str:
         """Verify owned persisted observations and derive factual social activity evidence."""
-        return verify_profiles(
+        result = verify_profiles(
             db, research_request, company, selection, expected_user_id
-        ).model_dump_json()
+        )
+        trace.verification_state = result.state
+        return result.model_dump_json()
 
     return (
         read_grounded_social_evidence,

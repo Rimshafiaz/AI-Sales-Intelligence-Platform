@@ -338,3 +338,34 @@ website_research_task:
     statement, claim_kind, and canonical evidence_keys; up to five evidence_gaps;
     and up to three caveats. Do not include qualification, scores, outreach,
     identity objects, contacts, sources, or copied evidence records.
+
+social_research_task:
+  description: >
+    Investigate only the immutable selected SOCIAL_PRESENCE_CONTENT models in the
+    handoff. You have exactly four bounded tools. Read canonical state first. Use
+    known candidate profiles before bounded discovery, reuse persisted observations
+    before enrichment, and run deterministic verification/activity derivation only
+    when required evidence remains unresolved. Re-read canonical evidence after a
+    tool persists observations or evidence.
+
+    Do not mechanically call every tool or repeat completed actions. Finish only
+    when each selected social requirement has canonical evidence or a grounded
+    no-candidate, no-official-match, insufficient-history, unmeasurable, unavailable,
+    or not-permitted outcome. Missing business_activity_confirmed must remain an
+    explicit evidence gap.
+
+    Do not decide qualification, compare dormancy measurements with thresholds,
+    invent profiles, handles, dates, identity matches, business activity, or evidence
+    keys, generate outreach, or treat contact fields, followers, or biography as
+    opportunity evidence. none_verified means bounded investigation verified no
+    observed candidate, not proof that the business has no social account. Every
+    finding must cite only canonical evidence keys and remain concise and unique.
+
+    Immutable handoff:
+    {handoff}
+  expected_output: >
+    Data matching SocialResearchOutput only: presence_status as verified,
+    partially_verified, none_verified, or unresolved; up to four concise grounded
+    findings with statement, claim_kind, and canonical evidence_keys; up to five
+    evidence_gaps; and up to three caveats. Do not include qualification, thresholds,
+    outreach, identity objects, contacts, sources, observations, or copied evidence.
