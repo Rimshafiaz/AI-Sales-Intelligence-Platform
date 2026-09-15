@@ -177,11 +177,15 @@ class BriefReviewIssue(BaseModel):
 
 
 class BriefReviewOutput(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
     approved: bool
     issues: list[BriefReviewIssue] = Field(default_factory=list, max_length=10)
 
     @model_validator(mode="after")
     def require_issues_when_rejected(self) -> Self:
+        if self.approved and self.issues:
+            raise ValueError("An approved review cannot contain issues.")
         if not self.approved and not self.issues:
             raise ValueError("Reviewer must provide issues when rejecting a Prospect Evidence Brief.")
         return self
