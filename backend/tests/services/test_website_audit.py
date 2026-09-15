@@ -11,7 +11,11 @@ from app.models.company import Company
 from app.models.research_evidence import ResearchEvidence
 from app.models.research_request import ResearchRequest, ResearchStatus
 from app.schemas.evidence_gate import EvidenceGateState
-from app.schemas.website_audit import WebsiteAuditState, WebsiteCheckState
+from app.schemas.website_audit import (
+    WebsiteAuditState,
+    WebsiteCheckExecutions,
+    WebsiteCheckState,
+)
 from app.services.website_audit import (
     WebsiteAuditError,
     audit_research_website,
@@ -171,6 +175,9 @@ class TestMobilePerformanceCapability:
         assert evidence.numeric_value == 43.0
         assert evidence.source_provider == "pagespeed_insights"
         assert evidence.source_identity_key == "pagespeed:https://glow.example/"
+        states = WebsiteCheckExecutions.model_validate(request.website_check_states)
+        assert states.mobile_performance.state is WebsiteCheckState.EVIDENCE_FOUND
+        assert states.conversion_paths.state is WebsiteCheckState.NOT_RUN
 
     def test_existing_valid_measurement_skips_pagespeed(self):
         request = research_request()
@@ -253,8 +260,9 @@ class TestConversionPathCapability:
             )
         )
 
+        db = FakeSession(run, scalars_results=[[]])
         result = inspect_verified_website_conversion_paths(
-            FakeSession(run, scalars_results=[[]]),
+            db,
             request,
             company(request),
             selection,
@@ -263,6 +271,10 @@ class TestConversionPathCapability:
         )
 
         assert result.state is WebsiteCheckState.NO_GAP_OBSERVED
+        states = WebsiteCheckExecutions.model_validate(request.website_check_states)
+        assert states.conversion_paths.state is WebsiteCheckState.NO_GAP_OBSERVED
+        assert states.mobile_performance.state is WebsiteCheckState.NOT_RUN
+        assert db.added == []
 
 
 class TestWebsiteAuditCompatibility:

@@ -6,7 +6,11 @@ import pytest
 from app.models.company import Company
 from app.models.research_request import ResearchStatus
 from app.models.user import User
-from app.schemas.opportunity_models import EvidenceSource, IdentityState
+from app.schemas.opportunity_models import (
+    EvidenceSource,
+    IdentityState,
+    OpportunityModelSelection,
+)
 from app.schemas.research_request import KnownProspectResearchRequest
 from app.services.company_resolution import ResolvedCompany
 from app.services.research_requests import (
@@ -51,6 +55,10 @@ def request() -> KnownProspectResearchRequest:
         offering="Website redesign and booking setup",
         desired_outcome="Decide whether to research this prospect further.",
         location="Lahore",
+        model_selection=OpportunityModelSelection(
+            model_ids=("web_conversion.mobile_performance",),
+            confirmed_by_user=True,
+        ),
     )
 
 
@@ -82,6 +90,10 @@ class TestKnownProspectConfirmation:
         assert research_request.objective["goal"] == request().goal
         assert research_request.objective["desired_outcome"] == request().desired_outcome
         assert research_request.objective["resolved_target"]["identity_state"] == "verified"
+        assert research_request.opportunity_model_selection == {
+            "model_ids": ["web_conversion.mobile_performance"],
+            "confirmed_by_user": True,
+        }
         assert len(db.added) == 2
 
     def test_reuses_an_owned_company_with_the_same_verified_website(self):

@@ -38,6 +38,9 @@ class FakeSession:
     def commit(self):
         self.commit_calls += 1
 
+    def refresh(self, value):
+        return value
+
 
 def context(model_ids=("web_conversion.mobile_performance",), verified=True):
     user_id = uuid.uuid4()

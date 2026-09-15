@@ -8,9 +8,9 @@ from app.schemas.company_discovery import (
     UNSUPPORTED_GOAL_MESSAGE,
     DiscoveryObjective,
 )
-from app.schemas.opportunity_models import EvidenceSource, IdentityState
+from app.schemas.opportunity_models import EvidenceSource, IdentityState, OpportunityModelSelection
 from app.schemas.evidence_gate import EvidenceGateState
-from app.schemas.website_audit import WebsiteAuditState
+from app.schemas.website_audit import WebsiteAuditState, WebsiteCheckExecutions
 from app.schemas.social_audit import SocialAuditState
 
 
@@ -24,6 +24,7 @@ class KnownProspectResearchRequest(BaseModel):
     location: str | None = Field(default=None, max_length=100)
     website: HttpUrl | None = None
     phone_number: str | None = Field(default=None, max_length=100)
+    model_selection: OpportunityModelSelection | None = None
 
     @field_validator(
         "business_name", "goal", "offering", "desired_outcome", "location", "phone_number", mode="before"
@@ -33,6 +34,12 @@ class KnownProspectResearchRequest(BaseModel):
         if isinstance(value, str):
             return value.strip() or None
         return value
+
+    @model_validator(mode="after")
+    def require_confirmed_model_selection(self) -> Self:
+        if self.model_selection is not None and not self.model_selection.confirmed_by_user:
+            raise ValueError("Confirm the Opportunity Model selection before creating research.")
+        return self
 
 
 class KnownProspectResolutionResponse(BaseModel):
@@ -54,6 +61,7 @@ class ResearchRequestStartRequest(BaseModel):
     region: str | None = Field(default=None, max_length=100)
     website: HttpUrl | None = None
     objective: DiscoveryObjective | None = None
+    model_selection: OpportunityModelSelection | None = None
 
     @field_validator("goal", "offering", "region", "website", mode="before")
     @classmethod
@@ -72,6 +80,9 @@ class ResearchRequestStartRequest(BaseModel):
         if not self.offering:
             raise ValueError("Describe what you are offering so the research can be scoped.")
 
+        if self.model_selection is not None and not self.model_selection.confirmed_by_user:
+            raise ValueError("Confirm the Opportunity Model selection before creating research.")
+
         return self
 
 
@@ -85,6 +96,9 @@ class ResearchRequestResponse(BaseModel):
     finished_at: datetime | None = None
     error_message: str | None = None
     objective: dict | None = None
+    opportunity_model_selection: OpportunityModelSelection | None = None
+    specialist_outputs: dict | None = None
+    website_check_states: WebsiteCheckExecutions | None = None
     evidence_gate_state: EvidenceGateState
     evidence_gate_reason: str | None = None
     evidence_gated_at: datetime | None = None

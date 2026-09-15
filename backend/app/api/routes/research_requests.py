@@ -137,6 +137,7 @@ async def create_research_request_endpoint(
         offering=payload.offering if payload else None,
         region=payload.region if payload else None,
         website=str(payload.website) if payload and payload.website else None,
+        model_selection=payload.model_selection if payload else None,
     )
     if research_request is None:
         raise HTTPException(

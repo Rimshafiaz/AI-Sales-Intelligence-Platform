@@ -1,4 +1,5 @@
 from datetime import UTC, datetime
+from typing import Literal
 from uuid import UUID
 
 from sqlalchemy.orm import Session
@@ -19,7 +20,10 @@ from app.repositories.research_evidence import (
     list_research_evidence_for_user,
     upsert_research_evidence,
 )
-from app.repositories.research_requests import save_website_audit_result
+from app.repositories.research_requests import (
+    save_website_audit_result,
+    save_website_check_execution,
+)
 from app.schemas.evidence_gate import EvidenceGateState
 from app.schemas.opportunity_models import (
     EvidenceSignalType,
@@ -32,6 +36,7 @@ from app.schemas.website_audit import (
     WebsiteAuditState,
     WebsiteCheckResult,
     WebsiteCheckState,
+    WebsiteCheckExecution,
 )
 from app.services.evidence_gate import target_from_research_request
 from app.services.industry_conversion_paths import analyze_conversion_paths
@@ -117,14 +122,26 @@ def measure_verified_website_mobile_performance(
         in model.required_signal_types
         for model in models
     ):
-        return WebsiteCheckResult(
-            WebsiteCheckState.NOT_PERMITTED,
-            "No selected opportunity model requires mobile-performance evidence.",
+        return _record_execution(
+            db,
+            research_request,
+            expected_user_id,
+            "mobile_performance",
+            WebsiteCheckResult(
+                WebsiteCheckState.NOT_PERMITTED,
+                "No selected opportunity model requires mobile-performance evidence.",
+            ),
         )
     if not target.identity_verified or target.official_website is None:
-        return WebsiteCheckResult(
-            WebsiteCheckState.UNAVAILABLE,
-            "No verified official website is available to audit.",
+        return _record_execution(
+            db,
+            research_request,
+            expected_user_id,
+            "mobile_performance",
+            WebsiteCheckResult(
+                WebsiteCheckState.UNAVAILABLE,
+                "No verified official website is available to audit.",
+            ),
         )
     existing = _existing_evidence(
         db,
@@ -133,16 +150,28 @@ def measure_verified_website_mobile_performance(
         EvidenceSignalType.WEBSITE_MOBILE_PERFORMANCE_MEASURED,
     )
     if existing is not None and existing.numeric_value is not None:
-        return _evidence_result(
-            WebsiteCheckState.ALREADY_AVAILABLE,
-            "A valid mobile performance measurement is already available.",
-            existing,
+        return _record_execution(
+            db,
+            research_request,
+            expected_user_id,
+            "mobile_performance",
+            _evidence_result(
+                WebsiteCheckState.ALREADY_AVAILABLE,
+                "A valid mobile performance measurement is already available.",
+                existing,
+            ),
         )
     try:
         audit_provider = provider or create_pagespeed_provider(settings.pagespeed_api_key)
         measurement = audit_provider.measure_mobile(target.official_website)
     except (PageSpeedProviderError, ValueError) as error:
-        return WebsiteCheckResult(WebsiteCheckState.UNAVAILABLE, str(error))
+        return _record_execution(
+            db,
+            research_request,
+            expected_user_id,
+            "mobile_performance",
+            WebsiteCheckResult(WebsiteCheckState.UNAVAILABLE, str(error)),
+        )
 
     observed_at = datetime.now(UTC)
     evidence = upsert_research_evidence(
@@ -163,11 +192,16 @@ def measure_verified_website_mobile_performance(
         source_identity_key=f"pagespeed:{measurement.final_url}",
         captured_at=observed_at,
     )
-    db.commit()
-    return _evidence_result(
-        WebsiteCheckState.EVIDENCE_FOUND,
-        "A factual mobile performance measurement was saved from PageSpeed Insights.",
-        evidence,
+    return _record_execution(
+        db,
+        research_request,
+        expected_user_id,
+        "mobile_performance",
+        _evidence_result(
+            WebsiteCheckState.EVIDENCE_FOUND,
+            "A factual mobile performance measurement was saved from PageSpeed Insights.",
+            evidence,
+        ),
     )
 
 
@@ -189,42 +223,78 @@ def inspect_verified_website_conversion_paths(
         if signal in CONVERSION_PATH_SIGNALS
     }
     if not permitted_signals:
-        return WebsiteCheckResult(
-            WebsiteCheckState.NOT_PERMITTED,
-            "No selected applicable opportunity model supports automated conversion-path inspection.",
+        return _record_execution(
+            db,
+            research_request,
+            expected_user_id,
+            "conversion_paths",
+            WebsiteCheckResult(
+                WebsiteCheckState.NOT_PERMITTED,
+                "No selected applicable opportunity model supports automated conversion-path inspection.",
+            ),
         )
     if not target.identity_verified or target.official_website is None:
-        return WebsiteCheckResult(
-            WebsiteCheckState.UNAVAILABLE,
-            "No verified official website is available to inspect.",
+        return _record_execution(
+            db,
+            research_request,
+            expected_user_id,
+            "conversion_paths",
+            WebsiteCheckResult(
+                WebsiteCheckState.UNAVAILABLE,
+                "No verified official website is available to inspect.",
+            ),
         )
     for signal in permitted_signals:
         existing = _existing_evidence(db, research_request, expected_user_id, signal)
         if existing is not None:
-            return _evidence_result(
-                WebsiteCheckState.ALREADY_AVAILABLE,
-                "Conversion-path evidence is already available.",
-                existing,
+            return _record_execution(
+                db,
+                research_request,
+                expected_user_id,
+                "conversion_paths",
+                _evidence_result(
+                    WebsiteCheckState.ALREADY_AVAILABLE,
+                    "Conversion-path evidence is already available.",
+                    existing,
+                ),
             )
     industry = _selected_industry(db, selection)
     if industry is None or not any(industry in model.applicable_industries for model in models):
-        return WebsiteCheckResult(
-            WebsiteCheckState.NOT_PERMITTED,
-            "The selected conversion-path model is not applicable to the trusted industry.",
+        return _record_execution(
+            db,
+            research_request,
+            expected_user_id,
+            "conversion_paths",
+            WebsiteCheckResult(
+                WebsiteCheckState.NOT_PERMITTED,
+                "The selected conversion-path model is not applicable to the trusted industry.",
+            ),
         )
     snapshot = (website_collector or WebsiteMetadataCollector()).collect_conversion_snapshot(
         target.official_website
     )
     if snapshot is None:
-        return WebsiteCheckResult(
-            WebsiteCheckState.UNAVAILABLE,
-            "The verified official website could not be inspected.",
+        return _record_execution(
+            db,
+            research_request,
+            expected_user_id,
+            "conversion_paths",
+            WebsiteCheckResult(
+                WebsiteCheckState.UNAVAILABLE,
+                "The verified official website could not be inspected.",
+            ),
         )
     finding = analyze_conversion_paths(industry, snapshot.links)
     if finding is None or finding.signal_type not in permitted_signals:
-        return WebsiteCheckResult(
-            WebsiteCheckState.NO_GAP_OBSERVED,
-            "The completed inspection found no qualifying conversion-path gap for the selected models.",
+        return _record_execution(
+            db,
+            research_request,
+            expected_user_id,
+            "conversion_paths",
+            WebsiteCheckResult(
+                WebsiteCheckState.NO_GAP_OBSERVED,
+                "The completed inspection found no qualifying conversion-path gap for the selected models.",
+            ),
         )
     observed_at = datetime.now(UTC)
     evidence = upsert_research_evidence(
@@ -242,11 +312,16 @@ def inspect_verified_website_conversion_paths(
         source_identity_key=f"website_conversion:{industry.value}:{snapshot.url}",
         captured_at=observed_at,
     )
-    db.commit()
-    return _evidence_result(
-        WebsiteCheckState.EVIDENCE_FOUND,
-        "Deterministic conversion-path evidence was saved from the verified official website.",
-        evidence,
+    return _record_execution(
+        db,
+        research_request,
+        expected_user_id,
+        "conversion_paths",
+        _evidence_result(
+            WebsiteCheckState.EVIDENCE_FOUND,
+            "Deterministic conversion-path evidence was saved from the verified official website.",
+            evidence,
+        ),
     )
 
 
@@ -325,6 +400,27 @@ def _evidence_result(state, reason, evidence) -> WebsiteCheckResult:
         numeric_value=evidence.numeric_value,
         source_identity_key=evidence.source_identity_key,
     )
+
+
+def _record_execution(
+    db: Session,
+    research_request: ResearchRequest,
+    expected_user_id: UUID,
+    capability: Literal["mobile_performance", "conversion_paths"],
+    result: WebsiteCheckResult,
+) -> WebsiteCheckResult:
+    save_website_check_execution(
+        db,
+        research_request,
+        expected_user_id,
+        capability,
+        WebsiteCheckExecution(
+            state=result.state,
+            reason=result.reason,
+            checked_at=datetime.now(UTC),
+        ),
+    )
+    return result
 
 
 def _save_unavailable(

@@ -264,6 +264,10 @@ class TestCampaignSelectionHandoff:
         assert research_request.finished_at is None
         assert research_request.objective["business_name"] == "Glow Salon"
         assert research_request.objective["campaign_run_id"] == str(selection.campaign_run_id)
+        assert research_request.opportunity_model_selection == {
+            "model_ids": ["web_conversion.no_verified_web_presence"],
+            "confirmed_by_user": True,
+        }
 
     def test_rejects_duplicate_selection_without_creating_new_records(self):
         existing_selection = object()

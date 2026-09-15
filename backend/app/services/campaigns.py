@@ -25,6 +25,7 @@ from app.schemas.campaign import (
     CampaignRunCreate,
     CampaignRunResponse,
 )
+from app.schemas.opportunity_models import OpportunityModelSelection
 
 
 class CampaignWorkflowError(ValueError):
@@ -258,6 +259,9 @@ def create_candidate_selections_and_research_requests(
                 user_id=current_user.id,
                 campaign_candidate_selection_id=selection.id,
                 status=ResearchStatus.PENDING,
+                opportunity_model_selection=OpportunityModelSelection.model_validate(
+                    campaign_run.model_selection_snapshot
+                ).model_dump(mode="json"),
                 objective=_campaign_research_objective(
                     campaign_run,
                     selection,

@@ -13,7 +13,7 @@ from app.models.research_request import ResearchRequest
 from app.models.research_request import ResearchStatus
 from app.models.company import Company
 from app.models.user import User
-from app.schemas.opportunity_models import IdentityState
+from app.schemas.opportunity_models import IdentityState, OpportunityModelSelection
 from app.schemas.research_request import KnownProspectResearchRequest
 from app.services.company_resolution import CompanyWebsiteResolver, ResolvedCompany
 
@@ -31,6 +31,7 @@ def create_research_request_for_company(
     offering: str | None = None,
     region: str | None = None,
     website: str | None = None,
+    model_selection: OpportunityModelSelection | None = None,
 ) -> ResearchRequest | None:
     company=get_company_by_id(db=db,company_id=company_id,user_id=current_user.id)
     if not company:
@@ -55,6 +56,7 @@ def create_research_request_for_company(
         company_id=company_id,
         user_id=current_user.id,
         objective=snapshot,
+        model_selection=model_selection,
     )
     return request
 
@@ -135,6 +137,11 @@ def confirm_known_prospect(
         company_id=company.id,
         user_id=current_user.id,
         status=ResearchStatus.PENDING,
+        opportunity_model_selection=(
+            request.model_selection.model_dump(mode="json")
+            if request.model_selection is not None
+            else None
+        ),
         objective={
             "mode": "known_prospect",
             "goal": request.goal,

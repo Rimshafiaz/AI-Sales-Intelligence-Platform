@@ -89,6 +89,9 @@ class ResearchRequest(Base):
         JSONB,
         nullable=True,
     )
+    opportunity_model_selection: Mapped[dict | None] = mapped_column(JSONB, nullable=True)
+    specialist_outputs: Mapped[dict | None] = mapped_column(JSONB, nullable=True)
+    website_check_states: Mapped[dict | None] = mapped_column(JSONB, nullable=True)
     evidence_gate_state: Mapped[EvidenceGateState] = mapped_column(
         SAEnum(
             EvidenceGateState,

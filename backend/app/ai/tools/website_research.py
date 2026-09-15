@@ -24,6 +24,7 @@ from app.schemas.website_research import (
     WebsiteCapabilityResult,
     WebsiteTargetStatus,
 )
+from app.schemas.website_audit import WebsiteCheckExecutions
 from app.services.evidence_gate import target_from_research_request
 from app.services.opportunity_model_catalog import get_opportunity_model
 from app.services.website_audit import (
@@ -161,6 +162,9 @@ def build_grounded_website_evidence(
         unresolved_requirements=sorted(required - available, key=lambda item: item.value),
         audit_state=research_request.website_audit_state,
         audit_reason=research_request.website_audit_reason,
+        check_states=WebsiteCheckExecutions.model_validate(
+            research_request.website_check_states or {}
+        ),
     )
 
 

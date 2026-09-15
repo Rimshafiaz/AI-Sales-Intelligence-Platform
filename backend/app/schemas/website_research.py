@@ -1,10 +1,14 @@
 from enum import Enum
 
-from pydantic import BaseModel, ConfigDict, HttpUrl
+from pydantic import BaseModel, ConfigDict, Field, HttpUrl
 
 from app.schemas.opportunity_models import EvidenceSource, EvidenceSignalType, OpportunityModelId
 from app.schemas.prospect_evidence_brief import BriefEvidence
-from app.schemas.website_audit import WebsiteAuditState, WebsiteCheckState
+from app.schemas.website_audit import (
+    WebsiteAuditState,
+    WebsiteCheckExecutions,
+    WebsiteCheckState,
+)
 
 
 class WebsiteTargetStatus(str, Enum):
@@ -48,6 +52,7 @@ class GroundedWebsiteEvidenceResult(BaseModel):
     unresolved_requirements: list[EvidenceSignalType]
     audit_state: WebsiteAuditState
     audit_reason: str | None = None
+    check_states: WebsiteCheckExecutions = Field(default_factory=WebsiteCheckExecutions)
 
 
 class WebsiteResearchHandoff(BaseModel):

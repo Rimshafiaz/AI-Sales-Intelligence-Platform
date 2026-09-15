@@ -214,6 +214,14 @@ class TestOpportunityQualificationPersistence:
                     "source": {"source_url": "https://glowsalon.example/about"},
                 },
             },
+            specialist_outputs={
+                "website": {
+                    "website_status": "verified",
+                    "findings": [],
+                    "evidence_gaps": ["Agent prose must not affect qualification."],
+                    "caveats": [],
+                }
+            },
         )
         measurement = ResearchEvidence(
             id=uuid.uuid4(),
