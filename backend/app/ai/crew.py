@@ -324,8 +324,6 @@ def _available_outreach_channels(
         for contact in contacts
         if contact.contact_type in channel_by_contact
     }
-    if any(contact.contact_type is ContactPathType.SOCIAL_PROFILE for contact in contacts):
-        channels.add(OutreachChannel.LINKEDIN)
     return channels
 def _select_brief_verdict(
     qualifications: list[BriefQualification],

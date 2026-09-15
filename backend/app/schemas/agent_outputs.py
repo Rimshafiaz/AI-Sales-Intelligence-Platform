@@ -131,6 +131,8 @@ class SocialResearchOutput(BaseModel):
 
 
 class OpportunityOutreachOutput(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
     opportunity_summary: AgentBriefFinding
     pitch_angle: AgentPitchAngle
     personalization_basis: list[AgentBriefFinding] = Field(min_length=1, max_length=5)
