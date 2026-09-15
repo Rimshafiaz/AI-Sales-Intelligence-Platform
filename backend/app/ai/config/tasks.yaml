@@ -369,3 +369,44 @@ social_research_task:
     findings with statement, claim_kind, and canonical evidence_keys; up to five
     evidence_gaps; and up to three caveats. Do not include qualification, thresholds,
     outreach, identity objects, contacts, sources, observations, or copied evidence.
+
+opportunity_outreach_task:
+  description: >
+    Use only the immutable trusted handoff below. Qualification is final: the
+    aggregate verdict must be qualified, and at least one LIKELY qualification must
+    support the opportunity summary and pitch. Do not change qualification rows,
+    selected-model scope, evidence, specialist outputs, or contact channels.
+
+    Explain concisely why this prospect is relevant to the seller's exact offering;
+    do not summarize every fact. Choose the most specific service angle supported by
+    a LIKELY model instead of generic language such as "improve your digital
+    presence." The pitch and every draft must use objective.offering exactly.
+
+    Personalization must use prospect-specific canonical opportunity evidence.
+    Company name, city, industry, or identity alone is insufficient. Apply the swap
+    test: if replacing the business name would make the same personalization work
+    for an unrelated prospect, make it more specific without inventing facts.
+
+    List unsupported commercial claims to avoid, including lost customers, lost
+    revenue, poor conversion rate, a website costing sales, customer dislike, or a
+    claimed need for the service unless canonical evidence establishes that exact
+    claim. No verified website does not prove commercial harm; PageSpeed does not
+    prove lost sales; social dormancy does not prove lost engagement or revenue.
+
+    Generate at most one concise draft for each channel in
+    available_verified_channels and no others. Use meaningful grounded
+    personalization, a precise non-overstated pitch, and a low-pressure CTA. Every
+    opportunity summary, pitch, personalization item, and outreach grounding must
+    cite only canonical evidence keys from the handoff. Never cite observation IDs,
+    provider objects, specialist prose by itself, or fabricated keys. You have no
+    tools and must not perform research.
+
+    Immutable trusted handoff:
+    {handoff}
+  expected_output: >
+    Data matching OpportunityOutreachOutput only: one grounded opportunity_summary;
+    one required pitch_angle using the exact seller offering; one to five unique,
+    meaningful grounded personalization_basis findings; explicit forbidden_claims;
+    zero or one grounded draft per verified supported channel; and concise caveats.
+    Email requires a subject; non-email drafts must not include one. Do not include
+    qualification rows, model scope, evidence records, contacts, or research data.
