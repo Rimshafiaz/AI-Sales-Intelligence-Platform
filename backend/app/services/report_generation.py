@@ -2,10 +2,12 @@ from datetime import datetime, timezone
 import time
 from uuid import UUID
 
+from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.ai.context import MAX_EVIDENCE_SOURCES, build_research_evidence_context
 from app.ai.crew import run_prospect_evidence_brief_crew, run_sales_intelligence_crew
+from app.ai.opportunity_outreach import run_opportunity_outreach_agent
 from app.core.logging import get_logger
 from app.db.session import SessionLocal
 from app.models.campaign_candidate_selection import CampaignCandidateSelection
@@ -27,12 +29,13 @@ from app.repositories.research_requests import get_research_request_for_user
 from app.repositories.research_sources import list_research_sources_for_user
 from app.schemas.company_discovery import DiscoveryObjective
 from app.schemas.prospect_evidence_brief import ProspectEvidenceBrief
-from app.services.aggregate_verdict import AggregateVerdict
+from app.services.aggregate_verdict import AggregateVerdict, aggregate_verdict
 from app.schemas.sales_intelligence_report import SalesIntelligenceReport
 from app.schemas.evidence_gate import EvidenceGateState, SourceAdmissionState
 from app.services.company_discovery import build_objective_context
 from app.services.evidence_gate import requires_deep_qualification
 from app.services.prospect_evidence_brief import build_prospect_evidence_brief_handoffs
+from app.services.opportunity_outreach import build_opportunity_outreach_handoff
 
 logger = get_logger(__name__)
 
@@ -334,8 +337,26 @@ def _generate_report(
             company,
             selection,
         )
+        aggregate = aggregate_verdict(
+            [
+                item.state
+                for item in handoffs.evidence_quality_review.context.qualifications
+            ]
+        )
+        opportunity_outreach = None
+        if aggregate is AggregateVerdict.QUALIFIED:
+            opportunity_handoff = build_opportunity_outreach_handoff(
+                db,
+                research_request,
+                company,
+                selection,
+                brief_handoffs=handoffs,
+            )
+            opportunity_outreach = run_opportunity_outreach_agent(
+                opportunity_handoff
+            )
         return (
-            run_prospect_evidence_brief_crew(handoffs),
+            run_prospect_evidence_brief_crew(handoffs, opportunity_outreach),
             ReportKind.PROSPECT_EVIDENCE_BRIEF,
         )
 

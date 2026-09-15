@@ -3,7 +3,6 @@ from types import SimpleNamespace
 
 import pytest
 
-from app.ai.crew import _available_outreach_channels
 from app.schemas.agent_outputs import OpportunityOutreachOutput
 from app.schemas.opportunity_outreach import OpportunityOutreachHandoff
 from app.schemas.prospect_evidence_brief import (
@@ -280,8 +279,6 @@ def test_verified_channels_are_exact_and_drafts_are_unique(monkeypatch):
         OutreachChannel.FACEBOOK,
         OutreachChannel.LINKEDIN,
     }
-    assert _available_outreach_channels([contacts[-1]]) == set()
-
     draft = {
         "channel": "email",
         "subject": "A measured mobile redesign idea",

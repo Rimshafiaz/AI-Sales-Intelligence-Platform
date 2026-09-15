@@ -30,7 +30,7 @@ from app.schemas.prospect_evidence_brief import (
     PublicTractionHandoff,
     StrategyOutreachHandoff,
 )
-from app.schemas.agent_outputs import BriefFindingsOutput, BriefReviewerOutput, BriefStrategyOutput
+from app.schemas.agent_outputs import BriefFindingsOutput, BriefReviewerOutput, OpportunityOutreachOutput
 from app.ai.crew import assemble_prospect_evidence_brief
 from app.services.prospect_evidence_brief_review import (
     ProspectEvidenceBriefReviewError,
@@ -351,12 +351,22 @@ class TestProspectEvidenceBriefAssemblyAndReview:
                 ]
             )
         ]
-        strategy = BriefStrategyOutput(
+        strategy = OpportunityOutreachOutput(
+            opportunity_summary={
+                "statement": "The measured mobile result supports a focused redesign opportunity.",
+                "claim_kind": "inference",
+                "evidence_keys": ["research_evidence:mobile-score"],
+            },
             pitch_angle={
                 "statement": "A mobile-focused booking improvement may be relevant.",
                 "offering": "Website redesign and booking setup",
                 "evidence_keys": ["research_evidence:mobile-score"],
             },
+            personalization_basis=[{
+                "statement": "Reference the measured mobile score for this prospect.",
+                "claim_kind": "derived_metric",
+                "evidence_keys": ["research_evidence:mobile-score"],
+            }],
             outreach_drafts=[
                 {
                     "channel": "email",
@@ -381,7 +391,7 @@ class TestProspectEvidenceBriefAssemblyAndReview:
         assert brief.pitch_angle is not None
         assert brief.outreach_drafts[0].offering == brief.objective.offering
 
-    def test_discards_agent_content_outside_the_brief_evidence(self):
+    def test_rejects_unvalidated_opportunity_content_outside_brief_evidence(self):
         handoffs = brief_handoffs()
         findings = [
             BriefFindingsOutput(
@@ -394,12 +404,22 @@ class TestProspectEvidenceBriefAssemblyAndReview:
                 ]
             )
         ]
-        strategy = BriefStrategyOutput(
+        strategy = OpportunityOutreachOutput(
+            opportunity_summary={
+                "statement": "An unavailable measurement suggests a problem.",
+                "claim_kind": "inference",
+                "evidence_keys": ["unavailable-evidence"],
+            },
             pitch_angle={
                 "statement": "Improve an unavailable measurement.",
                 "offering": "Website redesign and booking setup",
                 "evidence_keys": ["unavailable-evidence"],
             },
+            personalization_basis=[{
+                "statement": "Reference an unavailable measurement.",
+                "claim_kind": "inference",
+                "evidence_keys": ["unavailable-evidence"],
+            }],
             outreach_drafts=[
                 {
                     "channel": "email",
@@ -416,11 +436,28 @@ class TestProspectEvidenceBriefAssemblyAndReview:
             ],
         )
 
-        brief = assemble_prospect_evidence_brief(handoffs, findings, strategy)
+        with pytest.raises(ValidationError):
+            assemble_prospect_evidence_brief(handoffs, findings, strategy)
 
-        assert brief.findings == []
+    @pytest.mark.parametrize(
+        "state",
+        [
+            OpportunityQualificationState.INSUFFICIENT_EVIDENCE,
+            OpportunityQualificationState.NOT_ELIGIBLE,
+        ],
+    )
+    def test_nonqualified_brief_has_no_pitch_or_outreach(self, state):
+        handoffs = brief_handoffs()
+        context = handoffs.evidence_quality_review.context
+        context.qualifications[0] = context.qualifications[0].model_copy(
+            update={"state": state}
+        )
+
+        brief = assemble_prospect_evidence_brief(handoffs, [], None)
+
         assert brief.pitch_angle is None
         assert brief.outreach_drafts == []
+        assert brief.model_dump(mode="json")
 
     def test_reviewer_rejection_blocks_the_brief(self):
         handoffs = brief_handoffs()

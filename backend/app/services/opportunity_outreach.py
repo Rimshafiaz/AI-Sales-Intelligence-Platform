@@ -19,6 +19,7 @@ from app.schemas.prospect_evidence_brief import (
     ContactEvidenceState,
     ContactPathType,
     OutreachChannel,
+    ProspectEvidenceBriefHandoffs,
 )
 from app.services.aggregate_verdict import AggregateVerdict, aggregate_verdict
 from app.services.opportunity_model_catalog import get_opportunity_model
@@ -55,8 +56,10 @@ def build_opportunity_outreach_handoff(
     research_request: ResearchRequest,
     company: Company,
     selection: CampaignCandidateSelection | None,
+    *,
+    brief_handoffs: ProspectEvidenceBriefHandoffs | None = None,
 ) -> OpportunityOutreachHandoff:
-    legacy_handoffs = build_prospect_evidence_brief_handoffs(
+    legacy_handoffs = brief_handoffs or build_prospect_evidence_brief_handoffs(
         db, research_request, company, selection
     )
     context = legacy_handoffs.evidence_quality_review.context

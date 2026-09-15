@@ -10,14 +10,12 @@ from app.ai.tasks.prospect_evidence_brief_tasks import (
     create_brief_business_context_task,
     create_brief_digital_presence_task,
     create_brief_evidence_quality_review_task,
-    create_brief_opportunity_diagnosis_task,
     create_brief_public_traction_task,
-    create_brief_strategy_outreach_task,
 )
 from app.schemas.agent_outputs import (
     BriefFindingsOutput,
-    BriefStrategyOutput,
     NewsAgentOutput,
+    OpportunityOutreachOutput,
     PainPointAgentOutput,
     ResearchAgentOutput,
     ReviewerOutput,
@@ -28,17 +26,15 @@ from app.schemas.opportunity_qualification import OpportunityQualificationState
 from app.schemas.prospect_evidence_brief import (
     BriefEvidenceQuality,
     BriefFinding,
-    BriefContactPath,
     BriefQualification,
-    ContactPathType,
     GroundedOutreachDraft,
-    OutreachChannel,
     PitchAngle,
     ProspectEvidenceBrief,
     ProspectEvidenceBriefHandoffs,
 )
 from app.schemas.sales_intelligence_report import SalesIntelligenceReport
 from app.services.aggregate_verdict import (
+    AggregateVerdict,
     aggregate_headline,
     aggregate_verdict as compute_aggregate_verdict,
 )
@@ -210,6 +206,7 @@ def run_sales_intelligence_crew(
 
 def run_prospect_evidence_brief_crew(
     handoffs: ProspectEvidenceBriefHandoffs,
+    opportunity_outreach: OpportunityOutreachOutput | None,
 ) -> ProspectEvidenceBrief:
     business_context = _run_single_agent_crew(
         create_brief_business_context_task(handoffs.business_context),
@@ -223,27 +220,15 @@ def run_prospect_evidence_brief_crew(
         create_brief_public_traction_task(handoffs.public_traction),
         "Brief public traction",
     )
-    opportunity_diagnosis = _run_single_agent_crew(
-        create_brief_opportunity_diagnosis_task(handoffs.opportunity_diagnosis),
-        "Brief opportunity diagnosis",
-    )
     finding_outputs = [
         business_context,
         digital_presence,
         public_traction,
-        opportunity_diagnosis,
     ]
-    strategy = _run_single_agent_crew(
-        create_brief_strategy_outreach_task(
-            handoffs.strategy_outreach,
-            finding_outputs,
-        ),
-        "Brief strategy and outreach",
-    )
     brief = assemble_prospect_evidence_brief(
         handoffs,
         finding_outputs,
-        strategy,
+        opportunity_outreach,
     )
     reviewer = _run_single_agent_crew(
         create_brief_evidence_quality_review_task(
@@ -258,7 +243,7 @@ def run_prospect_evidence_brief_crew(
 def assemble_prospect_evidence_brief(
     handoffs: ProspectEvidenceBriefHandoffs,
     finding_outputs: list[BriefFindingsOutput],
-    strategy: BriefStrategyOutput,
+    opportunity_outreach: OpportunityOutreachOutput | None,
 ) -> ProspectEvidenceBrief:
     context = handoffs.evidence_quality_review.context
     verdict = _select_brief_verdict(context.qualifications)
@@ -266,27 +251,41 @@ def assemble_prospect_evidence_brief(
         [item.state for item in context.qualifications]
     )
     evidence_keys = {evidence.key for evidence in context.evidence}
-    findings = _unique_findings(finding_outputs, evidence_keys)
-    caveats = _unique_caveats(finding_outputs, strategy)
-    is_likely = verdict.state is OpportunityQualificationState.LIKELY
-    available_channels = _available_outreach_channels(context.contacts)
+    if (aggregate is AggregateVerdict.QUALIFIED) != (opportunity_outreach is not None):
+        raise ValueError(
+            "A validated Opportunity/Outreach output is required only for a QUALIFIED brief."
+        )
+    opportunity_findings = (
+        [
+            opportunity_outreach.opportunity_summary,
+            *opportunity_outreach.personalization_basis,
+        ]
+        if opportunity_outreach is not None
+        else []
+    )
+    findings = _unique_findings(finding_outputs, evidence_keys, opportunity_findings)
+    caveats = _unique_caveats(
+        finding_outputs,
+        (
+            [
+                *opportunity_outreach.caveats,
+                *(f"Avoid unsupported claim: {claim}" for claim in opportunity_outreach.forbidden_claims),
+            ]
+            if opportunity_outreach is not None
+            else []
+        ),
+    )
     pitch_angle = (
-        PitchAngle.model_validate(strategy.pitch_angle.model_dump())
-        if is_likely
-        and strategy.pitch_angle is not None
-        and strategy.pitch_angle.offering == context.objective.offering
-        and set(strategy.pitch_angle.evidence_keys) <= evidence_keys
+        PitchAngle.model_validate(opportunity_outreach.pitch_angle.model_dump())
+        if opportunity_outreach is not None
         else None
     )
     outreach_drafts = (
         [
             GroundedOutreachDraft.model_validate(draft.model_dump())
-            for draft in strategy.outreach_drafts
-            if draft.offering == context.objective.offering
-            and draft.channel in available_channels
-            and all(set(grounding.evidence_keys) <= evidence_keys for grounding in draft.grounding)
+            for draft in opportunity_outreach.outreach_drafts
         ]
-        if is_likely
+        if opportunity_outreach is not None
         else []
     )
     return ProspectEvidenceBrief(
@@ -307,24 +306,6 @@ def assemble_prospect_evidence_brief(
     )
 
 
-def _available_outreach_channels(
-    contacts: list[BriefContactPath],
-) -> set[OutreachChannel]:
-    channel_by_contact = {
-        ContactPathType.EMAIL: OutreachChannel.EMAIL,
-        ContactPathType.LINKEDIN: OutreachChannel.LINKEDIN,
-        ContactPathType.INSTAGRAM: OutreachChannel.INSTAGRAM,
-        ContactPathType.FACEBOOK: OutreachChannel.FACEBOOK,
-        ContactPathType.WHATSAPP: OutreachChannel.WHATSAPP,
-        ContactPathType.PHONE: OutreachChannel.PHONE,
-        ContactPathType.CONTACT_FORM: OutreachChannel.CONTACT_FORM,
-    }
-    channels = {
-        channel_by_contact[contact.contact_type]
-        for contact in contacts
-        if contact.contact_type in channel_by_contact
-    }
-    return channels
 def _select_brief_verdict(
     qualifications: list[BriefQualification],
 ) -> BriefQualification:
@@ -350,11 +331,12 @@ def _brief_evidence_quality(verdict: BriefQualification) -> BriefEvidenceQuality
 def _unique_findings(
     outputs: list[BriefFindingsOutput],
     evidence_keys: set[str],
+    priority_findings: list[BriefFinding] | None = None,
 ) -> list[BriefFinding]:
     findings = []
     seen = set()
-    for output in outputs:
-        for finding in output.findings:
+    for candidates in [priority_findings or [], *(output.findings for output in outputs)]:
+        for finding in candidates:
             if not set(finding.evidence_keys) <= evidence_keys:
                 continue
             key = finding.statement.casefold()
@@ -366,13 +348,13 @@ def _unique_findings(
 
 def _unique_caveats(
     outputs: list[BriefFindingsOutput],
-    strategy: BriefStrategyOutput,
+    additional: list[str],
 ) -> list[str]:
     caveats = []
     seen = set()
     for caveat in [
         *(value for output in outputs for value in output.caveats),
-        *strategy.caveats,
+        *additional,
     ]:
         normalized = caveat.strip()
         if normalized and normalized.casefold() not in seen:
