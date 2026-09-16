@@ -21,9 +21,13 @@ from app.schemas.prospect_evidence_brief import (
     OutreachChannel,
     ProspectEvidenceBriefHandoffs,
 )
+from app.schemas.prospect_evidence_brief_context import TrustedProspectEvidenceBriefContext
 from app.services.aggregate_verdict import AggregateVerdict, aggregate_verdict
 from app.services.opportunity_model_catalog import get_opportunity_model
-from app.services.prospect_evidence_brief import build_prospect_evidence_brief_handoffs
+from app.services.prospect_evidence_brief import (
+    build_prospect_evidence_brief_context,
+    build_prospect_evidence_brief_handoffs,
+)
 
 
 class OpportunityOutreachError(ValueError):
@@ -58,11 +62,16 @@ def build_opportunity_outreach_handoff(
     selection: CampaignCandidateSelection | None,
     *,
     brief_handoffs: ProspectEvidenceBriefHandoffs | None = None,
+    brief_context: TrustedProspectEvidenceBriefContext | None = None,
 ) -> OpportunityOutreachHandoff:
-    legacy_handoffs = brief_handoffs or build_prospect_evidence_brief_handoffs(
-        db, research_request, company, selection
-    )
-    context = legacy_handoffs.evidence_quality_review.context
+    if brief_context is not None:
+        context = brief_context
+    elif brief_handoffs is not None:
+        context = brief_handoffs.evidence_quality_review.context
+    else:
+        context = build_prospect_evidence_brief_handoffs(
+            db, research_request, company, selection
+        ).evidence_quality_review.context
     try:
         selected = OpportunityModelSelection.model_validate(
             research_request.opportunity_model_selection
@@ -136,6 +145,7 @@ def validate_opportunity_outreach_output(
     if handoff.aggregate_verdict is not AggregateVerdict.QUALIFIED:
         raise OpportunityOutreachError("Outreach output requires a QUALIFIED aggregate verdict.")
     validated = OpportunityOutreachOutput.model_validate(output)
+    _reject_disallowed_copy(validated)
     evidence_by_key = {item.key: item for item in handoff.evidence}
     evidence_keys = set(evidence_by_key)
     referenced_groups = [
@@ -206,6 +216,27 @@ def validate_opportunity_outreach_output(
             "Outreach draft channel is not backed by a verified contact path."
         )
     return validated
+
+
+def _reject_disallowed_copy(output: OpportunityOutreachOutput) -> None:
+    generated_text = [
+        output.opportunity_summary.statement,
+        output.pitch_angle.statement,
+        *(item.statement for item in output.personalization_basis),
+        *output.forbidden_claims,
+        *output.caveats,
+        *(draft.subject or "" for draft in output.outreach_drafts),
+        *(draft.message for draft in output.outreach_drafts),
+        *(
+            grounding.claim
+            for draft in output.outreach_drafts
+            for grounding in draft.grounding
+        ),
+    ]
+    if any("\N{EM DASH}" in value for value in generated_text):
+        raise OpportunityOutreachError(
+            "Generated report and outreach copy must not contain em dashes."
+        )
 
 
 def _required_specialist_output(outputs, namespace, model, required):

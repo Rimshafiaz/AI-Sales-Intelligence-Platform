@@ -39,7 +39,6 @@ from app.schemas.outreach_attempt import (
     OutreachDraftOptionResponse,
     OutreachOutcomeUpdate,
 )
-from app.schemas.opportunity_qualification import OpportunityQualificationState
 from app.schemas.prospect_evidence_brief import (
     BriefContactPath,
     ContactPathType,
@@ -201,7 +200,7 @@ def list_outreach_draft_options(
             brief = ProspectEvidenceBrief.model_validate(report.report_data)
         except ValueError:
             continue
-        if brief.verdict.state is not OpportunityQualificationState.LIKELY:
+        if brief.aggregate_verdict is not AggregateVerdict.QUALIFIED:
             continue
         options = []
         for draft in brief.outreach_drafts:

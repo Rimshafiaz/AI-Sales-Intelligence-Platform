@@ -1,76 +1,33 @@
 import { useState, type ReactNode } from 'react'
 import { Link } from 'react-router-dom'
-import { Check, Copy, ExternalLink } from 'lucide-react'
-import type { BriefEvidence, ProspectEvidenceBriefData } from '../../lib/report'
+import { Check, Copy } from 'lucide-react'
+import type { ProspectEvidenceBriefData } from '../../lib/report'
 
 function Section({ title, children }: { title: string; children: ReactNode }) {
-  return (
-    <section className="mt-8">
-      <h2 className="label-caps border-b border-line-soft pb-2 text-ink-soft">{title}</h2>
-      <div className="mt-3">{children}</div>
-    </section>
-  )
+  return <section className="mt-8"><h2 className="label-caps border-b border-line-soft pb-2 text-ink-soft">{title}</h2><div className="mt-3">{children}</div></section>
 }
 
 function CopyDraftButton({ text }: { text: string }) {
   const [copied, setCopied] = useState(false)
-  return (
-    <button
-      type="button"
-      onClick={async () => {
-        await navigator.clipboard.writeText(text)
-        setCopied(true)
-        setTimeout(() => setCopied(false), 2000)
-      }}
-      className="inline-flex items-center gap-1 rounded-control border border-line px-1.5 py-0.5 font-ui text-[11px] text-ink-soft hover:border-ink-faint hover:text-ink"
-    >
-      {copied ? <Check size={11} className="text-ok-ink" /> : <Copy size={11} />}
-      {copied ? 'Copied' : 'Copy'}
-    </button>
-  )
-}
-
-function EvidenceList({ keys, evidence }: { keys: string[]; evidence: BriefEvidence[] }) {
-  const items = keys
-    .map((key) => evidence.find((item) => item.key === key))
-    .filter((item): item is BriefEvidence => item !== undefined)
-  if (items.length === 0) return null
-  return (
-    <ul className="mt-2 space-y-1.5 border-l-2 border-line-soft pl-3">
-      {items.map((item) => (
-        <li key={item.key} className="text-xs text-ink-soft">
-          <span className="font-medium text-ink">{item.supporting_value}</span>{' '}
-          <span className="text-ink-faint">· {item.source.provider}</span>
-          {item.source.source_url && (
-            <a
-              href={item.source.source_url}
-              target="_blank"
-              rel="noreferrer"
-              aria-label={`Open evidence source from ${item.source.provider}`}
-              className="ml-1 inline-flex align-text-bottom text-action hover:text-ink"
-            >
-              <ExternalLink size={12} />
-            </a>
-          )}
-        </li>
-      ))}
-    </ul>
-  )
+  return <button type="button" onClick={async () => { await navigator.clipboard.writeText(text); setCopied(true); setTimeout(() => setCopied(false), 2000) }} className="inline-flex items-center gap-1 rounded-control border border-line px-1.5 py-0.5 font-ui text-[11px] text-ink-soft hover:border-ink-faint hover:text-ink">{copied ? <Check size={11} className="text-ok-ink" /> : <Copy size={11} />}{copied ? 'Copied' : 'Copy'}</button>
 }
 
 const verdictStyle: Record<string, string> = {
-  likely: 'border-ok-bg bg-ok-bg/50 text-ok-ink',
-  insufficient_evidence: 'border-warn-bg bg-warn-bg/60 text-warn-ink',
-  not_eligible: 'border-line bg-slate-wash text-ink-soft',
   qualified: 'border-ok-bg bg-ok-bg/50 text-ok-ink',
   needs_review: 'border-warn-bg bg-warn-bg/60 text-warn-ink',
   not_a_fit: 'border-line bg-slate-wash text-ink-soft',
 }
 
-const evidenceStyle = {
-  observed: 'bg-slate-wash text-ink-soft',
-  derived_metric: 'bg-slate-wash text-ink-soft',
-  inference: 'bg-warn-bg/60 text-warn-ink',
+const legacyModelLabels: Record<string, string> = {
+  'web_conversion.no_verified_web_presence': 'Official website',
+  'web_conversion.mobile_performance': 'Mobile performance',
+  'web_conversion.booking_contact_path': 'Booking and contact path',
+  'web_conversion.restaurant_reservation_path': 'Reservation path',
+  'web_conversion.restaurant_customer_path': 'Customer path',
+  'web_conversion.fitness_membership_path': 'Membership enquiry path',
+  'web_conversion.retail_product_path': 'Product enquiry path',
+  'web_conversion.clinic_patient_path': 'Patient contact path',
+  'social_presence.dormant_official_presence': 'Social activity',
 }
 
 function contactHref(type: string, value: string): string {
@@ -79,205 +36,60 @@ function contactHref(type: string, value: string): string {
   return value
 }
 
-export function ProspectEvidenceBriefView({
-  brief,
-  outreach,
-}: {
-  brief: ProspectEvidenceBriefData
-  outreach?: ProspectEvidenceBriefData['outreach']
-}) {
-  const aggregate = (brief.aggregate_verdict ?? 'needs_review').replaceAll('_', ' ')
-  const qualifications = brief.qualifications ?? [brief.verdict]
-  return (
-    <>
-      <section className="mt-6 rounded-card border border-line-soft bg-card p-5">
-        <div className="flex flex-wrap items-start justify-between gap-4">
-          <div>
-            <p className="label-caps text-ink-faint">Prospect verdict</p>
-            <span
-              className={
-                'mt-1.5 inline-flex rounded-control border px-2 py-1 font-ui text-sm font-semibold capitalize ' +
-                verdictStyle[brief.aggregate_verdict ?? 'needs_review']
-              }
-            >
-              {aggregate}
-            </span>
-            <p className="mt-2 text-xs capitalize text-ink-faint">
-              Evidence quality: {brief.evidence_quality.replaceAll('_', ' ')}
-            </p>
-          </div>
-          <div className="max-w-xl">
-            <p className="label-caps text-ink-faint">Why it surfaced</p>
-            <p className="mt-1 text-sm text-ink">{brief.aggregate_headline ?? aggregate}</p>
-          </div>
-        </div>
-        <ul className="mt-4 divide-y divide-line-soft">
-          {qualifications.map((item) => (
-            <li key={item.opportunity_model_id} className="flex items-center justify-between gap-3 py-2">
-              <span className="min-w-0 truncate text-sm text-ink">
-                {brief.modelLabels?.[item.opportunity_model_id] ?? item.opportunity_model_id}
-              </span>
-              <span
-                className={
-                  'shrink-0 rounded-control border px-2 py-0.5 font-ui text-xs font-medium capitalize ' +
-                  verdictStyle[item.state]
-                }
-              >
-                {item.state.replaceAll('_', ' ')}
-              </span>
-            </li>
-          ))}
-        </ul>
-        <p className="mt-2 text-xs text-ink-faint">{brief.verdict.reason}</p>
-        <EvidenceList keys={brief.verdict.supporting_evidence_keys} evidence={brief.evidence} />
-      </section>
+export function ProspectEvidenceBriefView({ brief, outreach }: { brief: ProspectEvidenceBriefData; outreach?: ProspectEvidenceBriefData['outreach'] }) {
+  const current = brief.schema_version === 2
+  const aggregate = brief.aggregate_verdict ?? 'needs_review'
+  const assessment = current ? brief.opportunity_assessment ?? [] : (brief.qualifications ?? (brief.verdict ? [brief.verdict] : [])).map((item) => ({
+    check: legacyModelLabels[item.opportunity_model_id] ?? 'Selected opportunity',
+    result: item.state === 'likely' ? ('opportunity_found' as const) : item.state === 'not_eligible' ? ('no_issue_observed' as const) : ('unresolved' as const),
+    evidence_summary: item.reason,
+    evidence_keys: item.supporting_evidence_keys,
+  }))
+  const approach = brief.recommended_approach ?? (brief.pitch_angle ? {
+    opportunity_summary: brief.findings?.[0] ?? { statement: brief.pitch_angle.statement, claim_kind: 'inference' as const, evidence_keys: brief.pitch_angle.evidence_keys },
+    pitch_angle: brief.pitch_angle,
+    personalization_basis: brief.findings ?? [],
+    forbidden_claims: [],
+    caveats: brief.caveats ?? [],
+  } : null)
+  const explanation = brief.verdict_explanation ?? brief.aggregate_headline ?? brief.verdict?.reason
+  const unresolved = brief.unresolved_evidence ?? (aggregate === 'needs_review' ? brief.caveats ?? [] : [])
 
-      <Section title="Your objective">
-        <dl className="grid gap-3 sm:grid-cols-3">
-          {[
-            ['Goal', brief.objective.goal],
-            ['Your offering', brief.objective.offering],
-            ['Desired outcome', brief.objective.desired_outcome],
-          ].map(([label, value]) => (
-            <div key={label} className="rounded-control border border-line-soft bg-card p-3">
-              <dt className="label-caps text-ink-faint">{label}</dt>
-              <dd className="mt-1 text-sm text-ink">{value}</dd>
-            </div>
-          ))}
-        </dl>
-      </Section>
+  return <>
+    <section className="mt-6 rounded-card border border-line-soft bg-card p-5">
+      <div className="flex flex-wrap items-start justify-between gap-4">
+        <div><h2 className="text-title-md font-semibold text-ink">{brief.prospect.business_name}</h2><p className="mt-1 text-sm text-ink-soft">{[brief.prospect.location, brief.prospect.business_descriptor].filter(Boolean).join(' : ')}</p></div>
+        <span className={'rounded-control border px-2 py-1 font-ui text-sm font-semibold ' + verdictStyle[aggregate]}>{aggregate.replaceAll('_', ' ').toUpperCase()}</span>
+      </div>
+      {explanation && <p className="mt-4 max-w-3xl text-sm text-ink">{explanation}</p>}
+      <p className="mt-2 text-xs text-ink-faint">Campaign: {brief.objective.offering}</p>
+    </section>
 
-      <Section title="Evidence-backed findings">
-        {brief.findings.length === 0 ? (
-          <p className="text-sm text-ink-soft">No additional supported findings were produced.</p>
-        ) : (
-          <div className="space-y-3">
-            {brief.findings.map((finding) => (
-              <article key={finding.statement} className="rounded-control border border-line-soft bg-card p-3">
-                <span className={'rounded-control px-1.5 py-0.5 font-ui text-[10px] font-medium uppercase ' + evidenceStyle[finding.claim_kind]}>
-                  {finding.claim_kind.replaceAll('_', ' ')}
-                </span>
-                <p className="mt-2 text-sm text-ink">{finding.statement}</p>
-                <EvidenceList keys={finding.evidence_keys} evidence={brief.evidence} />
-              </article>
-            ))}
-          </div>
-        )}
-      </Section>
+    <Section title="Opportunity assessment">
+      <div className="overflow-hidden rounded-card border border-line-soft bg-card">
+        <div className="hidden grid-cols-[1fr_1fr_2fr] gap-4 border-b border-line-soft px-4 py-2 sm:grid">{['Check', 'Result', 'Evidence'].map((label) => <span key={label} className="label-caps text-ink-faint">{label}</span>)}</div>
+        {assessment.map((row) => <div key={row.check} className="grid gap-1 border-b border-line-soft px-4 py-3 last:border-0 sm:grid-cols-[1fr_1fr_2fr] sm:gap-4"><span className="text-sm font-medium text-ink">{row.check}</span><span className="text-sm text-ink-soft">{row.result === 'opportunity_found' ? 'Opportunity found' : row.result === 'not_an_opportunity' ? 'Not an opportunity' : row.result === 'no_issue_observed' ? 'No issue observed' : 'Unresolved'}</span><span className="text-sm text-ink-soft">{row.evidence_summary}</span></div>)}
+      </div>
+    </Section>
 
-      <Section title="Contact paths">
-        {brief.contacts.length === 0 ? (
-          <p className="text-sm text-ink-soft">No verified or observed contact path is available.</p>
-        ) : (
-          <div className="grid gap-3 sm:grid-cols-2">
-            {brief.contacts.map((contact) => (
-              <div key={`${contact.contact_type}-${contact.value}`} className="rounded-control border border-line-soft bg-card p-3">
-                <p className="label-caps text-ink-faint">{contact.contact_type.replaceAll('_', ' ')}</p>
-                <a
-                  href={contactHref(contact.contact_type, contact.value)}
-                  target={contact.contact_type === 'email' || contact.contact_type === 'phone' ? undefined : '_blank'}
-                  rel="noreferrer"
-                  className="mt-1 block break-all text-sm text-action hover:text-ink"
-                >
-                  {contact.value}
-                </a>
-                <p className="mt-1 text-xs capitalize text-ink-faint">{contact.state}</p>
-              </div>
-            ))}
-          </div>
-        )}
-      </Section>
+    {aggregate === 'qualified' && approach && <Section title="Recommended approach">
+      <div className="space-y-4 rounded-card border border-line-soft bg-card p-4">
+        <p className="text-sm text-ink">{approach.opportunity_summary.statement}</p><p className="text-sm font-medium text-ink">{approach.pitch_angle.statement}</p>
+        {approach.personalization_basis.length > 0 && <div><p className="label-caps text-ink-faint">Personalize around</p><ul className="mt-2 space-y-1 text-sm text-ink-soft">{approach.personalization_basis.map((item) => <li key={item.statement}>{item.statement}</li>)}</ul></div>}
+        {approach.forbidden_claims.length > 0 && <div><p className="label-caps text-ink-faint">Do not claim</p><ul className="mt-2 list-disc space-y-1 pl-5 text-sm text-ink-soft">{approach.forbidden_claims.map((claim) => <li key={claim}>{claim}</li>)}</ul></div>}
+      </div>
+    </Section>}
 
-      {brief.pitch_angle && (
-        <Section title="Recommended pitch angle">
-          <div className="rounded-card border border-line-soft bg-card p-4">
-            <p className="text-sm text-ink">{brief.pitch_angle.statement}</p>
-            <EvidenceList keys={brief.pitch_angle.evidence_keys} evidence={brief.evidence} />
-          </div>
-        </Section>
-      )}
+    {aggregate === 'qualified' && brief.outreach_drafts.length > 0 && <Section title="Outreach">
+      <div className="space-y-3">{brief.outreach_drafts.map((draft) => <article key={draft.channel} className="rounded-control border border-line-soft bg-card p-4"><div className="flex items-center justify-between gap-3"><p className="label-caps text-ink-soft">{draft.channel}</p><CopyDraftButton text={[draft.subject, draft.message].filter(Boolean).join('\n\n')} /></div>{draft.subject && <p className="mt-2 text-sm font-semibold text-ink">Subject: {draft.subject}</p>}<p className="mt-2 whitespace-pre-wrap text-sm leading-relaxed text-ink">{draft.message}</p><p className="mt-3 text-xs text-ink-faint">Based on: {draft.grounding.map((item) => item.claim).join('; ')}</p></article>)}</div>
+      {outreach && <Link to={`/campaigns/${outreach.campaign_id}/prospects/${outreach.prospect_id}`} className="mt-3 inline-block text-label-md font-semibold text-action hover:text-ink">Manage approval and sending in Outreach</Link>}
+    </Section>}
 
-      {brief.outreach_drafts.length > 0 && (
-        <Section title="Grounded outreach drafts">
-          <p className="text-xs text-ink-faint">Drafts for manual review and sending. SalesLens does not send them automatically.</p>
-          <div className="mt-3 space-y-3">
-            {brief.outreach_drafts.map((draft) => (
-              <article key={draft.channel} className="rounded-control border border-line-soft bg-card p-3">
-                <div className="flex items-center justify-between gap-3">
-                  <p className="label-caps text-ink-soft">{draft.channel}</p>
-                  <CopyDraftButton text={[draft.subject, draft.message].filter(Boolean).join('\n\n')} />
-                </div>
-                {draft.subject && <p className="mt-2 text-sm font-semibold text-ink">Subject: {draft.subject}</p>}
-                <p className="mt-2 whitespace-pre-wrap text-sm leading-relaxed text-ink">{draft.message}</p>
-                {draft.grounding.map((grounding) => (
-                  <EvidenceList key={grounding.claim} keys={grounding.evidence_keys} evidence={brief.evidence} />
-                ))}
-              </article>
-            ))}
-          </div>
-          {outreach && (
-            <p className="mt-3">
-              <Link
-                to={`/campaigns/${outreach.campaign_id}/prospects/${outreach.prospect_id}`}
-                className="text-label-md font-semibold text-action hover:text-ink"
-              >
-                Manage approval and sending in Outreach
-              </Link>
-            </p>
-          )}
-        </Section>
-      )}
+    {brief.contacts.length > 0 && <Section title="Contact paths"><div className="grid gap-3 sm:grid-cols-2">{brief.contacts.map((contact) => <div key={`${contact.contact_type}-${contact.value}`} className="rounded-control border border-line-soft bg-card p-3"><p className="label-caps text-ink-faint">{contact.contact_type.replaceAll('_', ' ')}</p><a href={contactHref(contact.contact_type, contact.value)} target={['email', 'phone'].includes(contact.contact_type) ? undefined : '_blank'} rel="noreferrer" className="mt-1 block break-all text-sm text-action hover:text-ink">{contact.value}</a><p className="mt-1 text-xs capitalize text-ink-faint">{contact.state}</p></div>)}</div></Section>}
 
-      {brief.caveats.length > 0 && (
-        <Section title="Caveats">
-          <ul className="space-y-1.5">
-            {brief.caveats.map((caveat) => (
-              <li key={caveat} className="rounded-control border border-warn-bg bg-warn-bg/50 p-2.5 text-sm text-warn-ink">
-                {caveat}
-              </li>
-            ))}
-          </ul>
-        </Section>
-      )}
+    {unresolved.length > 0 && <Section title="What remains unresolved"><ul className="list-disc space-y-1 pl-5 text-sm text-ink-soft">{unresolved.map((item) => <li key={item}>{item}</li>)}</ul></Section>}
+    {(approach?.caveats.length ?? 0) > 0 && <Section title="Caveats"><ul className="list-disc space-y-1 pl-5 text-sm text-ink-soft">{approach?.caveats.map((item) => <li key={item}>{item}</li>)}</ul></Section>}
 
-      <Section title="Verified sources">
-        {brief.sources.length === 0 ? (
-          <p className="text-sm text-ink-soft">No separately stored source entries are available.</p>
-        ) : (
-          <ul className="divide-y divide-line-soft rounded-card border border-line-soft bg-card">
-            {brief.sources.map((source) => (
-              <li key={source.key} className="px-4 py-3">
-                <a href={source.source_url} target="_blank" rel="noreferrer" className="text-sm text-action hover:text-ink">
-                  {source.title ?? source.source_url}
-                </a>
-                <p className="mt-0.5 text-xs text-ink-faint">{source.provider}</p>
-              </li>
-            ))}
-          </ul>
-        )}
-      </Section>
-
-      {outreach && (
-        <section className="rounded-card border border-action bg-action-container/40 p-5">
-          <p className="label-caps text-ink-faint">Ready for outreach</p>
-          <p className="mt-1.5 max-w-2xl text-body-md text-on-surface">
-            This prospect has a qualified opportunity and grounded drafts are
-            available. Approval and sending live in Outreach.
-          </p>
-          <Link
-            to={`/campaigns/${outreach.campaign_id}/prospects/${outreach.prospect_id}`}
-            className="mt-3 inline-flex items-center justify-center rounded-control bg-primary px-4 py-2 text-label-md font-medium text-on-primary transition-colors hover:bg-inverse-surface focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-secondary"
-          >
-            {outreach.attempt_summary === 'none'
-              ? 'Create outreach attempt'
-              : outreach.attempt_summary === 'draft'
-                ? 'Review outreach draft'
-                : outreach.attempt_summary === 'approved'
-                  ? 'Send from Outreach'
-                  : 'View outreach activity'}
-          </Link>
-        </section>
-      )}
-    </>
-  )
+    <details className="mt-8 rounded-card border border-line-soft bg-card p-4"><summary className="cursor-pointer font-ui text-sm font-semibold text-ink">Evidence &amp; sources ({brief.evidence.length + brief.sources.length})</summary><div className="mt-4 space-y-3">{brief.evidence.map((item) => <div key={item.key} className="text-sm text-ink-soft"><p className="text-ink">{item.supporting_value}</p><p className="mt-0.5 text-xs text-ink-faint">{item.source.provider}</p></div>)}{brief.sources.map((source) => <a key={source.key} href={source.source_url} target="_blank" rel="noreferrer" className="block text-sm text-action hover:text-ink">{source.title ?? source.source_url}</a>)}</div></details>
+  </>
 }

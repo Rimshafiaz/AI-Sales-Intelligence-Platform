@@ -209,6 +209,17 @@ def test_validator_enforces_grounding_offering_and_personalization(monkeypatch):
         validate_opportunity_outreach_output(_valid_output(), handoff),
         OpportunityOutreachOutput,
     )
+    with pytest.raises(OpportunityOutreachError, match="em dashes"):
+        validate_opportunity_outreach_output(
+            _valid_output(
+                opportunity_summary={
+                    "statement": "The measured result supports a redesign—without proving lost sales.",
+                    "claim_kind": "observed",
+                    "evidence_keys": [MOBILE_KEY],
+                }
+            ),
+            handoff,
+        )
 
     bad = _valid_output()
     bad["pitch_angle"]["evidence_keys"] = ["unknown:key"]

@@ -72,6 +72,7 @@ export interface BriefEvidence {
 }
 
 export interface ProspectEvidenceBriefData {
+  schema_version?: 1 | 2
   objective: {
     goal: string
     offering: string
@@ -80,10 +81,11 @@ export interface ProspectEvidenceBriefData {
   prospect: {
     business_name: string
     location: string | null
+    business_descriptor?: string | null
     official_website: string | null
     identity_verified: boolean
   }
-  verdict: {
+  verdict?: {
     opportunity_model_id: string
     state: 'likely' | 'insufficient_evidence' | 'not_eligible'
     reason: string
@@ -106,8 +108,8 @@ export interface ProspectEvidenceBriefData {
     workflow_state: string
     attempt_summary: 'none' | 'draft' | 'approved' | 'sent' | 'replied'
   } | null
-  evidence_quality: 'high' | 'medium' | 'needs_review'
-  findings: {
+  evidence_quality?: 'high' | 'medium' | 'needs_review'
+  findings?: {
     statement: string
     claim_kind: 'observed' | 'derived_metric' | 'inference'
     evidence_keys: string[]
@@ -118,7 +120,7 @@ export interface ProspectEvidenceBriefData {
     state: 'verified' | 'observed'
     source_keys: string[]
   }[]
-  pitch_angle: {
+  pitch_angle?: {
     statement: string
     offering: string
     evidence_keys: string[]
@@ -130,7 +132,34 @@ export interface ProspectEvidenceBriefData {
     offering: string
     grounding: { claim: string; evidence_keys: string[] }[]
   }[]
-  caveats: string[]
+  caveats?: string[]
+  verdict_explanation?: string
+  opportunity_assessment?: Array<{
+    check: string
+    result: 'opportunity_found' | 'not_an_opportunity' | 'no_issue_observed' | 'unresolved'
+    evidence_summary: string
+    evidence_keys: string[]
+  }>
+  recommended_approach?: {
+    opportunity_summary: {
+      statement: string
+      claim_kind: 'observed' | 'derived_metric' | 'inference'
+      evidence_keys: string[]
+    }
+    pitch_angle: {
+      statement: string
+      offering: string
+      evidence_keys: string[]
+    }
+    personalization_basis: Array<{
+      statement: string
+      claim_kind: 'observed' | 'derived_metric' | 'inference'
+      evidence_keys: string[]
+    }>
+    forbidden_claims: string[]
+    caveats: string[]
+  } | null
+  unresolved_evidence?: string[]
   evidence: BriefEvidence[]
   sources: {
     key: string

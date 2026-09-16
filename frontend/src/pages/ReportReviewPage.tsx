@@ -294,9 +294,9 @@ export default function ReportReviewPage() {
             <Notice kind="error">{actionError}</Notice>
           </div>
         )}
-        <h1 className="mt-6 page-title">
-          {brief.prospect.business_name}
-        </h1>
+        {brief.schema_version !== 2 && (
+          <h1 className="mt-6 page-title">{brief.prospect.business_name}</h1>
+        )}
         <p className="mt-1 font-ui text-xs text-ink-faint">
           Generated {new Date(report.generated_at).toLocaleString()} | Evidence brief{' '}
           <span className="font-mono">{report.id.slice(0, 8)}</span>

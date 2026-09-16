@@ -12,7 +12,16 @@ from app.repositories.research_evidence import list_research_evidence_for_user
 from app.repositories.research_social_observations import list_social_observations_for_user
 from app.repositories.research_sources import list_research_sources_for_user
 from app.schemas.evidence_gate import EvidenceGateState, SourceAdmissionState
-from app.schemas.opportunity_models import EvidenceSignal, EvidenceSignalType, EvidenceSource, EvidenceType
+from app.schemas.agent_outputs import OpportunityOutreachOutput, SocialResearchOutput, WebsiteResearchOutput
+from app.schemas.opportunity_models import (
+    EvidenceSignal,
+    EvidenceSignalType,
+    EvidenceSource,
+    EvidenceType,
+    OpportunityModelSelection,
+    ServiceFamily,
+)
+from app.schemas.opportunity_qualification import OpportunityQualificationState
 from app.schemas.prospect_evidence_brief import (
     BriefContactPath,
     BriefEvidence,
@@ -26,12 +35,18 @@ from app.schemas.prospect_evidence_brief import (
     DigitalPresenceHandoff,
     EvidenceQualityReviewHandoff,
     OpportunityDiagnosisHandoff,
+    OpportunityAssessmentRow,
     ProspectEvidenceBriefContext,
+    ProspectEvidenceBrief,
     ProspectEvidenceBriefHandoffs,
     PublicTractionHandoff,
+    RecommendedApproach,
     StrategyOutreachHandoff,
 )
+from app.schemas.prospect_evidence_brief_context import TrustedProspectEvidenceBriefContext
+from app.services.aggregate_verdict import AggregateVerdict, aggregate_verdict
 from app.services.evidence_gate import target_from_research_request
+from app.services.opportunity_model_catalog import get_opportunity_model
 
 
 MAX_BRIEF_SOURCES = 12
@@ -54,6 +69,20 @@ def build_prospect_evidence_brief_handoffs(
     company: Company,
     selection: CampaignCandidateSelection | None,
 ) -> ProspectEvidenceBriefHandoffs:
+    context = build_prospect_evidence_brief_context(
+        db, research_request, company, selection, _legacy=True
+    )
+    return _legacy_handoffs(context)
+
+
+def build_prospect_evidence_brief_context(
+    db: Session,
+    research_request: ResearchRequest,
+    company: Company,
+    selection: CampaignCandidateSelection | None,
+    *,
+    _legacy: bool = False,
+) -> TrustedProspectEvidenceBriefContext:
     _require_ready_request(research_request)
     target = target_from_research_request(research_request, company, selection)
     if not target.identity_verified:
@@ -77,11 +106,51 @@ def build_prospect_evidence_brief_handoffs(
         evidence,
         sources,
     )
-    context = ProspectEvidenceBriefContext(
+    if _legacy and research_request.opportunity_model_selection is None:
+        selected = OpportunityModelSelection(
+            model_ids=tuple(item.opportunity_model_id for item in qualifications),
+            confirmed_by_user=True,
+        )
+    else:
+        selected = _selected_models(research_request)
+    selected_ids = set(selected.model_ids)
+    qualifications = [
+        item for item in qualifications if item.opportunity_model_id in selected_ids
+    ]
+    if {item.opportunity_model_id for item in qualifications} != selected_ids:
+        raise ProspectEvidenceBriefContextError(
+            "Every selected Opportunity Model must have a qualification result."
+        )
+    families = {
+        get_opportunity_model(model_id).service_family for model_id in selected.model_ids
+    }
+    outputs = research_request.specialist_outputs or {}
+    website = _specialist_output(
+        outputs,
+        "website",
+        WebsiteResearchOutput,
+        not _legacy and ServiceFamily.WEB_CONVERSION in families,
+    )
+    social = _specialist_output(
+        outputs,
+        "social",
+        SocialResearchOutput,
+        not _legacy and ServiceFamily.SOCIAL_PRESENCE_CONTENT in families,
+    )
+    evidence_keys = {item.key for item in evidence}
+    for specialist in (website, social):
+        if specialist is not None and any(
+            not set(finding.evidence_keys) <= evidence_keys for finding in specialist.findings
+        ):
+            raise ProspectEvidenceBriefContextError(
+                "Persisted specialist output references unavailable canonical evidence."
+            )
+    return TrustedProspectEvidenceBriefContext(
         objective=objective,
         prospect=BriefProspect(
             business_name=target.company_name,
             location=target.location,
+            business_descriptor=_business_descriptor(selection),
             official_website=target.official_website,
             identity_verified=target.identity_verified,
         ),
@@ -89,7 +158,13 @@ def build_prospect_evidence_brief_handoffs(
         evidence=evidence,
         sources=sources,
         contacts=contacts,
+        aggregate_verdict=aggregate_verdict([item.state for item in qualifications]),
+        website_research=website,
+        social_research=social,
     )
+
+
+def _legacy_handoffs(context: ProspectEvidenceBriefContext) -> ProspectEvidenceBriefHandoffs:
     return ProspectEvidenceBriefHandoffs(
         business_context=BusinessContextHandoff(
             objective=context.objective,
@@ -123,6 +198,187 @@ def build_prospect_evidence_brief_handoffs(
         ),
         evidence_quality_review=EvidenceQualityReviewHandoff(context=context),
     )
+
+
+def assemble_prospect_evidence_brief(
+    context: TrustedProspectEvidenceBriefContext,
+    opportunity_outreach: OpportunityOutreachOutput | None,
+) -> ProspectEvidenceBrief:
+    if context.aggregate_verdict is AggregateVerdict.QUALIFIED:
+        if opportunity_outreach is None:
+            raise ProspectEvidenceBriefContextError(
+                "A qualified report requires approved Opportunity and Outreach output."
+            )
+        recommended = RecommendedApproach(
+            opportunity_summary=opportunity_outreach.opportunity_summary,
+            pitch_angle=opportunity_outreach.pitch_angle,
+            personalization_basis=opportunity_outreach.personalization_basis,
+            forbidden_claims=opportunity_outreach.forbidden_claims,
+            caveats=opportunity_outreach.caveats,
+        )
+        drafts = opportunity_outreach.outreach_drafts
+    else:
+        if opportunity_outreach is not None:
+            raise ProspectEvidenceBriefContextError(
+                "A non-qualified report cannot include Opportunity and Outreach output."
+            )
+        recommended = None
+        drafts = []
+    assessment = [_assessment_row(item, context.evidence) for item in context.qualifications]
+    unresolved = _unresolved_evidence(context)
+    return ProspectEvidenceBrief(
+        schema_version=2,
+        objective=context.objective,
+        prospect=context.prospect,
+        qualifications=context.qualifications,
+        aggregate_verdict=context.aggregate_verdict,
+        verdict_explanation=_verdict_explanation(context.aggregate_verdict, assessment),
+        opportunity_assessment=assessment,
+        recommended_approach=recommended,
+        outreach_drafts=drafts,
+        contacts=context.contacts,
+        unresolved_evidence=unresolved,
+        evidence=context.evidence,
+        sources=context.sources,
+    )
+
+
+MODEL_LABELS = {
+    "web_conversion.no_verified_web_presence": "Official website",
+    "web_conversion.mobile_performance": "Mobile performance",
+    "web_conversion.booking_contact_path": "Booking and contact path",
+    "web_conversion.restaurant_reservation_path": "Reservation path",
+    "web_conversion.restaurant_customer_path": "Customer path",
+    "web_conversion.fitness_membership_path": "Membership enquiry path",
+    "web_conversion.retail_product_path": "Product enquiry path",
+    "web_conversion.clinic_patient_path": "Patient contact path",
+    "social_presence.dormant_official_presence": "Social activity",
+}
+
+
+def _assessment_row(
+    qualification: BriefQualification,
+    evidence: list[BriefEvidence],
+) -> OpportunityAssessmentRow:
+    evidence_by_key = {item.key: item for item in evidence}
+    supporting = [
+        evidence_by_key[key]
+        for key in qualification.supporting_evidence_keys
+        if key in evidence_by_key
+    ]
+    if qualification.state is OpportunityQualificationState.LIKELY:
+        result = "opportunity_found"
+    elif qualification.state is OpportunityQualificationState.NOT_ELIGIBLE:
+        result = (
+            "not_an_opportunity"
+            if qualification.opportunity_model_id == "web_conversion.no_verified_web_presence"
+            else "no_issue_observed"
+        )
+    else:
+        result = "unresolved"
+    return OpportunityAssessmentRow(
+        check=MODEL_LABELS[qualification.opportunity_model_id],
+        result=result,
+        evidence_summary=_assessment_summary(qualification, supporting),
+        evidence_keys=qualification.supporting_evidence_keys,
+    )
+
+
+def _assessment_summary(
+    qualification: BriefQualification,
+    evidence: list[BriefEvidence],
+) -> str:
+    model_id = qualification.opportunity_model_id
+    numeric = next((item.numeric_value for item in evidence if item.numeric_value is not None), None)
+    if model_id == "web_conversion.no_verified_web_presence":
+        return (
+            "An official website was verified."
+            if qualification.state is OpportunityQualificationState.NOT_ELIGIBLE
+            else "No official website was verified from the accepted sources."
+        )
+    if model_id == "web_conversion.mobile_performance" and numeric is not None:
+        return f"The mobile PageSpeed score was {numeric:g}/100."
+    if model_id == "social_presence.dormant_official_presence" and numeric is not None:
+        return f"The latest verified social post was {numeric:g} days ago."
+    opportunity_evidence = [
+        item for item in evidence if item.signal_type is not EvidenceSignalType.BUSINESS_IDENTITY_CONFIRMED
+    ]
+    if opportunity_evidence:
+        return opportunity_evidence[-1].supporting_value.strip()
+    if qualification.state is OpportunityQualificationState.INSUFFICIENT_EVIDENCE:
+        return "Required evidence is still unresolved."
+    return qualification.reason.strip()
+
+
+def _verdict_explanation(
+    verdict: AggregateVerdict,
+    assessment: list[OpportunityAssessmentRow],
+) -> str:
+    if verdict is AggregateVerdict.QUALIFIED:
+        row = next(item for item in assessment if item.result == "opportunity_found")
+        return f"{row.evidence_summary} This supports the selected opportunity."
+    if verdict is AggregateVerdict.NOT_A_FIT:
+        rows = [
+            item.evidence_summary
+            for item in assessment
+            if item.result in {"not_an_opportunity", "no_issue_observed"}
+        ]
+        return rows[0] if rows else "The selected opportunity did not meet its requirements."
+    unresolved = next(
+        (item.evidence_summary for item in assessment if item.result == "unresolved"),
+        "Required evidence is still unresolved.",
+    )
+    return f"No qualifying opportunity was confirmed. {unresolved}"
+
+
+def _unresolved_evidence(context: TrustedProspectEvidenceBriefContext) -> list[str]:
+    values = []
+    for specialist in (context.website_research, context.social_research):
+        if specialist is not None:
+            values.extend(specialist.evidence_gaps)
+    values.extend(
+        item.reason
+        for item in context.qualifications
+        if item.state is OpportunityQualificationState.INSUFFICIENT_EVIDENCE
+    )
+    return list(dict.fromkeys(value.strip() for value in values if value.strip()))[:12]
+
+
+def _selected_models(research_request: ResearchRequest) -> OpportunityModelSelection:
+    try:
+        return OpportunityModelSelection.model_validate(
+            research_request.opportunity_model_selection
+        )
+    except ValueError as error:
+        raise ProspectEvidenceBriefContextError(
+            "A valid persisted Opportunity Model selection is required."
+        ) from error
+
+
+def _specialist_output(outputs, namespace, model, required):
+    value = outputs.get(namespace)
+    if not required:
+        return None
+    if value is None:
+        raise ProspectEvidenceBriefContextError(
+            f"Required {namespace} specialist output is unavailable."
+        )
+    try:
+        return model.model_validate(value)
+    except ValueError as error:
+        raise ProspectEvidenceBriefContextError(
+            f"Required {namespace} specialist output is invalid."
+        ) from error
+
+
+def _business_descriptor(selection: CampaignCandidateSelection | None) -> str | None:
+    if selection is None:
+        return None
+    for key in ("business_category", "category", "industry"):
+        value = selection.candidate_snapshot.get(key)
+        if isinstance(value, str) and value.strip():
+            return value.strip()[:200]
+    return None
 
 
 def _require_ready_request(research_request: ResearchRequest) -> None:
@@ -235,7 +491,7 @@ def _no_listed_website_evidence(selection: CampaignCandidateSelection) -> BriefE
         key=f"selection_candidate:{selection.id}:no_listed_official_website",
         signal_type=EvidenceSignalType.NO_LISTED_OFFICIAL_WEBSITE,
         evidence_type=EvidenceType.OBSERVED,
-        supporting_value="The traceable local discovery record did not list an official website.",
+        supporting_value="No official website was listed in the accepted business source.",
         source=source,
         captured_at=source.retrieved_at,
     )
@@ -257,7 +513,7 @@ def _resolved_target_evidence(
             key="resolved_target:identity",
             signal_type=EvidenceSignalType.BUSINESS_IDENTITY_CONFIRMED,
             evidence_type=EvidenceType.OBSERVED,
-            supporting_value="The research target was resolved to a verified business identity.",
+            supporting_value="The business identity was verified.",
             source=source,
             captured_at=source.retrieved_at,
         )
@@ -268,7 +524,7 @@ def _resolved_target_evidence(
                 key="resolved_target:official_website",
                 signal_type=EvidenceSignalType.OFFICIAL_WEBSITE_CONFIRMED,
                 evidence_type=EvidenceType.OBSERVED,
-                supporting_value="The resolved target includes a verified official website.",
+                supporting_value="An official website was verified for the business.",
                 source=source,
                 captured_at=source.retrieved_at,
             )

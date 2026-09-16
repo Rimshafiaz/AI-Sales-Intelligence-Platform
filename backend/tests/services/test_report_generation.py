@@ -17,13 +17,7 @@ from app.services import report_generation
 def test_deep_qualified_request_uses_prospect_evidence_brief(monkeypatch):
     request = SimpleNamespace(campaign_candidate_selection_id=None)
     company = object()
-    handoffs = SimpleNamespace(
-        evidence_quality_review=SimpleNamespace(
-            context=SimpleNamespace(
-                qualifications=[SimpleNamespace(state=OpportunityQualificationState.LIKELY)]
-            )
-        )
-    )
+    context = SimpleNamespace(aggregate_verdict=AggregateVerdict.QUALIFIED)
     opportunity_handoff = object()
     opportunity_output = object()
     brief = object()
@@ -32,15 +26,15 @@ def test_deep_qualified_request_uses_prospect_evidence_brief(monkeypatch):
     monkeypatch.setattr(report_generation, "requires_deep_qualification", lambda _: True)
     monkeypatch.setattr(
         report_generation,
-        "build_prospect_evidence_brief_handoffs",
+        "build_prospect_evidence_brief_context",
         lambda db, received_request, received_company, selection: calls.append(
             (db, received_request, received_company, selection)
-        ) or handoffs,
+        ) or context,
     )
     monkeypatch.setattr(
         report_generation,
         "build_opportunity_outreach_handoff",
-        lambda db, received_request, received_company, selection, brief_handoffs: (
+        lambda db, received_request, received_company, selection, brief_context: (
             calls.append("handoff") or opportunity_handoff
         ),
     )
@@ -51,10 +45,10 @@ def test_deep_qualified_request_uses_prospect_evidence_brief(monkeypatch):
     )
     monkeypatch.setattr(
         report_generation,
-        "run_prospect_evidence_brief_crew",
-        lambda received_handoffs, received_output: (
+        "assemble_prospect_evidence_brief",
+        lambda received_context, received_output: (
             brief
-            if received_handoffs is handoffs and received_output is opportunity_output
+            if received_context is context and received_output is opportunity_output
             else None
         ),
     )
@@ -81,17 +75,19 @@ def test_deep_qualified_request_uses_prospect_evidence_brief(monkeypatch):
 )
 def test_nonqualified_brief_skips_opportunity_outreach_agent(monkeypatch, state):
     request = SimpleNamespace(campaign_candidate_selection_id=None)
-    handoffs = SimpleNamespace(
-        evidence_quality_review=SimpleNamespace(
-            context=SimpleNamespace(qualifications=[SimpleNamespace(state=state)])
+    context = SimpleNamespace(
+        aggregate_verdict=(
+            AggregateVerdict.NEEDS_REVIEW
+            if state is OpportunityQualificationState.INSUFFICIENT_EVIDENCE
+            else AggregateVerdict.NOT_A_FIT
         )
     )
     calls = []
     monkeypatch.setattr(report_generation, "requires_deep_qualification", lambda _: True)
     monkeypatch.setattr(
         report_generation,
-        "build_prospect_evidence_brief_handoffs",
-        lambda *_: handoffs,
+        "build_prospect_evidence_brief_context",
+        lambda *_: context,
     )
     monkeypatch.setattr(
         report_generation,
@@ -105,30 +101,24 @@ def test_nonqualified_brief_skips_opportunity_outreach_agent(monkeypatch, state)
     )
     monkeypatch.setattr(
         report_generation,
-        "run_prospect_evidence_brief_crew",
+        "assemble_prospect_evidence_brief",
         lambda received, output: (received, output),
     )
 
     report, kind = report_generation._generate_report(object(), request, object())
 
-    assert report == (handoffs, None)
+    assert report == (context, None)
     assert kind is ReportKind.PROSPECT_EVIDENCE_BRIEF
     assert calls == []
 
 
 def test_invalid_qualified_output_stops_before_report_assembly(monkeypatch):
     request = SimpleNamespace(campaign_candidate_selection_id=None)
-    handoffs = SimpleNamespace(
-        evidence_quality_review=SimpleNamespace(
-            context=SimpleNamespace(
-                qualifications=[SimpleNamespace(state=OpportunityQualificationState.LIKELY)]
-            )
-        )
-    )
+    context = SimpleNamespace(aggregate_verdict=AggregateVerdict.QUALIFIED)
     assembled = False
     monkeypatch.setattr(report_generation, "requires_deep_qualification", lambda _: True)
     monkeypatch.setattr(
-        report_generation, "build_prospect_evidence_brief_handoffs", lambda *_: handoffs
+        report_generation, "build_prospect_evidence_brief_context", lambda *_: context
     )
     monkeypatch.setattr(
         report_generation, "build_opportunity_outreach_handoff", lambda *_args, **_kwargs: object()
@@ -143,7 +133,7 @@ def test_invalid_qualified_output_stops_before_report_assembly(monkeypatch):
         nonlocal assembled
         assembled = True
 
-    monkeypatch.setattr(report_generation, "run_prospect_evidence_brief_crew", assemble)
+    monkeypatch.setattr(report_generation, "assemble_prospect_evidence_brief", assemble)
 
     with pytest.raises(ValueError, match="invalid grounded output"):
         report_generation._generate_report(object(), request, object())

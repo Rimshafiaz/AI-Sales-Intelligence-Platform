@@ -21,7 +21,6 @@ from app.models.research_request import ResearchRequest
 from app.models.user import User
 from app.schemas.campaign_prospect import CampaignProspectResponse
 from app.schemas.outreach_attempt import OutreachAttemptResponse, OutreachDraftOptionResponse
-from app.schemas.opportunity_qualification import OpportunityQualificationState
 from app.schemas.prospect_evidence_brief import ProspectEvidenceBrief
 from app.services.aggregate_verdict import AggregateVerdict
 from app.services.campaign_prospects import campaign_prospect_response
@@ -115,9 +114,20 @@ def outreach_workbench(db, current_user: User) -> list[WorkbenchGroup]:
         prospects_by_campaign[prospect.campaign_id].append(
             WorkbenchProspect(
                 prospect=campaign_prospect_response(prospect),
-                qualification_headline=brief.aggregate_headline,
-                opportunity_reason=brief.verdict.reason,
-                pitch_angle=brief.pitch_angle.statement if brief.pitch_angle else None,
+                qualification_headline=(
+                    brief.verdict_explanation
+                    or brief.aggregate_headline
+                    or "Qualified opportunity"
+                ),
+                opportunity_reason=(
+                    brief.verdict_explanation
+                    or (brief.verdict.reason if brief.verdict else "Qualified opportunity")
+                ),
+                pitch_angle=(
+                    brief.recommended_approach.pitch_angle.statement
+                    if brief.recommended_approach
+                    else brief.pitch_angle.statement if brief.pitch_angle else None
+                ),
                 attempts=prospect_attempts,
                 options=_draft_options(report, brief, prospect_attempts),
             )
@@ -160,7 +170,7 @@ def _draft_options(
         if attempt.status
         in {OutreachStatus.DRAFT, OutreachStatus.APPROVED, OutreachStatus.SENDING}
     }
-    if brief.verdict.state is not OpportunityQualificationState.LIKELY:
+    if brief.aggregate_verdict is not AggregateVerdict.QUALIFIED:
         return []
     options = []
     for draft in brief.outreach_drafts:
