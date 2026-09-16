@@ -205,68 +205,6 @@ class ProspectEvidenceBriefContext(BaseModel):
         return self
 
 
-class BusinessContextHandoff(BaseModel):
-    model_config = ConfigDict(extra="forbid")
-
-    objective: BriefObjective
-    prospect: BriefProspect
-    evidence: list[BriefEvidence] = Field(min_length=1, max_length=30)
-    sources: list[BriefSource] = Field(default_factory=list, max_length=15)
-
-
-class DigitalPresenceHandoff(BaseModel):
-    model_config = ConfigDict(extra="forbid")
-
-    objective: BriefObjective
-    prospect: BriefProspect
-    evidence: list[BriefEvidence] = Field(min_length=1, max_length=30)
-
-
-class PublicTractionHandoff(BaseModel):
-    model_config = ConfigDict(extra="forbid")
-
-    objective: BriefObjective
-    prospect: BriefProspect
-    sources: list[BriefSource] = Field(default_factory=list, max_length=15)
-    evidence: list[BriefEvidence] = Field(min_length=1, max_length=30)
-
-
-class OpportunityDiagnosisHandoff(BaseModel):
-    model_config = ConfigDict(extra="forbid")
-
-    objective: BriefObjective
-    prospect: BriefProspect
-    qualifications: list[BriefQualification] = Field(min_length=1, max_length=3)
-    evidence: list[BriefEvidence] = Field(min_length=1, max_length=30)
-
-
-class StrategyOutreachHandoff(BaseModel):
-    model_config = ConfigDict(extra="forbid")
-
-    objective: BriefObjective
-    prospect: BriefProspect
-    qualifications: list[BriefQualification] = Field(min_length=1, max_length=3)
-    evidence: list[BriefEvidence] = Field(min_length=1, max_length=30)
-    contacts: list[BriefContactPath] = Field(default_factory=list, max_length=10)
-
-
-class EvidenceQualityReviewHandoff(BaseModel):
-    model_config = ConfigDict(extra="forbid")
-
-    context: ProspectEvidenceBriefContext
-
-
-class ProspectEvidenceBriefHandoffs(BaseModel):
-    model_config = ConfigDict(extra="forbid")
-
-    business_context: BusinessContextHandoff
-    digital_presence: DigitalPresenceHandoff
-    public_traction: PublicTractionHandoff
-    opportunity_diagnosis: OpportunityDiagnosisHandoff
-    strategy_outreach: StrategyOutreachHandoff
-    evidence_quality_review: EvidenceQualityReviewHandoff
-
-
 class OpportunityAssessmentRow(BaseModel):
     model_config = ConfigDict(extra="forbid")
 

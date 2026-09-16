@@ -102,14 +102,8 @@ def _request(specialist_outputs=None):
 
 def _build(monkeypatch, state="likely", contacts=None, request=None):
     context = _context(state, contacts)
-    monkeypatch.setattr(
-        "app.services.opportunity_outreach.build_prospect_evidence_brief_handoffs",
-        lambda *_: SimpleNamespace(
-            evidence_quality_review=SimpleNamespace(context=context)
-        ),
-    )
     return build_opportunity_outreach_handoff(
-        object(), request or _request(), object(), None
+        object(), request or _request(), object(), None, brief_context=context
     )
 
 
@@ -170,12 +164,6 @@ def test_builder_requires_selected_social_specialist(monkeypatch):
             evaluated_at=NOW,
         )
     ]
-    monkeypatch.setattr(
-        "app.services.opportunity_outreach.build_prospect_evidence_brief_handoffs",
-        lambda *_: SimpleNamespace(
-            evidence_quality_review=SimpleNamespace(context=context)
-        ),
-    )
     request = SimpleNamespace(
         opportunity_model_selection={
             "model_ids": ["social_presence.dormant_official_presence"],
@@ -184,7 +172,9 @@ def test_builder_requires_selected_social_specialist(monkeypatch):
         specialist_outputs={},
     )
     with pytest.raises(OpportunityOutreachError, match="Required social"):
-        build_opportunity_outreach_handoff(object(), request, object(), None)
+        build_opportunity_outreach_handoff(
+            object(), request, object(), None, brief_context=context
+        )
 
     request.specialist_outputs = {
         "social": {
@@ -199,7 +189,7 @@ def test_builder_requires_selected_social_specialist(monkeypatch):
         }
     }
     assert build_opportunity_outreach_handoff(
-        object(), request, object(), None
+        object(), request, object(), None, brief_context=context
     ).social_research is not None
 
 

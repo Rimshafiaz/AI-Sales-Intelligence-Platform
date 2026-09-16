@@ -19,14 +19,12 @@ from app.schemas.prospect_evidence_brief import (
     ContactEvidenceState,
     ContactPathType,
     OutreachChannel,
-    ProspectEvidenceBriefHandoffs,
 )
 from app.schemas.prospect_evidence_brief_context import TrustedProspectEvidenceBriefContext
 from app.services.aggregate_verdict import AggregateVerdict, aggregate_verdict
 from app.services.opportunity_model_catalog import get_opportunity_model
 from app.services.prospect_evidence_brief import (
     build_prospect_evidence_brief_context,
-    build_prospect_evidence_brief_handoffs,
 )
 
 
@@ -61,17 +59,14 @@ def build_opportunity_outreach_handoff(
     company: Company,
     selection: CampaignCandidateSelection | None,
     *,
-    brief_handoffs: ProspectEvidenceBriefHandoffs | None = None,
     brief_context: TrustedProspectEvidenceBriefContext | None = None,
 ) -> OpportunityOutreachHandoff:
     if brief_context is not None:
         context = brief_context
-    elif brief_handoffs is not None:
-        context = brief_handoffs.evidence_quality_review.context
     else:
-        context = build_prospect_evidence_brief_handoffs(
+        context = build_prospect_evidence_brief_context(
             db, research_request, company, selection
-        ).evidence_quality_review.context
+        )
     try:
         selected = OpportunityModelSelection.model_validate(
             research_request.opportunity_model_selection

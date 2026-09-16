@@ -82,7 +82,6 @@ class ReviewerOutput(BaseModel):
 
         return self
 
-
 class AgentBriefFinding(BriefFinding):
     model_config = ConfigDict(extra="ignore")
 
@@ -186,43 +185,6 @@ class BriefReviewOutput(BaseModel):
     def require_issues_when_rejected(self) -> Self:
         if self.approved and self.issues:
             raise ValueError("An approved review cannot contain issues.")
-        if not self.approved and not self.issues:
-            raise ValueError("Reviewer must provide issues when rejecting a Prospect Evidence Brief.")
-        return self
-
-
-class BriefFindingsOutput(BaseModel):
-    findings: list[AgentBriefFinding] = Field(default_factory=list, max_length=4)
-    caveats: list[str] = Field(default_factory=list, max_length=3)
-
-    @field_validator("caveats")
-    @classmethod
-    def validate_caveats(cls, values: list[str]) -> list[str]:
-        return _normalize_text_items(values, "caveats")
-
-
-class BriefStrategyOutput(BaseModel):
-    pitch_angle: AgentPitchAngle | None = None
-    outreach_drafts: list[AgentGroundedOutreachDraft] = Field(default_factory=list, max_length=6)
-    caveats: list[str] = Field(default_factory=list, max_length=3)
-
-    @field_validator("caveats")
-    @classmethod
-    def validate_caveats(cls, values: list[str]) -> list[str]:
-        return _normalize_text_items(values, "caveats")
-
-
-class BriefReviewerOutput(BaseModel):
-    approved: bool
-    issues: list[str] = Field(default_factory=list, max_length=10)
-
-    @field_validator("issues")
-    @classmethod
-    def validate_issues(cls, values: list[str]) -> list[str]:
-        return _normalize_text_items(values, "issues")
-
-    @model_validator(mode="after")
-    def require_issues_when_rejected(self) -> Self:
         if not self.approved and not self.issues:
             raise ValueError("Reviewer must provide issues when rejecting a Prospect Evidence Brief.")
         return self

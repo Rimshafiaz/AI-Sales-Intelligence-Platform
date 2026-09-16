@@ -6,37 +6,15 @@ from app.ai.tasks.research_task import create_research_task
 from app.ai.tasks.reviewer_task import create_reviewer_task
 from app.ai.tasks.strategy_task import create_strategy_task
 from app.ai.tasks.technology_task import create_technology_task
-from app.ai.tasks.prospect_evidence_brief_tasks import (
-    create_brief_business_context_task,
-    create_brief_digital_presence_task,
-    create_brief_public_traction_task,
-)
 from app.schemas.agent_outputs import (
-    BriefFindingsOutput,
     NewsAgentOutput,
-    OpportunityOutreachOutput,
     PainPointAgentOutput,
     ResearchAgentOutput,
     ReviewerOutput,
     StrategyAgentOutput,
     TechnologyAgentOutput,
 )
-from app.schemas.opportunity_qualification import OpportunityQualificationState
-from app.schemas.prospect_evidence_brief import (
-    BriefEvidenceQuality,
-    BriefFinding,
-    BriefQualification,
-    GroundedOutreachDraft,
-    PitchAngle,
-    ProspectEvidenceBrief,
-    ProspectEvidenceBriefHandoffs,
-)
 from app.schemas.sales_intelligence_report import SalesIntelligenceReport
-from app.services.aggregate_verdict import (
-    AggregateVerdict,
-    aggregate_headline,
-    aggregate_verdict as compute_aggregate_verdict,
-)
 
 
 def _extract_pydantic(task, phase_label: str):
@@ -200,155 +178,3 @@ def run_sales_intelligence_crew(
         )
 
     return _assemble_report(research, technology, news, pain_point, strategy)
-
-
-def run_prospect_evidence_brief_crew(
-    handoffs: ProspectEvidenceBriefHandoffs,
-    opportunity_outreach: OpportunityOutreachOutput | None,
-) -> ProspectEvidenceBrief:
-    business_context = _run_single_agent_crew(
-        create_brief_business_context_task(handoffs.business_context),
-        "Brief business context",
-    )
-    digital_presence = _run_single_agent_crew(
-        create_brief_digital_presence_task(handoffs.digital_presence),
-        "Brief digital presence",
-    )
-    public_traction = _run_single_agent_crew(
-        create_brief_public_traction_task(handoffs.public_traction),
-        "Brief public traction",
-    )
-    finding_outputs = [
-        business_context,
-        digital_presence,
-        public_traction,
-    ]
-    brief = assemble_prospect_evidence_brief(
-        handoffs,
-        finding_outputs,
-        opportunity_outreach,
-    )
-    return brief
-
-
-def assemble_prospect_evidence_brief(
-    handoffs: ProspectEvidenceBriefHandoffs,
-    finding_outputs: list[BriefFindingsOutput],
-    opportunity_outreach: OpportunityOutreachOutput | None,
-) -> ProspectEvidenceBrief:
-    context = handoffs.evidence_quality_review.context
-    verdict = _select_brief_verdict(context.qualifications)
-    aggregate = compute_aggregate_verdict(
-        [item.state for item in context.qualifications]
-    )
-    evidence_keys = {evidence.key for evidence in context.evidence}
-    if (aggregate is AggregateVerdict.QUALIFIED) != (opportunity_outreach is not None):
-        raise ValueError(
-            "A validated Opportunity/Outreach output is required only for a QUALIFIED brief."
-        )
-    opportunity_findings = (
-        [
-            opportunity_outreach.opportunity_summary,
-            *opportunity_outreach.personalization_basis,
-        ]
-        if opportunity_outreach is not None
-        else []
-    )
-    findings = _unique_findings(finding_outputs, evidence_keys, opportunity_findings)
-    caveats = _unique_caveats(
-        finding_outputs,
-        (
-            [
-                *opportunity_outreach.caveats,
-                *(f"Avoid unsupported claim: {claim}" for claim in opportunity_outreach.forbidden_claims),
-            ]
-            if opportunity_outreach is not None
-            else []
-        ),
-    )
-    pitch_angle = (
-        PitchAngle.model_validate(opportunity_outreach.pitch_angle.model_dump())
-        if opportunity_outreach is not None
-        else None
-    )
-    outreach_drafts = (
-        [
-            GroundedOutreachDraft.model_validate(draft.model_dump())
-            for draft in opportunity_outreach.outreach_drafts
-        ]
-        if opportunity_outreach is not None
-        else []
-    )
-    return ProspectEvidenceBrief(
-        objective=context.objective,
-        prospect=context.prospect,
-        verdict=verdict,
-        qualifications=context.qualifications,
-        aggregate_verdict=aggregate,
-        aggregate_headline=aggregate_headline(aggregate),
-        evidence_quality=_brief_evidence_quality(verdict),
-        findings=findings,
-        contacts=context.contacts,
-        pitch_angle=pitch_angle,
-        outreach_drafts=outreach_drafts,
-        caveats=caveats,
-        evidence=context.evidence,
-        sources=context.sources,
-    )
-
-
-def _select_brief_verdict(
-    qualifications: list[BriefQualification],
-) -> BriefQualification:
-    priorities = {
-        OpportunityQualificationState.LIKELY: 0,
-        OpportunityQualificationState.INSUFFICIENT_EVIDENCE: 1,
-        OpportunityQualificationState.NOT_ELIGIBLE: 2,
-    }
-    return min(
-        qualifications,
-        key=lambda item: (priorities[item.state], item.opportunity_model_id),
-    )
-
-
-def _brief_evidence_quality(verdict: BriefQualification) -> BriefEvidenceQuality:
-    if verdict.state is OpportunityQualificationState.LIKELY:
-        if len(verdict.supporting_evidence_keys) >= 2:
-            return BriefEvidenceQuality.HIGH
-        return BriefEvidenceQuality.MEDIUM
-    return BriefEvidenceQuality.NEEDS_REVIEW
-
-
-def _unique_findings(
-    outputs: list[BriefFindingsOutput],
-    evidence_keys: set[str],
-    priority_findings: list[BriefFinding] | None = None,
-) -> list[BriefFinding]:
-    findings = []
-    seen = set()
-    for candidates in [priority_findings or [], *(output.findings for output in outputs)]:
-        for finding in candidates:
-            if not set(finding.evidence_keys) <= evidence_keys:
-                continue
-            key = finding.statement.casefold()
-            if key not in seen:
-                findings.append(BriefFinding.model_validate(finding.model_dump()))
-                seen.add(key)
-    return findings[:12]
-
-
-def _unique_caveats(
-    outputs: list[BriefFindingsOutput],
-    additional: list[str],
-) -> list[str]:
-    caveats = []
-    seen = set()
-    for caveat in [
-        *(value for output in outputs for value in output.caveats),
-        *additional,
-    ]:
-        normalized = caveat.strip()
-        if normalized and normalized.casefold() not in seen:
-            caveats.append(normalized)
-            seen.add(normalized.casefold())
-    return caveats[:10]

@@ -2,11 +2,10 @@ from types import SimpleNamespace
 
 import pytest
 
-from app.ai import crew
 from app.models.campaign_prospect import CampaignProspectNextAction, CampaignProspectState
 from app.models.research_report import ReportKind
 from app.schemas.opportunity_qualification import OpportunityQualificationState
-from app.schemas.agent_outputs import BriefFindingsOutput, BriefReviewIssue
+from app.schemas.agent_outputs import BriefReviewIssue
 from app.schemas.evidence_gate import EvidenceGateState
 from app.models.research_request import ResearchStatus
 from app.services.aggregate_verdict import AggregateVerdict
@@ -138,38 +137,6 @@ def test_invalid_qualified_output_stops_before_report_assembly(monkeypatch):
     with pytest.raises(ValueError, match="invalid grounded output"):
         report_generation._generate_report(object(), request, object())
     assert assembled is False
-
-
-def test_active_brief_crew_has_no_legacy_reviewer_phase(monkeypatch):
-    handoffs = SimpleNamespace(
-        business_context="business",
-        digital_presence="digital",
-        public_traction="traction",
-    )
-    phases = []
-    monkeypatch.setattr(crew, "create_brief_business_context_task", lambda _: "business-task")
-    monkeypatch.setattr(crew, "create_brief_digital_presence_task", lambda _: "digital-task")
-    monkeypatch.setattr(crew, "create_brief_public_traction_task", lambda _: "traction-task")
-    monkeypatch.setattr(
-        crew,
-        "_run_single_agent_crew",
-        lambda _task, phase: phases.append(phase) or BriefFindingsOutput(),
-    )
-    report = object()
-    monkeypatch.setattr(
-        crew,
-        "assemble_prospect_evidence_brief",
-        lambda received, _findings, opportunity: (
-            report if received is handoffs and opportunity == "approved" else None
-        ),
-    )
-
-    assert crew.run_prospect_evidence_brief_crew(handoffs, "approved") is report
-    assert phases == [
-        "Brief business context",
-        "Brief digital presence",
-        "Brief public traction",
-    ]
 
 
 def test_second_review_rejection_bypasses_broad_generation_retries(monkeypatch):

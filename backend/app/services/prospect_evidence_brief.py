@@ -29,19 +29,11 @@ from app.schemas.prospect_evidence_brief import (
     BriefProspect,
     BriefQualification,
     BriefSource,
-    BusinessContextHandoff,
     ContactEvidenceState,
     ContactPathType,
-    DigitalPresenceHandoff,
-    EvidenceQualityReviewHandoff,
-    OpportunityDiagnosisHandoff,
     OpportunityAssessmentRow,
-    ProspectEvidenceBriefContext,
     ProspectEvidenceBrief,
-    ProspectEvidenceBriefHandoffs,
-    PublicTractionHandoff,
     RecommendedApproach,
-    StrategyOutreachHandoff,
 )
 from app.schemas.prospect_evidence_brief_context import TrustedProspectEvidenceBriefContext
 from app.services.aggregate_verdict import AggregateVerdict, aggregate_verdict
@@ -63,25 +55,11 @@ class ProspectEvidenceBriefContextError(ValueError):
     pass
 
 
-def build_prospect_evidence_brief_handoffs(
-    db: Session,
-    research_request: ResearchRequest,
-    company: Company,
-    selection: CampaignCandidateSelection | None,
-) -> ProspectEvidenceBriefHandoffs:
-    context = build_prospect_evidence_brief_context(
-        db, research_request, company, selection, _legacy=True
-    )
-    return _legacy_handoffs(context)
-
-
 def build_prospect_evidence_brief_context(
     db: Session,
     research_request: ResearchRequest,
     company: Company,
     selection: CampaignCandidateSelection | None,
-    *,
-    _legacy: bool = False,
 ) -> TrustedProspectEvidenceBriefContext:
     _require_ready_request(research_request)
     target = target_from_research_request(research_request, company, selection)
@@ -106,13 +84,7 @@ def build_prospect_evidence_brief_context(
         evidence,
         sources,
     )
-    if _legacy and research_request.opportunity_model_selection is None:
-        selected = OpportunityModelSelection(
-            model_ids=tuple(item.opportunity_model_id for item in qualifications),
-            confirmed_by_user=True,
-        )
-    else:
-        selected = _selected_models(research_request)
+    selected = _selected_models(research_request)
     selected_ids = set(selected.model_ids)
     qualifications = [
         item for item in qualifications if item.opportunity_model_id in selected_ids
@@ -129,13 +101,13 @@ def build_prospect_evidence_brief_context(
         outputs,
         "website",
         WebsiteResearchOutput,
-        not _legacy and ServiceFamily.WEB_CONVERSION in families,
+        ServiceFamily.WEB_CONVERSION in families,
     )
     social = _specialist_output(
         outputs,
         "social",
         SocialResearchOutput,
-        not _legacy and ServiceFamily.SOCIAL_PRESENCE_CONTENT in families,
+        ServiceFamily.SOCIAL_PRESENCE_CONTENT in families,
     )
     evidence_keys = {item.key for item in evidence}
     for specialist in (website, social):
@@ -162,44 +134,6 @@ def build_prospect_evidence_brief_context(
         website_research=website,
         social_research=social,
     )
-
-
-def _legacy_handoffs(context: ProspectEvidenceBriefContext) -> ProspectEvidenceBriefHandoffs:
-    return ProspectEvidenceBriefHandoffs(
-        business_context=BusinessContextHandoff(
-            objective=context.objective,
-            prospect=context.prospect,
-            evidence=context.evidence,
-            sources=context.sources,
-        ),
-        digital_presence=DigitalPresenceHandoff(
-            objective=context.objective,
-            prospect=context.prospect,
-            evidence=context.evidence,
-        ),
-        public_traction=PublicTractionHandoff(
-            objective=context.objective,
-            prospect=context.prospect,
-            sources=context.sources,
-            evidence=context.evidence,
-        ),
-        opportunity_diagnosis=OpportunityDiagnosisHandoff(
-            objective=context.objective,
-            prospect=context.prospect,
-            qualifications=context.qualifications,
-            evidence=context.evidence,
-        ),
-        strategy_outreach=StrategyOutreachHandoff(
-            objective=context.objective,
-            prospect=context.prospect,
-            qualifications=context.qualifications,
-            evidence=context.evidence,
-            contacts=context.contacts,
-        ),
-        evidence_quality_review=EvidenceQualityReviewHandoff(context=context),
-    )
-
-
 def assemble_prospect_evidence_brief(
     context: TrustedProspectEvidenceBriefContext,
     opportunity_outreach: OpportunityOutreachOutput | None,
