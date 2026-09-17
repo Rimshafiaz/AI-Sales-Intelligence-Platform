@@ -178,7 +178,7 @@ def assemble_prospect_evidence_brief(
 
 
 MODEL_LABELS = {
-    "web_conversion.no_verified_web_presence": "Official website",
+    "web_conversion.no_verified_web_presence": "Website presence",
     "web_conversion.mobile_performance": "Mobile performance",
     "web_conversion.booking_contact_path": "Booking and contact path",
     "web_conversion.restaurant_reservation_path": "Reservation path",
@@ -187,6 +187,16 @@ MODEL_LABELS = {
     "web_conversion.retail_product_path": "Product enquiry path",
     "web_conversion.clinic_patient_path": "Patient contact path",
     "social_presence.dormant_official_presence": "Social activity",
+}
+
+MISSING_WEBSITE_DEPENDENCY_LABELS = {
+    "web_conversion.mobile_performance": "Mobile performance",
+    "web_conversion.booking_contact_path": "The booking/contact path",
+    "web_conversion.restaurant_reservation_path": "The restaurant booking/customer path",
+    "web_conversion.restaurant_customer_path": "The restaurant booking/customer path",
+    "web_conversion.fitness_membership_path": "The membership enquiry path",
+    "web_conversion.retail_product_path": "The product enquiry path",
+    "web_conversion.clinic_patient_path": "The patient contact path",
 }
 
 
@@ -267,13 +277,33 @@ def _verdict_explanation(
 
 def _unresolved_evidence(context: TrustedProspectEvidenceBriefContext) -> list[str]:
     values = []
-    for specialist in (context.website_research, context.social_research):
-        if specialist is not None:
-            values.extend(specialist.evidence_gaps)
+    website_blocked_models = set()
+    if (
+        context.website_research is not None
+        and context.website_research.website_status == "not_verified"
+    ):
+        for qualification in context.qualifications:
+            model_id = qualification.opportunity_model_id
+            if (
+                qualification.state is OpportunityQualificationState.INSUFFICIENT_EVIDENCE
+                and model_id in MISSING_WEBSITE_DEPENDENCY_LABELS
+                and EvidenceSignalType.OFFICIAL_WEBSITE_CONFIRMED
+                in get_opportunity_model(model_id).required_signal_types
+            ):
+                subject = MISSING_WEBSITE_DEPENDENCY_LABELS[model_id]
+                values.append(
+                    f"{subject} could not be evaluated because no official website was verified."
+                )
+                website_blocked_models.add(model_id)
+    elif context.website_research is not None:
+        values.extend(context.website_research.evidence_gaps)
+    if context.social_research is not None:
+        values.extend(context.social_research.evidence_gaps)
     values.extend(
         item.reason
         for item in context.qualifications
         if item.state is OpportunityQualificationState.INSUFFICIENT_EVIDENCE
+        and item.opportunity_model_id not in website_blocked_models
     )
     return list(dict.fromkeys(value.strip() for value in values if value.strip()))[:12]
 

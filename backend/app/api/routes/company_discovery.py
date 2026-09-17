@@ -69,7 +69,7 @@ def parse_discovery_goal_endpoint(
             detail="Could not interpret the discovery goal. Please try again.",
         ) from error
 
-    supported, message = check_supported_objective(objective)
+    supported, message = check_supported_objective(objective, request.goal)
     return ParseDiscoveryResponse(
         objective=objective,
         supported=supported,

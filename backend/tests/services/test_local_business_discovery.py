@@ -103,6 +103,7 @@ class TestLocalBusinessDiscovery:
             ("Fitness studios", IndustryOverlayId.FITNESS_GYMS),
             ("Fashion boutiques", IndustryOverlayId.BOUTIQUES_RETAIL),
             ("Dentists", IndustryOverlayId.DENTAL_SELECTED_CLINICS),
+            ("Dental practices", IndustryOverlayId.DENTAL_SELECTED_CLINICS),
         ],
     )
     def test_maps_only_supported_industry_families(

@@ -1,3 +1,5 @@
+import re
+
 from app.integrations.business_discovery import (
     BusinessDiscoveryProvider,
     DiscoveredBusiness,
@@ -44,10 +46,57 @@ INDUSTRY_ALIASES: dict[IndustryOverlayId, tuple[str, ...]] = {
     ),
     IndustryOverlayId.DENTAL_SELECTED_CLINICS: (
         "dental",
+        "dental clinic",
+        "dental clinics",
+        "dental practice",
+        "dental practices",
         "dentist",
         "dentists",
     ),
 }
+
+INDUSTRY_LABELS: dict[IndustryOverlayId, str] = {
+    IndustryOverlayId.BEAUTY_WELLNESS: "Beauty & wellness",
+    IndustryOverlayId.RESTAURANTS_CAFES: "Restaurants & cafes",
+    IndustryOverlayId.FITNESS_GYMS: "Fitness & gyms",
+    IndustryOverlayId.BOUTIQUES_RETAIL: "Boutiques & retail",
+    IndustryOverlayId.DENTAL_SELECTED_CLINICS: "Dental & selected clinics",
+}
+
+_INDUSTRY_PATTERNS: dict[IndustryOverlayId, re.Pattern[str]] = {
+    IndustryOverlayId.BEAUTY_WELLNESS: re.compile(
+        r"\b(?:beauty|salons?|spas?|wellness)\b", re.IGNORECASE
+    ),
+    IndustryOverlayId.RESTAURANTS_CAFES: re.compile(
+        r"\b(?:restaurants?|cafes?)\b", re.IGNORECASE
+    ),
+    IndustryOverlayId.FITNESS_GYMS: re.compile(
+        r"\b(?:fitness|gyms?)\b", re.IGNORECASE
+    ),
+    IndustryOverlayId.BOUTIQUES_RETAIL: re.compile(
+        r"\b(?:boutiques?|retail|clothing|fashion)\b", re.IGNORECASE
+    ),
+    IndustryOverlayId.DENTAL_SELECTED_CLINICS: re.compile(
+        r"\b(?:dentists?|dental(?:\s*&\s*selected\s+clinics?|\s+(?:clinics?|practices?))?)\b",
+        re.IGNORECASE,
+    ),
+}
+
+
+def resolve_discovery_scope(value: str) -> tuple[list[str], bool]:
+    """Return supported verticals plus whether an unsupported generic clinic was named."""
+    industries = [
+        industry
+        for industry, pattern in _INDUSTRY_PATTERNS.items()
+        if pattern.search(value)
+    ]
+    without_dental = _INDUSTRY_PATTERNS[
+        IndustryOverlayId.DENTAL_SELECTED_CLINICS
+    ].sub("", value)
+    has_generic_clinic = bool(
+        re.search(r"\bclinics?\b", without_dental, re.IGNORECASE)
+    )
+    return [INDUSTRY_LABELS[industry] for industry in industries], has_generic_clinic
 
 
 def collect_local_businesses(

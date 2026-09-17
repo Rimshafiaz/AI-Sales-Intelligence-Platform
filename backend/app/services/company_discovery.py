@@ -14,12 +14,16 @@ from app.schemas.company_discovery import (
     ParseDiscoveryRequest,
 )
 from app.services.candidate_pool import merge_candidate_pool
-from app.services.local_business_discovery import collect_local_businesses
+from app.services.local_business_discovery import (
+    collect_local_businesses,
+    resolve_discovery_scope,
+)
 from app.services.web_candidate_discovery import discover_web_and_social_candidates
 
 
 def check_supported_objective(
     objective: DiscoveryObjective,
+    goal: str | None = None,
 ) -> tuple[bool, str | None]:
     if objective.goal_type not in SUPPORTED_GOAL_TYPES:
         return False, UNSUPPORTED_GOAL_MESSAGE
@@ -40,13 +44,44 @@ def check_supported_objective(
             False,
             "Add the city or region to search, for example: Lahore or Toronto.",
         )
+    sectors, has_generic_clinic = resolve_discovery_scope(
+        goal or " ".join(objective.target_sectors)
+    )
+    if len(sectors) > 1 or (has_generic_clinic and sectors):
+        choices = ", ".join(sectors)
+        clinic_note = (
+            " Generic clinics are not supported yet." if has_generic_clinic else ""
+        )
+        return (
+            False,
+            "We found more than one business category in your goal. "
+            f"Edit the goal and choose one primary category: {choices}."
+            f"{clinic_note}",
+        )
+    if has_generic_clinic:
+        return (
+            False,
+            "Generic clinics are not supported yet. Choose Dental & selected "
+            "clinics only if you mean dental practices.",
+        )
+    if not sectors:
+        return (
+            False,
+            "Choose one supported business category: Beauty & wellness, "
+            "Restaurants & cafes, Fitness & gyms, Boutiques & retail, or "
+            "Dental & selected clinics.",
+        )
     return True, None
 
 
 def parse_discovery_objective(
     request: ParseDiscoveryRequest,
 ) -> DiscoveryObjective:
-    return run_goal_parser_task(create_goal_parser_task(request))
+    objective = run_goal_parser_task(create_goal_parser_task(request))
+    sectors, has_generic_clinic = resolve_discovery_scope(request.goal)
+    if len(sectors) == 1 and not has_generic_clinic:
+        return objective.model_copy(update={"target_sectors": sectors})
+    return objective
 
 
 def discover_companies(

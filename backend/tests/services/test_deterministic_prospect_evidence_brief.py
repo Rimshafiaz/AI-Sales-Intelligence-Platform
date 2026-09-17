@@ -2,7 +2,7 @@ from datetime import UTC, datetime
 
 import pytest
 
-from app.schemas.agent_outputs import OpportunityOutreachOutput
+from app.schemas.agent_outputs import OpportunityOutreachOutput, WebsiteResearchOutput
 from app.schemas.prospect_evidence_brief import (
     BriefEvidence,
     BriefObjective,
@@ -105,3 +105,57 @@ def test_nonqualified_v2_report_has_no_approach_or_outreach(verdict):
     assert brief.outreach_drafts == []
     if verdict is AggregateVerdict.NEEDS_REVIEW:
         assert brief.unresolved_evidence
+
+
+def test_not_verified_website_is_evidence_not_an_unresolved_requirement():
+    qualifications = [
+        BriefQualification(
+            opportunity_model_id="web_conversion.no_verified_web_presence",
+            state="likely",
+            reason="No official website was verified.",
+            supporting_evidence_keys=[MOBILE_KEY],
+            evaluated_at=NOW,
+        ),
+        BriefQualification(
+            opportunity_model_id="web_conversion.mobile_performance",
+            state="insufficient_evidence",
+            reason="More evidence is needed before this Opportunity Model can be evaluated: official website confirmed, website mobile performance measured.",
+            evaluated_at=NOW,
+        ),
+        BriefQualification(
+            opportunity_model_id="web_conversion.restaurant_customer_path",
+            state="insufficient_evidence",
+            reason="More evidence is needed before this Opportunity Model can be evaluated: official website confirmed, website restaurant primary path not observed.",
+            evaluated_at=NOW,
+        ),
+    ]
+    website_research = WebsiteResearchOutput(
+        website_status="not_verified",
+        findings=[],
+        evidence_gaps=[
+            "Official website is not confirmed or listed.",
+            "Website mobile performance cannot be measured without a verified website.",
+            "Website restaurant primary path cannot be observed without a verified website.",
+        ],
+        caveats=[
+            "No official website was verified in the trusted provider record, not proof none exists elsewhere."
+        ],
+    )
+    context = _context(AggregateVerdict.QUALIFIED).model_copy(
+        update={
+            "qualifications": qualifications,
+            "website_research": website_research,
+        }
+    )
+
+    brief = assemble_prospect_evidence_brief(context, _opportunity())
+
+    assert [row.check for row in brief.opportunity_assessment] == [
+        "Website presence",
+        "Mobile performance",
+        "Customer path",
+    ]
+    assert brief.unresolved_evidence == [
+        "Mobile performance could not be evaluated because no official website was verified.",
+        "The restaurant booking/customer path could not be evaluated because no official website was verified.",
+    ]
