@@ -101,17 +101,6 @@ class EvidenceSignal(BaseModel):
         return self
 
 
-class CandidateIdentity(BaseModel):
-    model_config = ConfigDict(extra="forbid")
-
-    canonical_name: str = Field(min_length=1, max_length=255)
-    business_category: str = Field(min_length=1, max_length=100)
-    location: str = Field(min_length=1, max_length=200)
-    identity_state: IdentityState
-    primary_source: EvidenceSource
-    official_website: HttpUrl | None = None
-
-
 class OpportunityModelSelection(BaseModel):
     model_config = ConfigDict(extra="forbid")
 

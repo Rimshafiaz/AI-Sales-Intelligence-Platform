@@ -5,8 +5,6 @@ from uuid import UUID
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from app.ai.context import MAX_EVIDENCE_SOURCES, build_research_evidence_context
-from app.ai.crew import run_sales_intelligence_crew
 from app.ai.opportunity_outreach_review import run_reviewed_opportunity_outreach
 from app.core.logging import get_logger
 from app.db.session import SessionLocal
@@ -26,13 +24,9 @@ from app.repositories.research_reports import (
     get_research_report_for_user,
 )
 from app.repositories.research_requests import get_research_request_for_user
-from app.repositories.research_sources import list_research_sources_for_user
-from app.schemas.company_discovery import DiscoveryObjective
 from app.schemas.prospect_evidence_brief import ProspectEvidenceBrief
 from app.services.aggregate_verdict import AggregateVerdict
-from app.schemas.sales_intelligence_report import SalesIntelligenceReport
-from app.schemas.evidence_gate import EvidenceGateState, SourceAdmissionState
-from app.services.company_discovery import build_objective_context
+from app.schemas.evidence_gate import EvidenceGateState
 from app.services.evidence_gate import requires_deep_qualification
 from app.services.prospect_evidence_brief import (
     assemble_prospect_evidence_brief,
@@ -45,42 +39,6 @@ logger = get_logger(__name__)
 
 MAX_GENERATION_ATTEMPTS = 3
 GENERATION_RETRY_DELAY_SECONDS = 45
-
-
-def _objective_context_from_request(research_request) -> str | None:
-    raw_objective = getattr(research_request, "objective", None)
-    if not isinstance(raw_objective, dict):
-        return None
-    if "goal_type" in raw_objective:
-        try:
-            objective = DiscoveryObjective.model_validate(raw_objective)
-        except Exception as error:
-            logger.warning(
-                "Stored discovery objective could not be validated for request %s: %s",
-                getattr(research_request, "id", "?"),
-                error,
-            )
-            return None
-        return build_objective_context(
-            raw_objective.get("goal")
-            if isinstance(raw_objective.get("goal"), str)
-            else None,
-            objective,
-        )
-    goal = raw_objective.get("goal")
-    offering = raw_objective.get("offering")
-    if not isinstance(goal, str) and not isinstance(offering, str):
-        return None
-    lines = ["- Mode: manual known-prospect research"]
-    if isinstance(goal, str):
-        lines.append(f"- Original request: {goal}")
-    if isinstance(offering, str):
-        lines.append(f"- Offering: {offering}")
-    if isinstance(raw_objective.get("region"), str):
-        lines.append(f"- Target city/region: {raw_objective['region']}")
-    if isinstance(raw_objective.get("website"), str):
-        lines.append(f"- Provided website: {raw_objective['website']}")
-    return "\n".join(lines)
 
 
 def run_generation_background(request_id: UUID, user_id: UUID) -> None:
@@ -127,10 +85,9 @@ def run_generation_background(request_id: UUID, user_id: UUID) -> None:
             return
 
         report = None
-        report_kind = ReportKind.LEGACY_SALES_INTELLIGENCE
         for attempt in range(1, MAX_GENERATION_ATTEMPTS + 1):
             try:
-                report, report_kind = _generate_report(
+                report = _generate_report(
                     db,
                     research_request,
                     company,
@@ -170,18 +127,10 @@ def run_generation_background(request_id: UUID, user_id: UUID) -> None:
             company_id=research_request.company_id,
             user_id=user_id,
             report_data=report.model_dump(mode="json"),
-            opportunity_score=(
-                report.opportunity_assessment.score
-                if report_kind is ReportKind.LEGACY_SALES_INTELLIGENCE
-                else None
-            ),
-            contact_recommendation=(
-                report.contact_recommendation.recommendation
-                if report_kind is ReportKind.LEGACY_SALES_INTELLIGENCE
-                else None
-            ),
+            opportunity_score=None,
+            contact_recommendation=None,
             generated_at=datetime.now(timezone.utc),
-            report_kind=report_kind,
+            report_kind=ReportKind.PROSPECT_EVIDENCE_BRIEF,
         )
         _sync_campaign_prospect_state(db, research_request, report)
         logger.info("Background generation completed for request %s.", request_id)
@@ -203,6 +152,12 @@ def run_regeneration_background(
         )
         if existing_report is None:
             logger.warning("Background regeneration skipped: report %s not found.", report_id)
+            return
+        if existing_report.report_kind is ReportKind.LEGACY_SALES_INTELLIGENCE:
+            logger.warning(
+                "Background regeneration skipped: legacy report %s is read-only.",
+                report_id,
+            )
             return
 
         research_request = get_research_request_for_user(
@@ -230,7 +185,7 @@ def run_regeneration_background(
             return
 
         try:
-            report, report_kind = _generate_report(
+            report = _generate_report(
                 db,
                 research_request,
                 company,
@@ -252,18 +207,10 @@ def run_regeneration_background(
             company_id=existing_report.company_id,
             user_id=user_id,
             report_data=report.model_dump(mode="json"),
-            opportunity_score=(
-                report.opportunity_assessment.score
-                if report_kind is ReportKind.LEGACY_SALES_INTELLIGENCE
-                else None
-            ),
-            contact_recommendation=(
-                report.contact_recommendation.recommendation
-                if report_kind is ReportKind.LEGACY_SALES_INTELLIGENCE
-                else None
-            ),
+            opportunity_score=None,
+            contact_recommendation=None,
             generated_at=datetime.now(timezone.utc),
-            report_kind=report_kind,
+            report_kind=ReportKind.PROSPECT_EVIDENCE_BRIEF,
         )
         _sync_campaign_prospect_state(db, research_request, report)
         logger.info("Background regeneration completed for report %s.", report_id)
@@ -274,7 +221,7 @@ def run_regeneration_background(
 def _sync_campaign_prospect_state(
     db: Session,
     research_request: ResearchRequest,
-    report: SalesIntelligenceReport | ProspectEvidenceBrief,
+    report: ProspectEvidenceBrief,
 ) -> None:
     """Brief generation is the single point where research + qualification are
     both complete: sync the campaign prospect row with the aggregate verdict
@@ -334,55 +281,35 @@ def _generate_report(
     research_request: ResearchRequest,
     company: Company,
     guidance: str | None = None,
-) -> tuple[SalesIntelligenceReport | ProspectEvidenceBrief, ReportKind]:
-    if requires_deep_qualification(research_request):
-        selection = (
-            db.get(
-                CampaignCandidateSelection,
-                research_request.campaign_candidate_selection_id,
-            )
-            if research_request.campaign_candidate_selection_id is not None
-            else None
+) -> ProspectEvidenceBrief:
+    if not requires_deep_qualification(research_request):
+        raise ValueError(
+            "Historical unscoped research requests cannot generate new reports."
         )
-        context = build_prospect_evidence_brief_context(
+    selection = (
+        db.get(
+            CampaignCandidateSelection,
+            research_request.campaign_candidate_selection_id,
+        )
+        if research_request.campaign_candidate_selection_id is not None
+        else None
+    )
+    context = build_prospect_evidence_brief_context(
+        db,
+        research_request,
+        company,
+        selection,
+    )
+    opportunity_outreach = None
+    if context.aggregate_verdict is AggregateVerdict.QUALIFIED:
+        opportunity_handoff = build_opportunity_outreach_handoff(
             db,
             research_request,
             company,
             selection,
+            brief_context=context,
         )
-        opportunity_outreach = None
-        if context.aggregate_verdict is AggregateVerdict.QUALIFIED:
-            opportunity_handoff = build_opportunity_outreach_handoff(
-                db,
-                research_request,
-                company,
-                selection,
-                brief_context=context,
-            )
-            opportunity_outreach = run_reviewed_opportunity_outreach(
-                opportunity_handoff
-            )
-        return (
-            assemble_prospect_evidence_brief(context, opportunity_outreach),
-            ReportKind.PROSPECT_EVIDENCE_BRIEF,
+        opportunity_outreach = run_reviewed_opportunity_outreach(
+            opportunity_handoff
         )
-
-    sources = list_research_sources_for_user(
-        db=db,
-        research_request_id=research_request.id,
-        user_id=research_request.user_id,
-        limit=MAX_EVIDENCE_SOURCES,
-        admission_state=SourceAdmissionState.ACCEPTED,
-    )
-    if not sources:
-        raise ValueError("No accepted evidence sources are available for report generation.")
-    evidence_context = build_research_evidence_context(sources)
-    return (
-        run_sales_intelligence_crew(
-            company_name=company.name,
-            evidence_context=evidence_context,
-            guidance=guidance,
-            objective_context=_objective_context_from_request(research_request),
-        ),
-        ReportKind.LEGACY_SALES_INTELLIGENCE,
-    )
+    return assemble_prospect_evidence_brief(context, opportunity_outreach)

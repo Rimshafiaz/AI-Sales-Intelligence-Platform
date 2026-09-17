@@ -18,6 +18,10 @@ import type {
   PreparedDiscoveryOpportunity,
 } from '../lib/types'
 import { Button } from '../components/ui'
+import {
+  OPPORTUNITY_MODEL_LABELS,
+  opportunityModelScopeForObjective,
+} from '../lib/opportunityModels'
 
 interface GoalForm {
   goal: string
@@ -41,18 +45,6 @@ const GOAL_TYPE_LABELS: Record<string, string> = {
   other: 'Custom goal',
 }
 
-const MODEL_LABELS: Record<OpportunityModelId, string> = {
-  'web_conversion.no_verified_web_presence': 'No website listed by provider',
-  'web_conversion.mobile_performance': 'Mobile performance',
-  'web_conversion.booking_contact_path': 'Booking or inquiry path',
-  'web_conversion.restaurant_reservation_path': 'Restaurant reservation path',
-  'web_conversion.restaurant_customer_path': 'Restaurant customer path',
-  'web_conversion.fitness_membership_path': 'Fitness membership path',
-  'web_conversion.retail_product_path': 'Retail product path',
-  'web_conversion.clinic_patient_path': 'Clinic patient path',
-  'social_presence.dormant_official_presence': 'Dormant official social presence',
-}
-
 function domainOf(url: string): string {
   try {
     return new URL(url).hostname.replace(/^www\./, '')
@@ -63,48 +55,6 @@ function domainOf(url: string): string {
 
 function joinItems(items: string[]): string {
   return items.join(' · ')
-}
-
-function opportunityModelsFor(objective: DiscoveryObjective): OpportunityModelId[] {
-  const text = [
-    objective.offering,
-    ...objective.triggers,
-    ...objective.signals_to_look_for,
-  ]
-    .filter(Boolean)
-    .join(' ')
-    .toLowerCase()
-  const industry = objective.target_sectors.join(' ').toLowerCase()
-  const modelIds: OpportunityModelId[] = []
-  const hasWebIntent = /website|web design|web development|landing page|conversion|cms|wordpress|seo/.test(text)
-  const redesignOnly =
-    /redesign|rebuild|revamp|overhaul|website refresh/.test(text) &&
-    !/new website|website development|build a website|create a website|landing page|no website|web presence/.test(
-      text,
-    )
-  const hasSocialIntent = /social|instagram|tiktok|content|reels|short.form|short form/.test(text)
-
-  if (hasWebIntent) {
-    if (!redesignOnly) {
-      modelIds.push('web_conversion.no_verified_web_presence')
-    }
-    modelIds.push(
-      'web_conversion.mobile_performance',
-    )
-    if (/restaurant|cafe/.test(industry)) {
-      modelIds.push('web_conversion.restaurant_customer_path')
-    } else if (/fitness|gym/.test(industry)) {
-      modelIds.push('web_conversion.fitness_membership_path')
-    } else if (/boutique|retail|fashion/.test(industry)) {
-      modelIds.push('web_conversion.retail_product_path')
-    } else if (/dental|dentist|clinic/.test(industry)) {
-      modelIds.push('web_conversion.clinic_patient_path')
-    } else if (/booking|appointment|inquiry/.test(text)) {
-      modelIds.push('web_conversion.booking_contact_path')
-    }
-  }
-  if (hasSocialIntent) modelIds.push('social_presence.dormant_official_presence')
-  return [...new Set(modelIds)].slice(0, 3)
 }
 
 function recommendedIndexes(opportunities: PreparedDiscoveryOpportunity[]): number[] {
@@ -161,7 +111,10 @@ export default function DiscoveryPage() {
   const [savedProspectIndexes, setSavedProspectIndexes] = useState<number[]>([])
   const [campaignContext, setCampaignContext] = useState<{ campaignId: string; campaignRunId: string } | null>(null)
   const [handoffError, setHandoffError] = useState<string | null>(null)
-  const selectedModels = objective ? opportunityModelsFor(objective) : []
+  const modelScope = objective
+    ? opportunityModelScopeForObjective(objective)
+    : { modelIds: [], error: null }
+  const selectedModels = modelScope.modelIds
 
   function update(field: keyof GoalForm, value: string) {
     setForm((current) => ({ ...current, [field]: value }))
@@ -216,7 +169,7 @@ export default function DiscoveryPage() {
   async function handleConfirmedRun() {
     if (searching || !objective) return
     if (selectedModels.length === 0) {
-      setSearchError('SalesLens currently supports Web & Conversion and Social Presence & Content opportunity models only.')
+      setSearchError(modelScope.error ?? 'No supported research scope was selected.')
       return
     }
 
@@ -407,7 +360,7 @@ export default function DiscoveryPage() {
           <p className="text-label-sm font-semibold text-ink">What we will check</p>
           <p className="mt-3 text-body-lg font-medium text-on-surface">{GOAL_TYPE_LABELS[objective.goal_type] ?? 'Custom goal'}{objective.target_sectors.length > 0 && <span className="text-on-surface-variant"> · {joinItems(objective.target_sectors)}</span>}{objective.target_geographies.length > 0 && <span className="text-on-surface-variant"> · {joinItems(objective.target_geographies)}</span>}</p>
           {objective.offering && <p className="mt-1 text-body-md text-on-surface-variant">Offering: {objective.offering}</p>}
-          <div className="mt-4 border-t border-line-soft pt-3"><p className="label-caps text-ink-faint">Research lenses</p>{selectedModels.length > 0 ? <div className="mt-2 flex flex-wrap gap-1.5">{selectedModels.map((modelId) => <span key={modelId} className="rounded-control bg-secondary-container px-2 py-1 text-label-sm text-on-surface">{MODEL_LABELS[modelId]}</span>)}</div> : <p className="mt-1 text-body-sm text-warn-ink">This offering does not yet map to an evidence-backed Opportunity Model.</p>}</div>
+          <div className="mt-4 border-t border-line-soft pt-3"><p className="label-caps text-ink-faint">Research lenses</p>{selectedModels.length > 0 ? <div className="mt-2 flex flex-wrap gap-1.5">{selectedModels.map((modelId) => <span key={modelId} className="rounded-control bg-secondary-container px-2 py-1 text-label-sm text-on-surface">{OPPORTUNITY_MODEL_LABELS[modelId]}</span>)}</div> : <p className="mt-1 text-body-sm text-warn-ink">{modelScope.error ?? 'This offering does not map to a supported Opportunity Model.'}</p>}</div>
           <div className="mt-4 border-t border-line-soft pt-3"><p className="text-label-sm font-semibold text-on-surface">Searches</p><ul className="mt-1.5 space-y-1">{objective.search_queries.map((query) => <li key={query} className="text-body-sm text-on-surface-variant">{query}</li>)}</ul></div>
           {gate && !gate.supported && gate.message && <div className="mt-4 rounded-card border border-warn-bg bg-warn-bg p-4"><p className="text-label-sm font-semibold uppercase tracking-wide text-warn-ink">Not supported yet</p><p className="mt-1 text-body-sm text-on-surface">{gate.message}</p></div>}
           {searchError && <div className="mt-4"><ErrorNotice message={searchError} /></div>}
@@ -437,7 +390,7 @@ function OpportunityCard({ opportunity, selected, saved, saving, onToggle, onSav
     <article className={'relative overflow-hidden rounded-card border bg-card p-space-lg transition-colors ' + (selected ? 'border-action' : 'border-line')}>
       <div className={'absolute bottom-0 left-0 top-0 w-1.5 ' + (selected ? 'bg-secondary' : 'bg-surface-container-high')} />
       <div className="flex flex-col gap-5 pl-2 lg:flex-row lg:items-start lg:justify-between">
-        <div className="min-w-0 flex-1 space-y-3"><div className="flex flex-wrap items-center gap-x-2 gap-y-1"><h3 className="text-headline-lg font-semibold text-on-surface">{candidate.company_name}</h3>{candidate.website && <a href={candidate.website} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-0.5 text-label-md text-secondary hover:underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-secondary"><span>{domainOf(candidate.website)}</span><ArrowUpRight size={14} /></a>}{candidate.industry && <span className="rounded bg-surface-container px-1.5 py-0.5 text-label-sm text-on-surface-variant">{candidate.industry}</span>}</div>{candidate.formatted_address && <p className="text-body-sm text-on-surface-variant">{candidate.formatted_address}</p>}<div className="space-y-2 bg-surface-container-low p-4"><p className="text-label-sm font-semibold text-ink">Why this appeared</p>{opportunity.queue_entry.reasons.map((reason) => <div key={`${reason.model_id}:${reason.signal_type}`} className="border-l-2 border-line pl-3"><p className="text-label-sm font-medium text-on-surface">{MODEL_LABELS[reason.model_id]}</p><p className="mt-0.5 text-body-sm leading-relaxed text-on-surface-variant">{reason.supporting_value}</p><p className="mt-1 text-label-sm text-outline">Source: {reason.source.source_url ? <a href={reason.source.source_url} target="_blank" rel="noopener noreferrer" className="text-secondary hover:underline">{domainOf(reason.source.source_url)}</a> : reason.source.provider}</p></div>)}</div></div>
+        <div className="min-w-0 flex-1 space-y-3"><div className="flex flex-wrap items-center gap-x-2 gap-y-1"><h3 className="text-headline-lg font-semibold text-on-surface">{candidate.company_name}</h3>{candidate.website && <a href={candidate.website} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-0.5 text-label-md text-secondary hover:underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-secondary"><span>{domainOf(candidate.website)}</span><ArrowUpRight size={14} /></a>}{candidate.industry && <span className="rounded bg-surface-container px-1.5 py-0.5 text-label-sm text-on-surface-variant">{candidate.industry}</span>}</div>{candidate.formatted_address && <p className="text-body-sm text-on-surface-variant">{candidate.formatted_address}</p>}<div className="space-y-2 bg-surface-container-low p-4"><p className="text-label-sm font-semibold text-ink">Why this appeared</p>{opportunity.queue_entry.reasons.map((reason) => <div key={`${reason.model_id}:${reason.signal_type}`} className="border-l-2 border-line pl-3"><p className="text-label-sm font-medium text-on-surface">{OPPORTUNITY_MODEL_LABELS[reason.model_id]}</p><p className="mt-0.5 text-body-sm leading-relaxed text-on-surface-variant">{reason.supporting_value}</p><p className="mt-1 text-label-sm text-outline">Source: {reason.source.source_url ? <a href={reason.source.source_url} target="_blank" rel="noopener noreferrer" className="text-secondary hover:underline">{domainOf(reason.source.source_url)}</a> : reason.source.provider}</p></div>)}</div></div>
         <div className="flex shrink-0 flex-col gap-2 lg:mt-1"><label className="flex cursor-pointer items-center gap-2 rounded-control border border-line bg-surface-container-lowest px-4 py-2 text-label-md font-medium text-on-surface transition-colors hover:border-secondary"><input type="checkbox" checked={selected} onChange={() => onToggle(opportunity.queue_entry.candidate_index)} className="size-4 accent-current" /><span>{selected ? 'In research batch' : 'Add to batch'}</span></label><button type="button" onClick={() => onSave(opportunity)} disabled={saved || saving} className="rounded-control border border-secondary px-4 py-2 text-label-md font-medium text-secondary transition-colors hover:bg-secondary-container disabled:cursor-not-allowed disabled:opacity-60">{saving ? 'Saving...' : saved ? 'Saved to prospects' : 'Save prospect'}</button></div>
       </div>
     </article>

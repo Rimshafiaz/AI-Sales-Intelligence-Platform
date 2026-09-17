@@ -7,8 +7,10 @@ from app.integrations.search_provider import CollectedSource, TavilySearchProvid
 from app.integrations.website_metadata import WebsiteIdentityPage, WebsiteMetadataCollector
 from app.schemas.opportunity_models import EvidenceSource, IdentityState
 from app.services.identity_resolution import (
+    IdentityStatus,
     domain_matches_name,
     domain_stem,
+    resolve_source_identity,
     significant_tokens,
 )
 
@@ -96,9 +98,10 @@ class CompanyWebsiteResolver:
             for part in (f'"{clean_name}"', clean_location, "official website")
             if part
         )
+        search_sources = self.search_provider.search(query)
         matches = [
             match
-            for source in self.search_provider.search(query)
+            for source in search_sources
             if (match := self._match_source(clean_name, clean_location, source)) is not None
             and (supplied_origin is None or match.website == supplied_origin)
         ]
@@ -116,7 +119,7 @@ class CompanyWebsiteResolver:
         }
         candidates = representative_matches or unique_matches
 
-        if len(candidates) != 1:
+        if len(candidates) > 1:
             return ResolvedCompany(
                 company_name=clean_name,
                 location=clean_location,
@@ -129,27 +132,77 @@ class CompanyWebsiteResolver:
                 ),
             )
 
-        match = next(iter(candidates.values()))
-        if clean_location and not match.location_supported:
+        if len(candidates) == 1:
+            match = next(iter(candidates.values()))
+            if clean_location and not match.location_supported:
+                return ResolvedCompany(
+                    company_name=clean_name,
+                    location=clean_location,
+                    website=match.website,
+                    identity_state=IdentityState.NEEDS_REVIEW,
+                    source=match.source,
+                    reason=(
+                        "The website matches the business name, but the supplied location "
+                        "is not supported by the search evidence."
+                    ),
+                )
+
             return ResolvedCompany(
                 company_name=clean_name,
                 location=clean_location,
                 website=match.website,
-                identity_state=IdentityState.NEEDS_REVIEW,
+                identity_state=IdentityState.VERIFIED,
                 source=match.source,
+                reason=match.reason,
+            )
+
+        identity_query = " ".join(
+            part for part in (f'"{clean_name}"', clean_location, "business") if part
+        )
+        identity_sources = [
+            *search_sources,
+            *self.search_provider.search(identity_query),
+        ]
+        confirmed = []
+        for source in identity_sources:
+            resolution = resolve_source_identity(
+                candidate_name=clean_name,
+                candidate_location=clean_location,
+                candidate_phone=phone_number,
+                source_url=source.url,
+                source_name=source.title or "",
+                source_text=source.excerpt or "",
+            )
+            if resolution.status is IdentityStatus.CONFIRMED:
+                confirmed.append((resolution.name_score, source))
+        if confirmed:
+            _score, source = max(confirmed, key=lambda item: (item[0], item[1].url))
+            return ResolvedCompany(
+                company_name=clean_name,
+                location=clean_location,
+                website=None,
+                identity_state=IdentityState.VERIFIED,
+                source=EvidenceSource(
+                    provider="tavily",
+                    source_url=source.url,
+                    retrieved_at=datetime.now(UTC),
+                ),
                 reason=(
-                    "The website matches the business name, but the supplied location "
-                    "is not supported by the search evidence."
+                    "The business identity was confirmed by a traceable source, but no "
+                    "official website was verified."
                 ),
             )
 
         return ResolvedCompany(
             company_name=clean_name,
             location=clean_location,
-            website=match.website,
-            identity_state=IdentityState.VERIFIED,
-            source=match.source,
-            reason=match.reason,
+            website=None,
+            identity_state=IdentityState.NEEDS_REVIEW,
+            source=None,
+            reason=(
+                "No official website or other traceable source conclusively matched this "
+                "business identity."
+            ),
         )
 
     @staticmethod

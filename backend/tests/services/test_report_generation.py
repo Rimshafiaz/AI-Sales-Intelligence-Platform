@@ -52,14 +52,13 @@ def test_deep_qualified_request_uses_prospect_evidence_brief(monkeypatch):
         ),
     )
 
-    report, report_kind = report_generation._generate_report(
+    report = report_generation._generate_report(
         object(),
         request,
         company,
     )
 
     assert report is brief
-    assert report_kind is ReportKind.PROSPECT_EVIDENCE_BRIEF
     assert calls[0][1:3] == (request, company)
     assert calls.count("handoff") == 1
     assert calls.count("agent") == 1
@@ -104,10 +103,9 @@ def test_nonqualified_brief_skips_opportunity_outreach_agent(monkeypatch, state)
         lambda received, output: (received, output),
     )
 
-    report, kind = report_generation._generate_report(object(), request, object())
+    report = report_generation._generate_report(object(), request, object())
 
     assert report == (context, None)
-    assert kind is ReportKind.PROSPECT_EVIDENCE_BRIEF
     assert calls == []
 
 
@@ -191,40 +189,31 @@ def test_second_review_rejection_bypasses_broad_generation_retries(monkeypatch):
     assert db.rollbacks == 1
 
 
-def test_standard_request_keeps_legacy_report_generation(monkeypatch):
+def test_unscoped_request_cannot_generate_a_new_legacy_report(monkeypatch):
     request = SimpleNamespace(id="request", user_id="user")
     company = SimpleNamespace(name="Example Corp")
-    sources = [object()]
-    legacy_report = object()
-    calls = []
 
     monkeypatch.setattr(report_generation, "requires_deep_qualification", lambda _: False)
-    monkeypatch.setattr(report_generation, "list_research_sources_for_user", lambda **_: sources)
-    monkeypatch.setattr(report_generation, "build_research_evidence_context", lambda _: "evidence")
-    monkeypatch.setattr(report_generation, "_objective_context_from_request", lambda _: "objective")
+    with pytest.raises(ValueError, match="unscoped"):
+        report_generation._generate_report(object(), request, company)
+
+
+def test_background_legacy_regeneration_is_rejected(monkeypatch):
+    db = SimpleNamespace(close=lambda: None)
+    legacy = SimpleNamespace(report_kind=ReportKind.LEGACY_SALES_INTELLIGENCE)
+    monkeypatch.setattr(report_generation, "SessionLocal", lambda: db)
     monkeypatch.setattr(
         report_generation,
-        "run_sales_intelligence_crew",
-        lambda **kwargs: calls.append(kwargs) or legacy_report,
+        "get_research_report_by_id_for_user",
+        lambda **_: legacy,
+    )
+    monkeypatch.setattr(
+        report_generation,
+        "get_research_request_for_user",
+        lambda **_: pytest.fail("Legacy regeneration must stop before loading research."),
     )
 
-    report, report_kind = report_generation._generate_report(
-        object(),
-        request,
-        company,
-        "focus on mobile",
-    )
-
-    assert report is legacy_report
-    assert report_kind is ReportKind.LEGACY_SALES_INTELLIGENCE
-    assert calls == [
-        {
-            "company_name": "Example Corp",
-            "evidence_context": "evidence",
-            "guidance": "focus on mobile",
-            "objective_context": "objective",
-        }
-    ]
+    report_generation.run_regeneration_background("report", "user", None)
 
 
 @pytest.mark.parametrize(

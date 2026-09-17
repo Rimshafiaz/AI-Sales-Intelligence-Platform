@@ -16,7 +16,6 @@ import {
   Notice,
   RecommendationBadge,
   StatusBadge,
-  TextField,
   TextareaField,
 } from '../components/ui'
 import { FindingText } from '../components/report/FindingText'
@@ -72,9 +71,6 @@ export default function ReportReviewPage() {
   const [actionError, setActionError] = useState<string | null>(null)
   const [editMode, setEditMode] = useState(false)
   const [saving, setSaving] = useState(false)
-  const [showRegenerate, setShowRegenerate] = useState(false)
-  const [regenPhase, setRegenPhase] = useState<'idle' | 'starting' | 'polling'>('idle')
-  const [regenInstruction, setRegenInstruction] = useState('')
 
   interface EditFormState {
     strategy: string
@@ -140,7 +136,6 @@ export default function ReportReviewPage() {
       review_note: detail.report.review_note ?? '',
     })
     setEditMode(true)
-    setShowRegenerate(false)
     setActionError(null)
   }
 
@@ -180,58 +175,6 @@ export default function ReportReviewPage() {
       setSaving(false)
     }
   }
-
-  async function handleRegenerate() {
-    if (!detail || regenPhase !== 'idle') return
-    setActionError(null)
-    setRegenPhase('starting')
-    try {
-      const instruction = regenInstruction.trim()
-      await api<{ status: string }>(`/reports/${detail.report.id}/regenerate`, {
-        method: 'POST',
-        body: instruction ? { instruction } : {},
-      })
-      setRegenPhase('polling')
-    } catch (e) {
-      setActionError(e instanceof Error ? e.message : 'Could not start regeneration.')
-      setRegenPhase('idle')
-    }
-  }
-
-  useEffect(() => {
-    if (regenPhase !== 'polling' || !detail) return
-    const original = detail.report
-    let attempts = 0
-    const interval = setInterval(async () => {
-      attempts += 1
-      try {
-        const page = await api<{
-          items: { id: string; research_request_id: string; generated_at: string }[]
-        }>('/reports', { params: { page: 1, page_size: 5 } })
-        const found = page.items.find(
-          (item) =>
-            item.research_request_id === original.research_request_id &&
-            item.id !== original.id &&
-            new Date(item.generated_at) > new Date(original.generated_at),
-        )
-        if (found) {
-          setRegenPhase('idle')
-          setRegenInstruction('')
-          navigate(`/reports/${found.id}`)
-          return
-        }
-      } catch {
-        // transient poll failure; keep polling
-      }
-      if (attempts >= 200) {
-        setRegenPhase('idle')
-        setActionError(
-          'Regeneration is taking longer than expected. Check History in a minute; the new draft may appear there.',
-        )
-      }
-    }, 3000)
-    return () => clearInterval(interval)
-  }, [regenPhase, detail, navigate])
 
   const nextBatchRequestId = batchRequestIds.find(
     (id) => detail?.report.research_request_id !== id,
@@ -362,20 +305,9 @@ export default function ReportReviewPage() {
           <Button
             variant="secondary"
             onClick={startEdit}
-            disabled={editMode || regenPhase !== 'idle'}
+            disabled={editMode}
           >
             Edit draft
-          </Button>
-          <Button
-            variant="secondary"
-            onClick={() => {
-              setEditMode(false)
-              setEditForm(null)
-              setShowRegenerate((visible) => !visible)
-            }}
-            disabled={editMode || regenPhase !== 'idle'}
-          >
-            Regenerate
           </Button>
         </div>
       </div>
@@ -471,49 +403,6 @@ export default function ReportReviewPage() {
         </section>
       )}
 
-      {showRegenerate && (
-        <section className="mt-3 rounded-card border border-line-soft bg-card p-5">
-          <h2 className="label-caps text-ink-soft">Regenerate report</h2>
-          <p className="mt-1 text-xs text-ink-faint">
-            Creates a new draft from the same evidence. The original report is
-            kept. Takes 1 to 5 minutes.
-          </p>
-          {regenPhase === 'polling' ? (
-            <div className="mt-3 flex items-center gap-2 rounded-control bg-slate-wash p-3">
-              <Loader2 size={15} className="animate-spin text-action" />
-              <p className="font-ui text-sm text-ink">
-                Regeneration is running. This typically takes 1 to 5 minutes.
-                Keep this page open; you will be moved to the new draft
-                automatically.
-              </p>
-            </div>
-          ) : (
-            <>
-              <div className="mt-3">
-                <TextField
-                  label="Guidance (optional)"
-                  placeholder="e.g. focus the outreach on hiring growth"
-                  maxLength={500}
-                  value={regenInstruction}
-                  onChange={(event) => setRegenInstruction(event.target.value)}
-                />
-              </div>
-              <div className="mt-4 flex justify-end gap-2">
-                <Button
-                  variant="secondary"
-                  onClick={() => setShowRegenerate(false)}
-                  disabled={regenPhase !== 'idle'}
-                >
-                  Cancel
-                </Button>
-                <Button onClick={handleRegenerate} disabled={regenPhase !== 'idle'}>
-                  Regenerate report
-                </Button>
-              </div>
-            </>
-          )}
-        </section>
-      )}
       {actionError && (
         <div className="mt-3">
           <Notice kind="error">{actionError}</Notice>

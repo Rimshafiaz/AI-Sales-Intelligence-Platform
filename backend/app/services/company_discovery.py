@@ -43,35 +43,6 @@ def check_supported_objective(
     return True, None
 
 
-def build_objective_context(
-    goal: str | None,
-    objective: DiscoveryObjective | None,
-) -> str:
-    if objective is None:
-        return "Not provided. Match the listed criteria."
-
-    def list_items(items: list[str]) -> str:
-        return ", ".join(items) if items else "not specified"
-
-    lines = [
-        f"- Goal type: {objective.goal_type}",
-        f"- Seller role: {objective.seller_role or 'not specified'}",
-        f"- Offering: {objective.offering or 'not specified'}",
-        f"- Target sectors: {list_items(objective.target_sectors)}",
-        f"- Target geographies: {list_items(objective.target_geographies)}",
-        f"- Company size: {objective.company_size or 'not specified'}",
-        f"- Stage: {objective.stage or 'not specified'}",
-        f"- Triggers: {list_items(objective.triggers)}",
-        f"- Signals to look for: {list_items(objective.signals_to_look_for)}",
-        f"- Decision makers: {list_items(objective.decision_makers)}",
-        f"- Fit rubric: {objective.fit_rubric}",
-        f"- Desired outcome: {objective.desired_outcome}",
-    ]
-    if goal:
-        lines.insert(0, f"- Original request: {goal}")
-    return "\n".join(lines)
-
-
 def parse_discovery_objective(
     request: ParseDiscoveryRequest,
 ) -> DiscoveryObjective:

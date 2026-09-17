@@ -7,7 +7,6 @@ from app.integrations.business_discovery import (
 from app.integrations.geocoding import GeocodingProvider, NominatimGeocodingProvider
 from app.schemas.company_discovery import (
     CompanyDiscoveryRequest,
-    CompanyDiscoveryResponse,
     DiscoveredCompanyCandidate,
 )
 from app.schemas.opportunity_models import IndustryOverlayId
@@ -49,19 +48,6 @@ INDUSTRY_ALIASES: dict[IndustryOverlayId, tuple[str, ...]] = {
         "dentists",
     ),
 }
-
-
-def discover_local_businesses(
-    criteria: CompanyDiscoveryRequest,
-    provider: BusinessDiscoveryProvider,
-) -> CompanyDiscoveryResponse:
-    businesses = collect_local_businesses(criteria, provider)
-    return CompanyDiscoveryResponse(
-        candidates=[
-            business_to_candidate(criteria, business)
-            for business in businesses
-        ]
-    )
 
 
 def collect_local_businesses(

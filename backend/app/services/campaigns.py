@@ -50,15 +50,6 @@ def create_campaign(
     return campaign
 
 
-def list_campaigns_for_user(db: Session, user_id: uuid.UUID) -> list[Campaign]:
-    statement = (
-        select(Campaign)
-        .where(Campaign.user_id == user_id)
-        .order_by(Campaign.created_at.desc())
-    )
-    return list(db.scalars(statement).all())
-
-
 def list_campaign_summaries_for_user(
     db: Session,
     user_id: uuid.UUID,

@@ -104,6 +104,9 @@ def run_research(request_id: UUID) -> None:
             objective["resolved_target"] = {
                 "business_name": resolved_company.company_name,
                 "website": resolved_company.website,
+                "website_status": (
+                    "verified" if resolved_company.website is not None else "not_verified"
+                ),
                 "identity_state": resolved_company.identity_state.value,
                 "source": (
                     resolved_company.source.model_dump(mode="json")
@@ -134,6 +137,29 @@ def run_research(request_id: UUID) -> None:
             research_request_id=research_request.id,
             sources=admissions,
         )
+        if (
+            gate_result.state is EvidenceGateState.READY_FOR_DEEPER_RESEARCH
+            and target.no_listed_official_website
+            and resolved_company is not None
+            and resolved_company.source is not None
+        ):
+            upsert_research_evidence(
+                db=db,
+                research_request_id=research_request.id,
+                signal_type=EvidenceSignalType.NO_LISTED_OFFICIAL_WEBSITE,
+                evidence_type=EvidenceType.OBSERVED,
+                supporting_value=(
+                    "No official website was verified from the accepted identity sources."
+                ),
+                numeric_value=None,
+                source=resolved_company.source,
+                source_identity_key=(
+                    "resolved_target:no_verified_official_website:"
+                    f"{resolved_company.source.provider}:"
+                    f"{resolved_company.source.provider_record_id or resolved_company.source.source_url}"
+                ),
+                captured_at=datetime.now(UTC),
+            )
         if (
             gate_result.state is EvidenceGateState.READY_FOR_DEEPER_RESEARCH
             and target.official_website is not None

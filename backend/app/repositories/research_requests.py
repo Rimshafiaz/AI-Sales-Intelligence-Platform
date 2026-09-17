@@ -1,5 +1,6 @@
 from uuid import UUID
 from typing import Literal
+import copy
 
 from sqlalchemy import select
 from sqlalchemy.orm import Session
@@ -35,6 +36,30 @@ def create_research_request(
     db.commit()
     db.refresh(research_request)
     return research_request
+
+
+def clone_failed_research_request(
+    db: Session,
+    research_request: ResearchRequest,
+) -> ResearchRequest:
+    campaign_selection_id = research_request.campaign_candidate_selection_id
+    if campaign_selection_id is not None:
+        research_request.campaign_candidate_selection_id = None
+        db.flush()
+    retried = ResearchRequest(
+        company_id=research_request.company_id,
+        user_id=research_request.user_id,
+        status=ResearchStatus.PENDING,
+        objective=copy.deepcopy(research_request.objective),
+        opportunity_model_selection=copy.deepcopy(
+            research_request.opportunity_model_selection
+        ),
+        campaign_candidate_selection_id=campaign_selection_id,
+    )
+    db.add(retried)
+    db.commit()
+    db.refresh(retried)
+    return retried
 
 
 def save_specialist_output(

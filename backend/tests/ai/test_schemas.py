@@ -1,11 +1,8 @@
-import uuid
-
 import pytest
 from pydantic import ValidationError
 
 from app.ai.config_loader import get_task_config, render_task_config
-from app.ai.context import MAX_EVIDENCE_EXCERPT_LENGTH, build_research_evidence_context
-from app.models.research_source import ResearchSource
+from app.ai.tasks.goal_parser_task import create_goal_parser_task
 from app.schemas.agent_outputs import (
     BriefReviewOutput,
     OpportunityOutreachOutput,
@@ -15,11 +12,10 @@ from app.schemas.agent_outputs import (
 from app.schemas.company_discovery import (
     CompanyDiscoveryRequest,
     DiscoveryObjective,
+    ParseDiscoveryRequest,
 )
-from app.schemas.evidence_gate import SourceAdmissionState
 from app.schemas.research_request import (
     KnownProspectResearchRequest,
-    ResearchRequestStartRequest,
 )
 from app.schemas.sales_intelligence_report import SalesIntelligenceReport
 
@@ -102,60 +98,31 @@ class TestProspectEvidenceBriefAgentOutputs:
         )
         assert review.issues[0].issue_type == "generic_outreach"
 
-class TestEvidenceContext:
-    def _source(self, url="https://example.com", excerpt="evidence text"):
-        return ResearchSource(
-            id=uuid.uuid4(),
-            url=url,
-            title="Example",
-            source_type="web_search",
-            excerpt=excerpt,
-            admission_state=SourceAdmissionState.ACCEPTED,
-        )
-
-    def test_context_contains_urls(self):
-        context = build_research_evidence_context([self._source()])
-        assert "https://example.com" in context
-
-    def test_empty_sources_rejected(self):
-        with pytest.raises(ValueError):
-            build_research_evidence_context([])
-
-    def test_unaccepted_sources_are_rejected(self):
-        source = self._source()
-        source.admission_state = SourceAdmissionState.NEEDS_REVIEW
-        with pytest.raises(ValueError, match="only accepted"):
-            build_research_evidence_context([source])
-
-    def test_excerpts_bounded(self):
-        source = self._source(excerpt="x" * 5000)
-        context = build_research_evidence_context([source])
-        assert "x" * (MAX_EVIDENCE_EXCERPT_LENGTH + 1) not in context
-
-    def test_source_count_bounded(self):
-        sources = [self._source(url=f"https://example.com/{i}") for i in range(20)]
-        context = build_research_evidence_context(sources)
-        assert context.count("https://example.com/") == 12
-
-
 class TestConfigLoader:
     def test_render_replaces_placeholders(self):
         config = render_task_config(
-            "research_task",
-            company_name="Stripe",
-            evidence_context="EVIDENCE_BLOCK",
+            "goal_parser_task",
+            goal_context="Find dental clinics in Toronto",
+            hint_context="None provided.",
         )
-        assert "Stripe" in config["description"]
-        assert "EVIDENCE_BLOCK" in config["description"]
+        assert "Find dental clinics in Toronto" in config["description"]
         assert "{" not in config["description"]
 
     def test_missing_template_value_raises(self):
         with pytest.raises(ValueError):
-            render_task_config("research_task", company_name="Stripe")
+            render_task_config("goal_parser_task", goal_context="Find clinics")
 
     def test_unknown_task_raises(self):
         with pytest.raises(ValueError):
             get_task_config("does_not_exist")
+
+    def test_goal_parser_is_toolless_and_uses_narrow_agent(self):
+        task = create_goal_parser_task(
+            ParseDiscoveryRequest(goal="Find dental clinics that need website work")
+        )
+        assert task.tools == []
+        assert task.agent.tools == []
+        assert task.agent.role.strip() == "Seller Goal Parser"
 
 
 class TestDiscoverySchemas:
@@ -215,12 +182,4 @@ class TestDiscoverySchemas:
                 goal="Decide whether this salon is worth pitching.",
                 offering="",
                 desired_outcome="Decide whether this salon is worth pitching.",
-            )
-
-    def test_research_start_rejects_unsupported_objective(self):
-        with pytest.raises(ValidationError, match="not supported yet"):
-            ResearchRequestStartRequest(
-                goal="Decide whether this business is worth pitching.",
-                offering="Website redesign services",
-                objective=self._objective("investment"),
             )

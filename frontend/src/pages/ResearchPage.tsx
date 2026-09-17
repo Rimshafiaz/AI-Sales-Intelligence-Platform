@@ -4,6 +4,10 @@ import { Check, ExternalLink, Loader2, Search } from 'lucide-react'
 import { api } from '../lib/api'
 import type { Company, KnownProspectResolution } from '../lib/types'
 import { Button, Notice, TextField } from '../components/ui'
+import {
+  OPPORTUNITY_MODEL_LABELS,
+  opportunityModelScopeForText,
+} from '../lib/opportunityModels'
 
 function isValidWebsite(value: string): boolean {
   try {
@@ -21,6 +25,7 @@ export default function ResearchPage() {
   const [offering, setOffering] = useState('')
   const [goal, setGoal] = useState('')
   const [region, setRegion] = useState('')
+  const [phoneNumber, setPhoneNumber] = useState('')
   const [companies, setCompanies] = useState<Company[] | null>(null)
   const [companiesError, setCompaniesError] = useState<string | null>(null)
   const [resolving, setResolving] = useState(false)
@@ -47,6 +52,7 @@ export default function ResearchPage() {
     const cleanOffering = offering.trim()
     const cleanGoal = goal.trim()
     const cleanRegion = region.trim()
+    const cleanPhoneNumber = phoneNumber.trim()
     return {
       business_name: cleanName,
       goal: cleanGoal,
@@ -54,8 +60,11 @@ export default function ResearchPage() {
       desired_outcome: 'Decide whether this prospect merits evidence review before outreach.',
       ...(cleanRegion ? { location: cleanRegion } : {}),
       ...(cleanWebsite ? { website: cleanWebsite } : {}),
+      ...(cleanPhoneNumber ? { phone_number: cleanPhoneNumber } : {}),
     }
   }
+
+  const modelScope = opportunityModelScopeForText(offering, goal)
 
   function validate() {
     const request = payload()
@@ -67,6 +76,7 @@ export default function ResearchPage() {
     if (website.trim() && !isValidWebsite(website.trim())) {
       return 'Website must be a valid http(s) URL.'
     }
+    if (modelScope.error) return modelScope.error
     return null
   }
 
@@ -103,7 +113,13 @@ export default function ResearchPage() {
     try {
       const request = await api<{ id: string }>('/known-prospects/confirm', {
         method: 'POST',
-        body: payload(),
+        body: {
+          ...payload(),
+          model_selection: {
+            model_ids: modelScope.modelIds,
+            confirmed_by_user: true,
+          },
+        },
       })
       navigate(`/research/${request.id}`)
     } catch (e) {
@@ -185,6 +201,16 @@ export default function ResearchPage() {
               clearResolution()
             }}
           />
+          <TextField
+            label="Business phone"
+            hint="Optional"
+            placeholder="e.g. +92 300 1234567"
+            value={phoneNumber}
+            onChange={(event) => {
+              setPhoneNumber(event.target.value)
+              clearResolution()
+            }}
+          />
         </div>
         {error && (
           <div className="mt-4" aria-live="polite">
@@ -244,12 +270,26 @@ export default function ResearchPage() {
             </p>
           )}
           {isVerified ? (
-            <div className="mt-5 flex flex-wrap items-center justify-between gap-3 border-t border-line-soft pt-4">
-              <p className="max-w-xl text-sm text-ink-soft">
-                Confirming creates a pending evidence-review request. It does not start a
-                report or send outreach.
-              </p>
-              <Button onClick={handleConfirm} disabled={confirming}>
+            <div className="mt-5 border-t border-line-soft pt-4">
+              <div>
+                <p className="label-caps text-ink-faint">Research scope</p>
+                <div className="mt-2 flex flex-wrap gap-2">
+                  {modelScope.modelIds.map((modelId) => (
+                    <span
+                      key={modelId}
+                      className="rounded-control bg-secondary-container px-2 py-1 text-label-sm text-on-surface"
+                    >
+                      {OPPORTUNITY_MODEL_LABELS[modelId]}
+                    </span>
+                  ))}
+                </div>
+              </div>
+              <div className="mt-4 flex flex-wrap items-center justify-between gap-3">
+                <p className="max-w-xl text-sm text-ink-soft">
+                  Confirming creates a pending evidence-review request with this scope. It
+                  does not start a report or send outreach.
+                </p>
+                <Button onClick={handleConfirm} disabled={confirming || !!modelScope.error}>
                 {confirming ? (
                   <>
                     <Loader2 size={15} className="animate-spin" />
@@ -261,7 +301,8 @@ export default function ResearchPage() {
                     Confirm prospect
                   </>
                 )}
-              </Button>
+                </Button>
+              </div>
             </div>
           ) : (
             <div className="mt-4">

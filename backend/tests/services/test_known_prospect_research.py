@@ -11,7 +11,9 @@ from app.schemas.opportunity_models import (
     IdentityState,
     OpportunityModelSelection,
 )
-from app.schemas.research_request import KnownProspectResearchRequest
+from app.schemas.research_request import (
+    KnownProspectConfirmationRequest,
+)
 from app.services.company_resolution import ResolvedCompany
 from app.services.research_requests import (
     KnownProspectResolutionError,
@@ -47,9 +49,12 @@ class FakeSession:
     def rollback(self):
         self.rolled_back = True
 
+    def flush(self):
+        pass
 
-def request() -> KnownProspectResearchRequest:
-    return KnownProspectResearchRequest(
+
+def request() -> KnownProspectConfirmationRequest:
+    return KnownProspectConfirmationRequest(
         business_name="Glow Salon",
         goal="Decide whether this salon is worth pitching for a booking website.",
         offering="Website redesign and booking setup",
@@ -78,6 +83,19 @@ def resolution(state=IdentityState.VERIFIED) -> ResolvedCompany:
 
 
 class TestKnownProspectConfirmation:
+    def test_confirmation_schema_requires_confirmed_model_scope(self):
+        values = request().model_dump(mode="json")
+        values.pop("model_selection")
+        with pytest.raises(ValueError, match="model_selection"):
+            KnownProspectConfirmationRequest.model_validate(values)
+
+        values["model_selection"] = {
+            "model_ids": ["web_conversion.mobile_performance"],
+            "confirmed_by_user": False,
+        }
+        with pytest.raises(ValueError, match="Confirm the Opportunity Model"):
+            KnownProspectConfirmationRequest.model_validate(values)
+
     def test_creates_a_pending_request_with_goal_and_identity_snapshot(self):
         db = FakeSession(scalar_results=[None, None])
         user = User(id=uuid.uuid4(), email="owner@example.com")
@@ -157,3 +175,43 @@ class TestKnownProspectConfirmation:
             )
 
         assert db.added == []
+
+    def test_verified_identity_without_website_creates_traceable_company(self):
+        db = FakeSession(scalar_results=[None, None])
+        user = User(id=uuid.uuid4(), email="owner@example.com")
+        no_website = ResolvedCompany(
+            company_name="Glow Salon",
+            location="Lahore",
+            website=None,
+            identity_state=IdentityState.VERIFIED,
+            source=EvidenceSource(
+                provider="tavily",
+                source_url="https://directory.example/glow-salon-lahore",
+                retrieved_at=NOW,
+            ),
+            reason="Identity confirmed; no official website was verified.",
+        )
+
+        research_request = confirm_known_prospect(db, user, request(), no_website)
+
+        company = db.added[0]
+        assert company.website is None
+        assert company.identity_key == (
+            "tavily:url:https://directory.example/glow-salon-lahore"
+        )
+        assert research_request.objective["resolved_target"]["website"] is None
+        assert research_request.objective["resolved_target"]["website_status"] == "not_verified"
+
+    def test_website_less_confirmation_requires_traceable_source(self):
+        db = FakeSession()
+        user = User(id=uuid.uuid4(), email="owner@example.com")
+        no_source = ResolvedCompany(
+            company_name="Glow Salon",
+            location="Lahore",
+            website=None,
+            identity_state=IdentityState.VERIFIED,
+            source=None,
+            reason="Missing source.",
+        )
+        with pytest.raises(KnownProspectResolutionError, match="traceable identity source"):
+            confirm_known_prospect(db, user, request(), no_source)

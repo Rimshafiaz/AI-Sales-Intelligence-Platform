@@ -495,14 +495,22 @@ export default function ResearchProgressPage() {
     if (!request) return
     try {
       const fresh = await api<{ id: string }>(
-        `/companies/${request.company_id}/research-requests`,
+        `/research-requests/${request.id}/retry`,
         { method: 'POST' },
       )
       setRequest(null)
       setSources(null)
       setAuditEvidence(null)
       setSocialObservations(null)
-      navigate(`/research/${fresh.id}`)
+      const updatedBatchRequestIds = batchRequestIds.map((id) =>
+        id === request.id ? fresh.id : id,
+      )
+      navigate(`/research/${fresh.id}`, {
+        state:
+          updatedBatchRequestIds.length > 0
+            ? { batchRequestIds: updatedBatchRequestIds }
+            : undefined,
+      })
     } catch (e) {
       setLoadError(e instanceof Error ? e.message : 'Could not start a new request.')
     }
@@ -581,7 +589,9 @@ export default function ResearchProgressPage() {
             </dl>
           )}
           <div className="mt-5">
-            {request.status === 'pending' ? (
+            {failed ? (
+              <Button onClick={handleRetry}>Try again</Button>
+            ) : request.status === 'pending' ? (
               <Button onClick={handleStartEvidenceReview} disabled={evidencePhase !== 'idle'}>
                 {evidencePhase === 'starting' ? (
                   <>

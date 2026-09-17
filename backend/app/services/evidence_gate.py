@@ -7,6 +7,7 @@ from app.models.campaign_candidate_selection import CampaignCandidateSelection
 from app.models.company import Company
 from app.models.research_request import ResearchRequest
 from app.schemas.evidence_gate import EvidenceGateResponse, EvidenceGateState, SourceAdmissionState
+from app.schemas.opportunity_models import OpportunityModelSelection
 from app.services.identity_resolution import (
     IdentityResolution,
     IdentityStatus,
@@ -55,6 +56,9 @@ def target_from_research_request(
             trusted_source_urls=frozenset(
                 value for value in (_normalized_url(source_url),) if value is not None
             ),
+            no_listed_official_website=(
+                resolved_target.get("website_status") == "not_verified"
+            ),
         )
 
     if selection is not None:
@@ -101,9 +105,8 @@ def review_sources(
     elif not has_accepted_source and target.no_listed_official_website:
         state = EvidenceGateState.READY_FOR_DEEPER_RESEARCH
         reason = (
-            "The provider record verified this business identity and lists no "
-            "official website, so web evidence is unavailable by design. "
-            "Proceed to social and contact verification."
+            "A traceable source verified this business identity, and no official "
+            "website was verified. Proceed with the selected research scope."
         )
     elif not has_accepted_source:
         state = EvidenceGateState.NEEDS_REVIEW
@@ -154,11 +157,13 @@ def _apply_corroboration(
 
 
 def requires_deep_qualification(research_request: ResearchRequest) -> bool:
-    objective = research_request.objective
-    return (
-        research_request.campaign_candidate_selection_id is not None
-        or isinstance(objective, dict) and objective.get("mode") == "known_prospect"
-    )
+    try:
+        selection = OpportunityModelSelection.model_validate(
+            research_request.opportunity_model_selection
+        )
+    except ValueError:
+        return False
+    return selection.confirmed_by_user
 
 
 def _review_source(target: EvidenceGateTarget, source: CollectedSource) -> tuple[

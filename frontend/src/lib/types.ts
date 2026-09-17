@@ -235,6 +235,10 @@ export interface ResearchRequest {
   finished_at: string | null
   error_message: string | null
   objective: Record<string, unknown> | null
+  opportunity_model_selection: {
+    model_ids: OpportunityModelId[]
+    confirmed_by_user: boolean
+  } | null
   evidence_gate_state: 'not_run' | 'ready_for_deeper_research' | 'needs_review'
   evidence_gate_reason: string | null
   evidence_gated_at: string | null

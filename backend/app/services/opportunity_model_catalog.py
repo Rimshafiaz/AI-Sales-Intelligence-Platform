@@ -168,12 +168,3 @@ OPPORTUNITY_MODELS: dict[OpportunityModelId, OpportunityModel] = {
 
 def get_opportunity_model(model_id: OpportunityModelId) -> OpportunityModel:
     return OPPORTUNITY_MODELS[model_id]
-
-
-def list_opportunity_models(
-    service_family: ServiceFamily | None = None,
-) -> tuple[OpportunityModel, ...]:
-    models = tuple(OPPORTUNITY_MODELS.values())
-    if service_family is None:
-        return models
-    return tuple(model for model in models if model.service_family is service_family)

@@ -42,6 +42,44 @@ def source(url: str, title: str, excerpt: str | None = None) -> CollectedSource:
 
 
 class TestCompanyWebsiteResolver:
+    def test_confirms_business_identity_without_declaring_a_website(self):
+        provider = FakeSearchProvider(
+            [
+                source(
+                    "https://facebook.com/glowsalonlahore",
+                    "Glow Salon Lahore",
+                    "Glow Salon in Lahore. Call +92 300 1234567.",
+                )
+            ]
+        )
+
+        resolved = CompanyWebsiteResolver(provider).resolve(
+            "Glow Salon",
+            "Lahore",
+            phone_number="+92 300 1234567",
+        )
+
+        assert resolved.identity_state is IdentityState.VERIFIED
+        assert resolved.website is None
+        assert resolved.source is not None
+        assert "no official website was verified" in resolved.reason.lower()
+
+    def test_probable_identity_source_does_not_become_verified(self):
+        provider = FakeSearchProvider(
+            [
+                source(
+                    "https://facebook.com/glowsalonlahore",
+                    "Glow Salon Lahore",
+                    "Beauty services in Lahore.",
+                )
+            ]
+        )
+
+        resolved = CompanyWebsiteResolver(provider).resolve("Glow Salon", "Lahore")
+
+        assert resolved.identity_state is IdentityState.NEEDS_REVIEW
+        assert resolved.website is None
+
     def test_verifies_one_name_and_location_supported_website(self):
         provider = FakeSearchProvider(
             [
@@ -96,7 +134,7 @@ class TestCompanyWebsiteResolver:
         )
 
         assert resolved.identity_state is IdentityState.NEEDS_REVIEW
-        assert resolved.website == "https://glowsalon.com"
+        assert resolved.website is None
 
     def test_verifies_supplied_website_with_business_and_location_on_the_site(self):
         collector = FakeWebsiteCollector(

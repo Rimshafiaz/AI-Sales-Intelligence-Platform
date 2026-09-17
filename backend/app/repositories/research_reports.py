@@ -16,7 +16,7 @@ def create_research_report(
     opportunity_score: int | None,
     contact_recommendation: str | None,
     generated_at: datetime,
-    report_kind: ReportKind = ReportKind.LEGACY_SALES_INTELLIGENCE,
+    report_kind: ReportKind = ReportKind.PROSPECT_EVIDENCE_BRIEF,
 ) -> ResearchReport:
     report = ResearchReport(
         research_request_id=research_request_id,
@@ -94,20 +94,6 @@ def save_report_edits(
     db.commit()
     db.refresh(report)
     return report
-
-
-def list_research_reports_for_user(
-    db: Session,
-    user_id: UUID,
-    limit: int,
-) -> list[ResearchReport]:
-    statement = (
-        select(ResearchReport)
-        .where(ResearchReport.user_id == user_id)
-        .order_by(ResearchReport.generated_at.desc())
-        .limit(limit)
-    )
-    return db.scalars(statement).all()
 
 
 def _report_filter_conditions(

@@ -11,7 +11,7 @@ from app.schemas.company_discovery import CompanyDiscoveryRequest
 from app.schemas.opportunity_models import IndustryOverlayId
 from app.services.local_business_discovery import (
     LocalBusinessDiscoveryError,
-    discover_local_businesses,
+    collect_local_businesses,
     resolve_area,
     resolve_industry,
 )
@@ -25,6 +25,11 @@ class RecordingProvider:
     def discover(self, request: LocalBusinessDiscoveryRequest) -> list[DiscoveredBusiness]:
         self.requests.append(request)
         return self.businesses
+
+
+class NullGeocodingProvider:
+    def geocode(self, location: str):
+        return None
 
 
 def criteria(**overrides: object) -> CompanyDiscoveryRequest:
@@ -62,20 +67,17 @@ class TestLocalBusinessDiscovery:
     def test_maps_industry_and_lahore_pilot_area_to_provider_request(self):
         provider = RecordingProvider([business()])
 
-        response = discover_local_businesses(criteria(), provider)
+        businesses = collect_local_businesses(
+            criteria(latitude=31.5204, longitude=74.3587),
+            provider,
+        )
 
         assert provider.requests[0].industry is IndustryOverlayId.FITNESS_GYMS
         assert provider.requests[0].area.latitude == 31.5204
         assert provider.requests[0].area.longitude == 74.3587
         assert provider.requests[0].area.radius_miles == 15
         assert provider.requests[0].max_results == 50
-        candidate = response.candidates[0]
-        assert candidate.company_name == "FitLab Gym"
-        assert candidate.source_provider == "open_places"
-        assert candidate.source_record_id == "overture:fitlab"
-        assert candidate.source_data_release == "2026-08-19.0"
-        assert candidate.website_verification_state == "listed_unverified"
-        assert "not been qualified" in candidate.match_explanation
+        assert businesses == [business()]
 
     def test_caller_coordinates_enable_an_unconfigured_location(self):
         area = resolve_area(
@@ -87,8 +89,11 @@ class TestLocalBusinessDiscovery:
         assert area.longitude == 67.0011
 
     def test_unconfigured_location_requires_explicit_coordinates(self):
-        with pytest.raises(LocalBusinessDiscoveryError, match="latitude and longitude"):
-            resolve_area(criteria(location="Karachi"))
+        with pytest.raises(LocalBusinessDiscoveryError, match="Could not resolve location"):
+            resolve_area(
+                criteria(location="Karachi"),
+                NullGeocodingProvider(),
+            )
 
     @pytest.mark.parametrize(
         ("value", "expected"),

@@ -10,7 +10,7 @@ from app.api.dependencies.current_user import (
     get_current_user,
 )
 from app.db.session import get_db
-from app.models.research_report import ReportReviewStatus
+from app.models.research_report import ReportKind, ReportReviewStatus
 from app.models.research_request import ResearchStatus
 from app.models.user import User
 from app.schemas.evidence_gate import EvidenceGateState
@@ -114,6 +114,14 @@ def create_report_endpoint(
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
             detail="Research request is not completed yet.",
+        )
+    if not requires_deep_qualification(research_request):
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail=(
+                "This historical research request cannot generate a new report. "
+                "Start a new scoped research request instead."
+            ),
         )
     if research_request.evidence_gate_state is not EvidenceGateState.READY_FOR_DEEPER_RESEARCH:
         raise HTTPException(
@@ -267,6 +275,11 @@ def regenerate_report_endpoint(
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Report not found",
+        )
+    if existing_report.report_kind is ReportKind.LEGACY_SALES_INTELLIGENCE:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Historical Sales Intelligence reports cannot be regenerated.",
         )
     research_request = get_research_request_for_user(
         db=db,

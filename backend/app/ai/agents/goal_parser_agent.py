@@ -4,11 +4,9 @@ from app.ai.config_loader import get_agent_config
 from app.ai.llm import get_llm
 
 
-def create_news_agent() -> Agent:
-    config = get_agent_config("news_agent")
-
+def create_goal_parser_agent() -> Agent:
     return Agent(
-        config=config,
+        config=get_agent_config("goal_parser_agent"),
         llm=get_llm(),
         allow_delegation=False,
         tools=[],

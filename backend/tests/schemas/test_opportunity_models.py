@@ -4,19 +4,16 @@ import pytest
 from pydantic import ValidationError
 
 from app.schemas.opportunity_models import (
-    CandidateIdentity,
     EvidenceSignal,
     EvidenceSignalType,
     EvidenceSource,
     EvidenceType,
-    IdentityState,
     OpportunityModelSelection,
 )
 from app.services.opportunity_model_catalog import (
     INDUSTRY_OVERLAYS,
     OPPORTUNITY_MODELS,
     get_opportunity_model,
-    list_opportunity_models,
 )
 
 
@@ -37,7 +34,6 @@ class TestOpportunityModelCatalog:
         assert get_opportunity_model(
             "web_conversion.booking_contact_path"
         ).display_name == "Appointment or inquiry path"
-        assert len(list_opportunity_models()) == 9
 
     def test_industry_coverage_is_explicit(self):
         social = get_opportunity_model("social_presence.dormant_official_presence")
@@ -94,13 +90,3 @@ class TestIdentityAndSelectionContracts:
                     "web_conversion.mobile_performance",
                 )
             )
-
-    def test_identity_keeps_its_verification_state_and_source(self):
-        identity = CandidateIdentity(
-            canonical_name="Glow Studio",
-            business_category="Beauty salon",
-            location="Lahore",
-            identity_state=IdentityState.VERIFIED,
-            primary_source=source(),
-        )
-        assert identity.identity_state is IdentityState.VERIFIED

@@ -4,6 +4,7 @@ from datetime import datetime, timezone
 import pytest
 
 from app.repositories.research_reports import create_research_report
+from app.models.research_report import ReportKind
 from tests.conftest import make_valid_report_data
 
 
@@ -18,6 +19,7 @@ def history_reports(test_user, owned_completed_request, owned_company, db):
         opportunity_score=40,
         contact_recommendation="do_not_prioritize",
         generated_at=datetime(2026, 8, 1, tzinfo=timezone.utc),
+        report_kind=ReportKind.LEGACY_SALES_INTELLIGENCE,
     )
     second = create_research_report(
         db=db,
@@ -28,6 +30,7 @@ def history_reports(test_user, owned_completed_request, owned_company, db):
         opportunity_score=90,
         contact_recommendation="prioritize",
         generated_at=datetime(2026, 8, 2, tzinfo=timezone.utc),
+        report_kind=ReportKind.LEGACY_SALES_INTELLIGENCE,
     )
     return [first, second]
 

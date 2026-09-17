@@ -8,12 +8,6 @@ from app.models.research_report import ResearchReport
 from app.models.research_request import ResearchRequest
 from app.repositories.research_sources import create_research_sources
 from app.schemas.evidence_gate import EvidenceGateState, SourceAdmissionState
-from app.schemas.sales_intelligence_report import SalesIntelligenceReport
-from tests.conftest import make_valid_report_data
-
-
-def _fake_crew_result(score: int = 64):
-    return SalesIntelligenceReport.model_validate(make_valid_report_data(score=score))
 
 
 @pytest.fixture
@@ -21,20 +15,6 @@ def no_background_runner(monkeypatch):
     monkeypatch.setattr(
         "app.api.routes.research_requests.run_research", lambda request_id: None
     )
-
-
-@pytest.fixture
-def mocked_crew(monkeypatch):
-    calls = []
-
-    def fake_crew(company_name, evidence_context, guidance=None, objective_context=None):
-        calls.append({"company": company_name, "guidance": guidance, "objective_context": objective_context})
-        return _fake_crew_result()
-
-    monkeypatch.setattr(
-        "app.services.report_generation.run_sales_intelligence_crew", fake_crew
-    )
-    return calls
 
 
 @pytest.fixture
@@ -51,14 +31,13 @@ def owned_pending_request(test_user, owned_company, db):
 
 
 class TestResearchRequestLifecycle:
-    def test_create_request_returns_pending(
+    def test_generic_unscoped_creation_route_is_removed(
         self, auth_client, owned_company, no_background_runner
     ):
         resp = auth_client.post(f"/companies/{owned_company.id}/research-requests")
-        assert resp.status_code == 202
-        assert resp.json()["status"] == "pending"
+        assert resp.status_code == 404
 
-    def test_request_for_unknown_company_404(self, auth_client, no_background_runner):
+    def test_removed_route_is_404_for_unknown_company(self, auth_client, no_background_runner):
         resp = auth_client.post(f"/companies/{uuid.uuid4()}/research-requests")
         assert resp.status_code == 404
 
@@ -72,6 +51,64 @@ class TestResearchRequestLifecycle:
             f"/research-requests/{uuid.uuid4()}"
         ).status_code == 404
 
+    def test_failed_modern_request_retries_with_original_scope(
+        self, auth_client, test_user, owned_company, db, monkeypatch
+    ):
+        calls = []
+        monkeypatch.setattr(
+            "app.api.routes.research_requests.run_research",
+            lambda request_id: calls.append(request_id),
+        )
+        original = ResearchRequest(
+            company_id=owned_company.id,
+            user_id=test_user.id,
+            status="failed",
+            error_message="Provider failed.",
+            objective={"mode": "known_prospect", "offering": "Website development"},
+            opportunity_model_selection={
+                "model_ids": ["web_conversion.no_verified_web_presence"],
+                "confirmed_by_user": True,
+            },
+            specialist_outputs={"website": {"stale": True}},
+            website_check_states={"mobile_performance": {"state": "unavailable"}},
+        )
+        db.add(original)
+        db.commit()
+        db.refresh(original)
+
+        response = auth_client.post(f"/research-requests/{original.id}/retry")
+
+        assert response.status_code == 201
+        body = response.json()
+        assert body["id"] != str(original.id)
+        assert body["objective"] == original.objective
+        assert body["opportunity_model_selection"] == original.opportunity_model_selection
+        assert body["status"] == "pending"
+        assert body["error_message"] is None
+        assert body["specialist_outputs"] is None
+        assert body["website_check_states"] is None
+        assert body["social_check_states"] is None
+        assert calls == [uuid.UUID(body["id"])]
+
+    @pytest.mark.parametrize("request_status", ["pending", "running", "completed"])
+    def test_only_failed_requests_can_be_retried(
+        self, auth_client, test_user, owned_company, db, request_status
+    ):
+        request = ResearchRequest(
+            company_id=owned_company.id,
+            user_id=test_user.id,
+            status=request_status,
+            objective={"mode": "known_prospect"},
+            opportunity_model_selection={
+                "model_ids": ["web_conversion.mobile_performance"],
+                "confirmed_by_user": True,
+            },
+        )
+        db.add(request)
+        db.commit()
+        response = auth_client.post(f"/research-requests/{request.id}/retry")
+        assert response.status_code == 409
+
 
 class TestReportGeneration:
     def test_generate_on_pending_request_409(
@@ -83,11 +120,10 @@ class TestReportGeneration:
         assert resp.status_code == 409
         assert resp.json()["error"]["code"] == "conflict"
 
-    def test_generate_on_completed_request_saves_report(
+    def test_unscoped_completed_request_cannot_generate_legacy_report(
         self,
         auth_client,
         owned_completed_request,
-        mocked_crew,
         db,
     ):
         sources = create_research_sources(
@@ -107,36 +143,29 @@ class TestReportGeneration:
         resp = auth_client.post(
             f"/research-requests/{owned_completed_request.id}/reports"
         )
-        assert resp.status_code == 202
-        assert resp.json() == {"status": "generating"}
-        assert len(mocked_crew) == 1
-        assert mocked_crew[0]["company"].startswith("TestCorp-")
+        assert resp.status_code == 409
 
         saved = db.scalars(
             select(ResearchReport).where(
                 ResearchReport.research_request_id == owned_completed_request.id
             )
         ).all()
-        assert len(saved) == 1
-        assert saved[0].review_status.value == "draft"
-        assert saved[0].opportunity_score == 64
-        assert saved[0].contact_recommendation == "consider"
+        assert saved == []
 
-    def test_duplicate_generation_409(self, auth_client, owned_report, mocked_crew):
+    def test_duplicate_generation_409(self, auth_client, owned_report):
         resp = auth_client.post(
             f"/research-requests/{owned_report.research_request_id}/reports"
         )
         assert resp.status_code == 409
         assert resp.json()["error"]["code"] == "conflict"
 
-    def test_generate_without_sources_fails_safe(
-        self, auth_client, owned_completed_request, mocked_crew, db
+    def test_generate_without_scope_fails_safe(
+        self, auth_client, owned_completed_request, db
     ):
         resp = auth_client.post(
             f"/research-requests/{owned_completed_request.id}/reports"
         )
-        assert resp.status_code == 202
-        assert mocked_crew == []
+        assert resp.status_code == 409
         reports = db.scalars(
             select(ResearchReport).where(
                 ResearchReport.research_request_id == owned_completed_request.id
@@ -223,16 +252,14 @@ class TestReportReview:
         assert resp.status_code == 200
         assert resp.json()["review_status"] == "draft"
 
-    def test_regenerate_creates_second_report(
-        self, auth_client, owned_report, mocked_crew, db
+    def test_legacy_report_regeneration_is_rejected(
+        self, auth_client, owned_report, db
     ):
         resp = auth_client.post(
             f"/reports/{owned_report.id}/regenerate",
             json={"instruction": "focus the outreach on hiring growth"},
         )
-        assert resp.status_code == 202
-        assert resp.json() == {"status": "regenerating"}
-        assert mocked_crew[0]["guidance"] == "focus the outreach on hiring growth"
+        assert resp.status_code == 409
 
         reports = db.scalars(
             select(ResearchReport).where(
@@ -240,19 +267,15 @@ class TestReportReview:
                 == owned_report.research_request_id
             )
         ).all()
-        assert len(reports) == 2
-        new_report = next(r for r in reports if r.id != owned_report.id)
-        assert new_report.review_status.value == "draft"
-        assert new_report.opportunity_score == 64
+        assert reports == [owned_report]
 
-    def test_regenerate_with_blank_instruction_passes_none(
-        self, auth_client, owned_report, mocked_crew
+    def test_legacy_report_regeneration_never_schedules_blank_instruction(
+        self, auth_client, owned_report
     ):
         resp = auth_client.post(
             f"/reports/{owned_report.id}/regenerate", json={"instruction": "  "}
         )
-        assert resp.status_code == 202
-        assert mocked_crew[0]["guidance"] is None
+        assert resp.status_code == 409
 
     def test_report_ownership_404(self, foreign_client, owned_report):
         assert (

@@ -12,10 +12,10 @@ from app.db.session import get_db
 from app.models.research_request import ResearchStatus
 from app.models.user import User
 from app.schemas.research_request import (
+    KnownProspectConfirmationRequest,
     KnownProspectResearchRequest,
     KnownProspectResolutionResponse,
     ResearchRequestResponse,
-    ResearchRequestStartRequest,
 )
 from app.schemas.research_source import ResearchSourceResponse
 from app.schemas.research_evidence import ResearchEvidenceResponse
@@ -28,9 +28,10 @@ from app.schemas.opportunity_qualification import (
 from app.services.research_runner import run_research
 from app.services.research_requests import (
     KnownProspectResolutionError,
+    ResearchRetryError,
     confirm_known_prospect,
-    create_research_request_for_company,
     get_research_request_for_user,
+    retry_research_request,
     resolve_known_prospect,
 )
 from app.services.research_sources import list_research_sources_for_user
@@ -89,7 +90,7 @@ def resolve_known_prospect_endpoint(
     responses={422: {"description": "Business identity needs review"}},
 )
 def confirm_known_prospect_endpoint(
-    payload: KnownProspectResearchRequest,
+    payload: KnownProspectConfirmationRequest,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
@@ -107,47 +108,35 @@ def confirm_known_prospect_endpoint(
 
 
 @router.post(
-    "/companies/{company_id}/research-requests",
+    "/research-requests/{request_id}/retry",
     response_model=ResearchRequestResponse,
-    status_code=status.HTTP_202_ACCEPTED,
-    summary="Start a research request for a company",
+    status_code=status.HTTP_201_CREATED,
+    summary="Retry a failed research request with its original trusted scope",
     responses={
-        404: {"description": "Company unknown or owned by another user"},
+        404: {"description": "Request unknown or owned by another user"},
+        409: {"description": "Request is not failed or its modern scope is invalid"},
     },
 )
-async def create_research_request_endpoint(
-    company_id: UUID,
+def retry_research_request_endpoint(
+    request_id: UUID,
     background_tasks: BackgroundTasks,
-    payload: ResearchRequestStartRequest | None = None,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    research_request = create_research_request_for_company(
-        db=db,
-        company_id=company_id,
-        current_user=current_user,
-        goal=payload.goal if payload else None,
-        objective=(
-            payload.objective.model_dump(mode="json")
-            if payload and payload.objective
-            else None
-        ),
-        offering=payload.offering if payload else None,
-        region=payload.region if payload else None,
-        website=str(payload.website) if payload and payload.website else None,
-        model_selection=payload.model_selection if payload else None,
-    )
-    if research_request is None:
+    try:
+        retried = retry_research_request(db, request_id, current_user)
+    except ResearchRetryError as error:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail=str(error),
+        ) from error
+    if retried is None:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail="Company not found",
+            detail="Research request not found",
     )
-    background_tasks.add_task(
-        run_research,
-        research_request.id,
-    )
-
-    return research_request
+    background_tasks.add_task(run_research, retried.id)
+    return retried
 
 
 @router.get(

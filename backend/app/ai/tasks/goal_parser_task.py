@@ -1,6 +1,6 @@
 from crewai import Crew, Process, Task
 
-from app.ai.agents.research_agent import create_research_agent
+from app.ai.agents.goal_parser_agent import create_goal_parser_agent
 from app.ai.config_loader import render_task_config
 from app.schemas.company_discovery import (
     DiscoveryObjective,
@@ -38,7 +38,7 @@ def create_goal_parser_task(request: ParseDiscoveryRequest) -> Task:
     return Task(
         description=config["description"],
         expected_output=config["expected_output"],
-        agent=create_research_agent(),
+        agent=create_goal_parser_agent(),
         output_pydantic=DiscoveryObjective,
     )
 
