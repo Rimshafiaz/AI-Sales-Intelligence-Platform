@@ -7,6 +7,7 @@ from app.models.research_request import ResearchRequest
 from app.schemas.agent_outputs import SocialResearchOutput, WebsiteResearchOutput
 from app.schemas.opportunity_qualification import OpportunityQualificationRunRequest
 from app.services import research_qualification
+from app.ai.website_research import WebsiteResearchError
 from app.services.opportunity_qualification import OpportunityQualificationError
 
 
@@ -198,6 +199,27 @@ def test_invalid_specialist_output_prevents_qualification(monkeypatch):
     )
 
     with pytest.raises(ValueError):
+        research_qualification.research_then_qualify(
+            db, request, company, None, OpportunityQualificationRunRequest()
+        )
+
+
+def test_website_provider_failure_uses_qualification_error_boundary(monkeypatch):
+    db, request, company = context()
+    monkeypatch.setattr(
+        research_qualification,
+        "run_website_research_agent",
+        lambda *_: (_ for _ in ()).throw(
+            WebsiteResearchError("Website Research Agent could not complete.")
+        ),
+    )
+    monkeypatch.setattr(
+        research_qualification,
+        "qualify_research_request",
+        lambda *_: pytest.fail("qualification must not run"),
+    )
+
+    with pytest.raises(OpportunityQualificationError, match="could not complete"):
         research_qualification.research_then_qualify(
             db, request, company, None, OpportunityQualificationRunRequest()
         )

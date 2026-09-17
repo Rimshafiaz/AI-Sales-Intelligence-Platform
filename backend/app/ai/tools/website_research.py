@@ -55,34 +55,54 @@ def build_website_research_tools(
     expected_user_id: UUID,
 ) -> tuple[BaseTool, BaseTool, BaseTool, BaseTool]:
     _require_bound_context(research_request, company, selection, expected_user_id)
+    cached_results: dict[str, str] = {}
+    evidence_reads: list[str] = []
 
-    @tool("get_verified_website_target", max_usage_count=1)
+    @tool("get_verified_website_target")
     def get_verified_website_target() -> str:
         """Read the already persisted trusted website target and its verification status."""
-        return _target_result(research_request, company, selection).model_dump_json()
+        if "target" not in cached_results:
+            cached_results["target"] = _target_result(
+                research_request, company, selection
+            ).model_dump_json()
+        return cached_results["target"]
 
-    @tool("measure_verified_website_mobile_performance", max_usage_count=1)
+    @tool("measure_verified_website_mobile_performance")
     def measure_verified_website_mobile_performance() -> str:
         """Measure mobile performance only when trusted scope and a verified website permit it."""
+        if "mobile" in cached_results:
+            return cached_results["mobile"]
         result = measure_mobile_performance(
             db, research_request, company, selection, expected_user_id
         )
-        return WebsiteCapabilityResult.model_validate(result.__dict__).model_dump_json()
+        cached_results["mobile"] = WebsiteCapabilityResult.model_validate(
+            result.__dict__
+        ).model_dump_json()
+        return cached_results["mobile"]
 
-    @tool("inspect_verified_website_conversion_paths", max_usage_count=1)
+    @tool("inspect_verified_website_conversion_paths")
     def inspect_verified_website_conversion_paths() -> str:
         """Inspect deterministic conversion paths only when trusted selected scope permits it."""
+        if "conversion" in cached_results:
+            return cached_results["conversion"]
         result = inspect_conversion_paths(
             db, research_request, company, selection, expected_user_id
         )
-        return WebsiteCapabilityResult.model_validate(result.__dict__).model_dump_json()
+        cached_results["conversion"] = WebsiteCapabilityResult.model_validate(
+            result.__dict__
+        ).model_dump_json()
+        return cached_results["conversion"]
 
-    @tool("read_grounded_website_evidence", max_usage_count=3)
+    @tool("read_grounded_website_evidence")
     def read_grounded_website_evidence() -> str:
         """Read owned canonical website evidence and unresolved selected-model requirements."""
-        return build_grounded_website_evidence(
+        if len(evidence_reads) >= 3:
+            return evidence_reads[-1]
+        result = build_grounded_website_evidence(
             db, research_request, company, selection, expected_user_id
         ).model_dump_json()
+        evidence_reads.append(result)
+        return result
 
     return (
         get_verified_website_target,

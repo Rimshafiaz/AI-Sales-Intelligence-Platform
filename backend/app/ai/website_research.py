@@ -82,7 +82,10 @@ def _run_task(task: Task) -> WebsiteResearchOutput:
         process=Process.sequential,
         verbose=False,
     )
-    crew.kickoff()
+    try:
+        crew.kickoff()
+    except Exception as error:
+        raise WebsiteResearchError("Website Research Agent could not complete.") from error
     if task.output is None or task.output.pydantic is None:
         raise WebsiteResearchError("Website Research Agent did not return valid structured output.")
     return WebsiteResearchOutput.model_validate(task.output.pydantic)

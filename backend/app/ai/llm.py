@@ -1,9 +1,44 @@
+import logging
+from typing import Any
+
 from crewai import LLM
+from crewai.llms.providers.gemini.completion import GeminiCompletion
+from google.genai import types
 
 from app.core.config import settings
 
 
 _DEFAULT_MAX_TOKENS = 4096
+
+
+class SalesLensGeminiCompletion(GeminiCompletion):
+    """Adapt CrewAI's text tool loop to Gemini's final wire format."""
+
+    def _prepare_generation_config(self, *args: Any, **kwargs: Any) -> Any:
+        config = super()._prepare_generation_config(*args, **kwargs)
+        return config.model_copy(
+            update={
+                "automatic_function_calling": types.AutomaticFunctionCallingConfig(
+                    disable=True
+                )
+            }
+        )
+
+    def _handle_completion(
+        self, contents: list[types.Content], *args: Any, **kwargs: Any
+    ) -> Any:
+        normalized = list(contents)
+        if normalized and normalized[-1].role == "model":
+            normalized.append(
+                types.Content(
+                    role="user",
+                    parts=[types.Part.from_text(text="Continue using the tool result above.")],
+                )
+            )
+        logging.getLogger(__name__).debug(
+            "Gemini request role sequence: %s", [item.role for item in normalized]
+        )
+        return super()._handle_completion(normalized, *args, **kwargs)
 
 
 def get_llm(
@@ -34,15 +69,15 @@ def get_llm(
             )
 
         llm_kwargs = {
-            "model": f"gemini/{settings.gemini_model}",
+            "model": settings.gemini_model,
             "api_key": settings.gemini_api_key,
-            "max_tokens": effective_max_tokens,
+            "max_output_tokens": effective_max_tokens,
             "num_retries": 1,
             "timeout": 180,
         }
         if temperature is not None:
             llm_kwargs["temperature"] = temperature
 
-        return LLM(**llm_kwargs)
+        return SalesLensGeminiCompletion(**llm_kwargs)
 
     raise ValueError(f"Unsupported LLM provider: {settings.llm_provider}")

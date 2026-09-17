@@ -2,9 +2,12 @@ import uuid
 from datetime import UTC, datetime
 
 import pytest
+from crewai.llms.providers.gemini.completion import GeminiCompletion
 from crewai.tools import tool
+from google.genai import types
 
 from app.ai import website_research
+from app.ai.llm import SalesLensGeminiCompletion
 from app.ai.tasks import website_research_task
 from app.models.company import Company
 from app.models.research_request import ResearchRequest
@@ -107,6 +110,80 @@ def invoke(task, name):
 
 
 class TestWebsiteResearchAgent:
+    def test_gemini_llm_tool_llm_sequence_ends_with_user_turn(self, monkeypatch):
+        received = {}
+
+        def complete(_self, contents, *_args, **_kwargs):
+            received["roles"] = [item.role for item in contents]
+            return "done"
+
+        monkeypatch.setattr(GeminiCompletion, "_handle_completion", complete)
+        llm = SalesLensGeminiCompletion(model="gemini-test", api_key="test")
+        contents = [
+            types.Content(
+                role="user", parts=[types.Part.from_text(text="Research the website.")]
+            ),
+            types.Content(
+                role="model", parts=[types.Part.from_text(text="Observation: trusted target.")]
+            ),
+        ]
+
+        assert llm._handle_completion(contents, None, None) == "done"
+        assert received["roles"] == ["user", "model", "user"]
+
+    def test_gemini_native_afc_is_disabled_for_crewai_managed_tools(self):
+        llm = SalesLensGeminiCompletion(model="gemini-test", api_key="test")
+        config = llm._prepare_generation_config(tools=[{
+            "type": "function",
+            "function": {
+                "name": "get_verified_website_target",
+                "description": "Read target.",
+                "parameters": {"type": "object", "properties": {}},
+            },
+        }])
+
+        assert config.automatic_function_calling.disable is True
+
+    def test_repeated_target_tool_call_reuses_one_bounded_result(self, monkeypatch):
+        db, request, company, selection, user_id = bound_context()
+        calls = 0
+
+        def target(*_args):
+            nonlocal calls
+            calls += 1
+            return WebsiteTargetStatus.VERIFIED
+
+        original = website_research.build_website_research_tools
+        monkeypatch.setattr(
+            "app.ai.tools.website_research._target_result",
+            lambda *_: type(
+                "Result",
+                (),
+                {"model_dump_json": lambda self: target().value},
+            )(),
+        )
+        tools = original(db, request, company, selection, user_id)
+        target_tool = next(item for item in tools if item.name == "get_verified_website_target")
+
+        assert target_tool.run() == target_tool.run() == "verified"
+        assert calls == 1
+
+    def test_provider_failure_becomes_website_research_error(self, monkeypatch):
+        class BrokenCrew:
+            def __init__(self, **_kwargs):
+                pass
+
+            def kickoff(self):
+                raise RuntimeError("provider details")
+
+        monkeypatch.setattr(website_research, "Crew", BrokenCrew)
+
+        with pytest.raises(
+            website_research.WebsiteResearchError,
+            match="could not complete",
+        ):
+            website_research._run_task(type("Task", (), {"agent": object()})())
+
     @pytest.mark.parametrize(
         ("status", "actions"),
         [
