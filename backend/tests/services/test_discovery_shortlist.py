@@ -170,7 +170,7 @@ class TestDiscoveryShortlist:
 
         entry = response.candidates[0]
         evaluation = entry.model_evaluations[0]
-        assert entry.state is DiscoveryShortlistState.NEEDS_EVIDENCE
+        assert entry.state is DiscoveryShortlistState.ELIGIBLE_FOR_DEEPER_RESEARCH
         assert EvidenceSignalType.WEBSITE_MOBILE_PERFORMANCE_MEASURED in evaluation.missing_signal_types
         assert entry.next_evidence_action is NextEvidenceAction.AUDIT_MOBILE_PERFORMANCE
 

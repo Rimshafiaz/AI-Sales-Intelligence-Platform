@@ -48,6 +48,7 @@ class CampaignRun(Base):
     model_selection_snapshot: Mapped[dict] = mapped_column(JSONB, nullable=False)
     provider_summary: Mapped[dict] = mapped_column(JSONB, nullable=False)
     discovered_candidate_count: Mapped[int] = mapped_column(Integer, nullable=False)
+    candidate_pool_snapshot: Mapped[dict | None] = mapped_column(JSONB, nullable=True)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
         server_default=func.now(),

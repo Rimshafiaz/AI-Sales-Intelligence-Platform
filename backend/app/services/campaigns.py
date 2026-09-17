@@ -13,19 +13,31 @@ from app.models.campaign import Campaign
 from app.models.campaign_candidate_selection import CampaignCandidateSelection
 from app.models.campaign_run import CampaignRun, CampaignRunStatus
 from app.models.company import Company
+from app.models.opportunity_qualification import OpportunityQualification
 from app.models.research_request import ResearchRequest, ResearchStatus
 from app.models.user import User
 from app.schemas.campaign import (
     CampaignCandidateSelectionCreate,
     CampaignCandidateSelectionResponse,
+    CampaignCandidatePoolSnapshot,
     CampaignCreate,
     CampaignRecommendedBatchCreate,
     CampaignRecommendedBatchResponse,
     CampaignResponse,
+    CampaignResearchBatchMember,
+    CampaignResearchBatchSummary,
+    CampaignResearchQueueResponse,
     CampaignRunCreate,
     CampaignRunResponse,
 )
+from app.schemas.discovery_shortlist import (
+    DiscoveryShortlistState,
+    PreparedDiscoveryOpportunity,
+)
+from app.schemas.evidence_gate import EvidenceGateState
 from app.schemas.opportunity_models import OpportunityModelSelection
+from app.schemas.opportunity_qualification import OpportunityQualificationState
+from app.services.aggregate_verdict import aggregate_verdict
 
 
 class CampaignWorkflowError(ValueError):
@@ -95,6 +107,7 @@ def create_campaign_run(
         model_selection_snapshot=campaign.model_selection,
         provider_summary=run_data.provider_summary,
         discovered_candidate_count=run_data.discovered_candidate_count,
+        candidate_pool_snapshot=run_data.candidate_pool_snapshot.model_dump(mode="json"),
     )
     db.add(campaign_run)
     db.commit()
@@ -140,50 +153,43 @@ def create_recommended_research_batch(
     batch_data: CampaignRecommendedBatchCreate,
 ) -> list[tuple[CampaignCandidateSelection, ResearchRequest]]:
     selected_model_ids = set(campaign_run.model_selection_snapshot.get("model_ids", []))
-    ruled_out = {
-        prospect.source_identity_key
-        for prospect in db.scalars(
-            select(CampaignProspect).where(
-                CampaignProspect.campaign_run_id == campaign_run.id,
-                CampaignProspect.workflow_state == CampaignProspectState.NOT_A_FIT,
-            )
-        ).all()
+    remaining_by_key = {
+        _opportunity_source_key(opportunity): opportunity
+        for opportunity in remaining_campaign_run_candidates(db, campaign_run)
     }
     selection_data = []
-    skipped = 0
-    for opportunity in batch_data.opportunities:
+    for submitted in batch_data.opportunities:
+        source_identity_key = _opportunity_source_key(submitted)
+        opportunity = remaining_by_key.get(source_identity_key)
+        if opportunity is None:
+            raise CampaignWorkflowError(
+                "This candidate is not available in the campaign run's remaining pool."
+            )
         queue_model_ids = {reason.model_id for reason in opportunity.queue_entry.reasons}
+        if opportunity.queue_entry.verification_reason:
+            queue_model_ids.update(
+                evaluation.model_id
+                for evaluation in opportunity.shortlist_entry.model_evaluations
+                if evaluation.state
+                is DiscoveryShortlistState.ELIGIBLE_FOR_DEEPER_RESEARCH
+                and evaluation.missing_signal_types
+            )
         if not queue_model_ids <= selected_model_ids:
             raise CampaignWorkflowError(
                 "The recommended candidate does not match this campaign's Opportunity Models."
             )
-        source_identity_key = (
-            f"{opportunity.candidate_input.candidate.source_provider}:"
-            f"{opportunity.candidate_input.candidate.source_record_id}"
-        )
-        if source_identity_key in ruled_out:
-            skipped += 1
-            continue
         selection_data.append(
             CampaignCandidateSelectionCreate(
                 candidate_input=opportunity.candidate_input,
                 shortlist_entry=opportunity.shortlist_entry,
             )
         )
-    if skipped and not selection_data:
-        raise CampaignWorkflowError(
-            "Every selected prospect was already researched and ruled out for this campaign."
-        )
-    if skipped:
-        raise CampaignWorkflowError(
-            "Some selected prospects were already researched and ruled out for "
-            "this campaign. Deselect them and try again."
-        )
     return create_candidate_selections_and_research_requests(
         db,
         campaign_run,
         current_user,
         selection_data,
+        research_batch_id=uuid.uuid4(),
     )
 
 
@@ -192,6 +198,7 @@ def create_candidate_selections_and_research_requests(
     campaign_run: CampaignRun,
     current_user: User,
     selections_data: list[CampaignCandidateSelectionCreate],
+    research_batch_id: uuid.UUID | None = None,
 ) -> list[tuple[CampaignCandidateSelection, ResearchRequest]]:
     source_identity_keys = [
         f"{selection_data.candidate_input.candidate.source_provider}:"
@@ -237,6 +244,7 @@ def create_candidate_selections_and_research_requests(
                 campaign_run_id=campaign_run.id,
                 company_id=company.id,
                 source_identity_key=source_identity_key,
+                research_batch_id=research_batch_id,
                 candidate_snapshot=candidate.model_dump(mode="json"),
                 shortlist_snapshot=selection_data.shortlist_entry.model_dump(mode="json"),
                 evidence_snapshot=[
@@ -362,6 +370,7 @@ def campaign_candidate_selection_response(
         company_id=selection.company_id,
         research_request_id=research_request.id,
         source_identity_key=selection.source_identity_key,
+        research_batch_id=selection.research_batch_id,
         created_at=selection.created_at,
     )
 
@@ -369,12 +378,150 @@ def campaign_candidate_selection_response(
 def campaign_recommended_batch_response(
     selections: list[tuple[CampaignCandidateSelection, ResearchRequest]],
 ) -> CampaignRecommendedBatchResponse:
+    research_batch_id = selections[0][0].research_batch_id
+    if research_batch_id is None:
+        raise CampaignWorkflowError("The research batch has no durable identifier.")
     return CampaignRecommendedBatchResponse(
+        research_batch_id=research_batch_id,
         selections=[
             campaign_candidate_selection_response(selection, research_request)
             for selection, research_request in selections
         ]
     )
+
+
+def remaining_campaign_run_candidates(
+    db: Session,
+    campaign_run: CampaignRun,
+) -> list[PreparedDiscoveryOpportunity]:
+    try:
+        snapshot = CampaignCandidatePoolSnapshot.model_validate(
+            campaign_run.candidate_pool_snapshot
+        )
+    except ValueError as error:
+        raise CampaignWorkflowError(
+            "This historical campaign run has no durable candidate pool."
+        ) from error
+    selected_keys = set(
+        db.scalars(
+            select(CampaignCandidateSelection.source_identity_key).where(
+                CampaignCandidateSelection.campaign_run_id == campaign_run.id
+            )
+        ).all()
+    )
+    return [
+        opportunity
+        for opportunity in snapshot.candidates
+        if _opportunity_source_key(opportunity) not in selected_keys
+    ]
+
+
+def campaign_research_queue_response(
+    db: Session,
+    campaign_run: CampaignRun,
+) -> CampaignResearchQueueResponse:
+    snapshot = CampaignCandidatePoolSnapshot.model_validate(
+        campaign_run.candidate_pool_snapshot
+    )
+    remaining = remaining_campaign_run_candidates(db, campaign_run)
+    return CampaignResearchQueueResponse(
+        campaign_id=campaign_run.campaign_id,
+        campaign_run_id=campaign_run.id,
+        criteria=campaign_run.criteria_snapshot,
+        model_selection=campaign_run.model_selection_snapshot,
+        pool_count=len(snapshot.candidates),
+        selected_count=len(snapshot.candidates) - len(remaining),
+        remaining_count=len(remaining),
+        candidates=remaining,
+    )
+
+
+def research_batch_summary_for_request(
+    db: Session,
+    request_id: uuid.UUID,
+    user_id: uuid.UUID,
+) -> CampaignResearchBatchSummary | None:
+    anchor = db.scalar(
+        select(CampaignCandidateSelection)
+        .join(ResearchRequest)
+        .join(CampaignRun)
+        .join(Campaign)
+        .where(
+            ResearchRequest.id == request_id,
+            Campaign.user_id == user_id,
+        )
+    )
+    if anchor is None or anchor.research_batch_id is None:
+        return None
+    selections = list(
+        db.scalars(
+            select(CampaignCandidateSelection)
+            .options(selectinload(CampaignCandidateSelection.research_request))
+            .where(
+                CampaignCandidateSelection.campaign_run_id == anchor.campaign_run_id,
+                CampaignCandidateSelection.research_batch_id == anchor.research_batch_id,
+            )
+            .order_by(CampaignCandidateSelection.created_at, CampaignCandidateSelection.id)
+        ).all()
+    )
+    request_ids = [
+        selection.research_request.id
+        for selection in selections
+        if selection.research_request is not None
+    ]
+    qualification_rows = db.scalars(
+        select(OpportunityQualification).where(
+            OpportunityQualification.research_request_id.in_(request_ids)
+        )
+    ).all()
+    states_by_request: dict[uuid.UUID, list[OpportunityQualificationState]] = {}
+    for row in qualification_rows:
+        states_by_request.setdefault(row.research_request_id, []).append(
+            OpportunityQualificationState(row.state)
+        )
+    counts = {key: 0 for key in ("qualified", "not_a_fit", "needs_review", "failed", "pending")}
+    members = []
+    for selection in selections:
+        research_request = selection.research_request
+        if research_request is None:
+            continue
+        states = states_by_request.get(research_request.id, [])
+        if research_request.status is ResearchStatus.FAILED:
+            outcome = "failed"
+        elif states:
+            outcome = aggregate_verdict(states).value
+        elif (
+            research_request.status is ResearchStatus.COMPLETED
+            and research_request.evidence_gate_state is EvidenceGateState.NEEDS_REVIEW
+        ):
+            outcome = "needs_review"
+        else:
+            outcome = "pending"
+        counts[outcome] += 1
+        members.append(
+            CampaignResearchBatchMember(
+                selection_id=selection.id,
+                research_request_id=research_request.id,
+                company_name=str(selection.candidate_snapshot.get("company_name") or "Prospect"),
+                outcome=outcome,
+            )
+        )
+    campaign_run = db.get(CampaignRun, anchor.campaign_run_id)
+    if campaign_run is None:
+        return None
+    return CampaignResearchBatchSummary(
+        research_batch_id=anchor.research_batch_id,
+        campaign_id=campaign_run.campaign_id,
+        campaign_run_id=campaign_run.id,
+        remaining_count=len(remaining_campaign_run_candidates(db, campaign_run)),
+        members=members,
+        **counts,
+    )
+
+
+def _opportunity_source_key(opportunity: PreparedDiscoveryOpportunity) -> str:
+    candidate = opportunity.candidate_input.candidate
+    return f"{candidate.source_provider}:{candidate.source_record_id}"
 
 
 def _campaign_research_objective(

@@ -3,11 +3,14 @@ from datetime import UTC, datetime
 from app.schemas.campaign import CampaignRecommendedBatchCreate
 from app.schemas.company_discovery import CompanyDiscoveryRequest, DiscoveredCompanyCandidate
 from app.schemas.discovery_shortlist import (
+    DiscoveryOpportunityQueueEntry,
+    DiscoveryOpportunityReason,
     DiscoveryOpportunityPreparationRequest,
     DiscoveryShortlistState,
 )
 from app.schemas.opportunity_models import EvidenceSignalType, OpportunityModelSelection
 from app.services.discovery_queue_preparation import prepare_discovery_opportunity_queue
+from app.services.discovery_opportunity_queue import opportunity_sort_key
 
 
 NOW = datetime(2026, 9, 8, tzinfo=UTC)
@@ -52,7 +55,74 @@ def request(candidates: list[DiscoveredCompanyCandidate]):
     )
 
 
+def research_dependent_request(candidates: list[DiscoveredCompanyCandidate]):
+    value = request(candidates)
+    value.criteria.business_category = "Dental practices"
+    value.model_selection = OpportunityModelSelection(
+        model_ids=(
+            "web_conversion.mobile_performance",
+            "web_conversion.clinic_patient_path",
+        ),
+        confirmed_by_user=True,
+    )
+    return value
+
+
 class TestDiscoveryQueuePreparation:
+    def test_observed_signals_sort_before_verification_then_alphabetically(self):
+        source = EvidenceSignalType.NO_LISTED_OFFICIAL_WEBSITE
+        observed = DiscoveryOpportunityQueueEntry(
+            candidate_index=2,
+            company_name="Zulu Salon",
+            reasons=[
+                DiscoveryOpportunityReason(
+                    model_id="web_conversion.no_verified_web_presence",
+                    signal_type=source,
+                    supporting_value="No website listed.",
+                    source={
+                        "provider": "open_places",
+                        "provider_record_id": "overture:zulu-salon",
+                        "retrieved_at": NOW,
+                    },
+                    captured_at=NOW,
+                )
+            ],
+        )
+        verification_b = DiscoveryOpportunityQueueEntry(
+            candidate_index=1,
+            company_name="Beta Clinic",
+            verification_reason="Website checks require verification.",
+        )
+        verification_a = verification_b.model_copy(
+            update={"candidate_index": 0, "company_name": "Alpha Clinic"}
+        )
+
+        ordered = sorted(
+            [verification_b, verification_a, observed], key=opportunity_sort_key
+        )
+
+        assert [item.company_name for item in ordered] == [
+            "Zulu Salon",
+            "Alpha Clinic",
+            "Beta Clinic",
+        ]
+
+    def test_research_dependent_web_models_surface_verified_identity_for_research(self):
+        response = prepare_discovery_opportunity_queue(
+            research_dependent_request([candidate()])
+        )
+
+        opportunity = response.candidates[0]
+        assert opportunity.queue_entry.reasons == []
+        assert opportunity.queue_entry.verification_reason is not None
+        assert opportunity.shortlist_entry.state is (
+            DiscoveryShortlistState.ELIGIBLE_FOR_DEEPER_RESEARCH
+        )
+        assert response.needs_verification_count == 1
+        assert CampaignRecommendedBatchCreate(opportunities=[opportunity]).opportunities == [
+            opportunity
+        ]
+
     def test_seeds_a_traceable_local_identity_and_surfaces_no_listed_website(self):
         response = prepare_discovery_opportunity_queue(request([candidate()]))
 

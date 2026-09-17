@@ -16,6 +16,8 @@ from app.schemas.campaign import (
     CampaignCreate,
     CampaignRecommendedBatchCreate,
     CampaignRecommendedBatchResponse,
+    CampaignResearchBatchSummary,
+    CampaignResearchQueueResponse,
     CampaignResponse,
     CampaignRunCreate,
     CampaignRunResponse,
@@ -29,6 +31,7 @@ from app.services.campaigns import (
     CampaignWorkflowError,
     campaign_candidate_selection_response,
     campaign_recommended_batch_response,
+    campaign_research_queue_response,
     campaign_response,
     campaign_run_response,
     create_campaign,
@@ -39,6 +42,7 @@ from app.services.campaigns import (
     get_campaign_run_for_user,
     list_campaign_selections_for_user,
     list_campaign_summaries_for_user,
+    research_batch_summary_for_request,
 )
 from app.services.campaign_prospects import (
     CampaignProspectError,
@@ -172,6 +176,39 @@ def create_campaign_run_endpoint(
     if campaign is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Campaign not found")
     return campaign_run_response(create_campaign_run(db, campaign, request))
+
+
+@router.get(
+    "/runs/{campaign_run_id}/research-queue",
+    response_model=CampaignResearchQueueResponse,
+)
+def get_campaign_research_queue_endpoint(
+    campaign_run_id: uuid.UUID,
+    db: Session = Depends(get_db),
+    current_user: AuthenticatedIdentity = Depends(get_authenticated_identity),
+):
+    campaign_run = get_campaign_run_for_user(db, campaign_run_id, current_user.id)
+    if campaign_run is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Campaign run not found")
+    try:
+        return campaign_research_queue_response(db, campaign_run)
+    except (CampaignWorkflowError, ValueError) as error:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(error)) from error
+
+
+@router.get(
+    "/research-batches/by-request/{request_id}",
+    response_model=CampaignResearchBatchSummary,
+)
+def get_research_batch_for_request_endpoint(
+    request_id: uuid.UUID,
+    db: Session = Depends(get_db),
+    current_user: AuthenticatedIdentity = Depends(get_authenticated_identity),
+):
+    summary = research_batch_summary_for_request(db, request_id, current_user.id)
+    if summary is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Research batch not found")
+    return summary
 
 
 @router.post(

@@ -1,5 +1,5 @@
 from datetime import datetime
-from typing import Self
+from typing import Literal, Self
 from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
@@ -40,6 +40,7 @@ class CampaignRunCreate(BaseModel):
 
     provider_summary: dict[str, int] = Field(min_length=1, max_length=10)
     discovered_candidate_count: int = Field(ge=0, le=100)
+    candidate_pool_snapshot: "CampaignCandidatePoolSnapshot"
 
     @model_validator(mode="after")
     def require_consistent_provider_summary(self) -> Self:
@@ -49,6 +50,8 @@ class CampaignRunCreate(BaseModel):
             raise ValueError(
                 "Provider counts cannot be lower than the deduplicated candidate count."
             )
+        if len(self.candidate_pool_snapshot.candidates) > self.discovered_candidate_count:
+            raise ValueError("The candidate pool cannot exceed the discovered candidate count.")
         return self
 
 
@@ -149,8 +152,63 @@ class CampaignCandidateSelectionResponse(BaseModel):
     company_id: UUID
     research_request_id: UUID
     source_identity_key: str
+    research_batch_id: UUID | None = None
     created_at: datetime
 
 
 class CampaignRecommendedBatchResponse(BaseModel):
+    research_batch_id: UUID
     selections: list[CampaignCandidateSelectionResponse] = Field(min_length=1, max_length=3)
+
+
+class CampaignCandidatePoolSnapshot(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    version: Literal[1] = 1
+    candidates: list[PreparedDiscoveryOpportunity] = Field(max_length=100)
+
+
+class CampaignResearchQueueResponse(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    campaign_id: UUID
+    campaign_run_id: UUID
+    criteria: CompanyDiscoveryRequest
+    model_selection: OpportunityModelSelection
+    pool_count: int = Field(ge=0)
+    selected_count: int = Field(ge=0)
+    remaining_count: int = Field(ge=0)
+    candidates: list[PreparedDiscoveryOpportunity] = Field(max_length=100)
+
+
+BatchOutcome = Literal[
+    "qualified",
+    "not_a_fit",
+    "needs_review",
+    "failed",
+    "pending",
+]
+
+
+class CampaignResearchBatchMember(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    selection_id: UUID
+    research_request_id: UUID
+    company_name: str
+    outcome: BatchOutcome
+
+
+class CampaignResearchBatchSummary(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    research_batch_id: UUID
+    campaign_id: UUID
+    campaign_run_id: UUID
+    qualified: int = Field(ge=0)
+    not_a_fit: int = Field(ge=0)
+    needs_review: int = Field(ge=0)
+    failed: int = Field(ge=0)
+    pending: int = Field(ge=0)
+    remaining_count: int = Field(ge=0)
+    members: list[CampaignResearchBatchMember] = Field(min_length=1, max_length=3)

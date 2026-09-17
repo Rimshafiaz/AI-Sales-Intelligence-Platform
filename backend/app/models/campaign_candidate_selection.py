@@ -44,6 +44,9 @@ class CampaignCandidateSelection(Base):
         index=True,
     )
     source_identity_key: Mapped[str] = mapped_column(String(400), nullable=False)
+    research_batch_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True), nullable=True, index=True
+    )
     candidate_snapshot: Mapped[dict] = mapped_column(JSONB, nullable=False)
     shortlist_snapshot: Mapped[dict] = mapped_column(JSONB, nullable=False)
     evidence_snapshot: Mapped[list] = mapped_column(JSONB, nullable=False)

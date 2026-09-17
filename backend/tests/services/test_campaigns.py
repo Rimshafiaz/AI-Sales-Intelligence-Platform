@@ -5,14 +5,18 @@ import pytest
 from pydantic import ValidationError
 
 from app.models.campaign import Campaign
-from app.models.campaign_prospect import CampaignProspect, CampaignProspectState
+from app.models.campaign_candidate_selection import CampaignCandidateSelection
 from app.models.campaign_run import CampaignRun
+from app.models.opportunity_qualification import OpportunityQualification
+from app.models.research_request import ResearchRequest
 from app.models.research_request import ResearchStatus
 from app.models.user import User
 from app.schemas.campaign import (
+    CampaignCandidatePoolSnapshot,
     CampaignCandidateSelectionCreate,
     CampaignCreate,
     CampaignRecommendedBatchCreate,
+    CampaignResearchQueueResponse,
     CampaignRunCreate,
 )
 from app.schemas.company_discovery import (
@@ -36,10 +40,14 @@ from app.schemas.opportunity_models import (
     EvidenceType,
     OpportunityModelSelection,
 )
+from app.repositories.research_requests import clone_failed_research_request
 from app.services.campaigns import (
     CampaignWorkflowError,
     create_candidate_selection_and_research_request,
     create_recommended_research_batch,
+    campaign_research_queue_response,
+    research_batch_summary_for_request,
+    remaining_campaign_run_candidates,
 )
 
 
@@ -47,10 +55,17 @@ NOW = datetime(2026, 9, 8, tzinfo=UTC)
 
 
 class FakeSession:
-    def __init__(self, scalar_results=None, commit_error=None, scalars_all_results=None):
+    def __init__(
+        self,
+        scalar_results=None,
+        commit_error=None,
+        scalars_all_results=None,
+        get_results=None,
+    ):
         self.scalar_results = list(scalar_results or [])
         self.scalars_all_results = list(scalars_all_results or [])
         self.commit_error = commit_error
+        self.get_results = dict(get_results or {})
         self.added = []
         self.committed = False
         self.rolled_back = False
@@ -70,6 +85,12 @@ class FakeSession:
 
     def add(self, value):
         self.added.append(value)
+
+    def flush(self):
+        pass
+
+    def get(self, model, identity):
+        return self.get_results.get((model, identity))
 
     def commit(self):
         if self.commit_error is not None:
@@ -199,15 +220,19 @@ def prepared_opportunity(name: str = "Glow Salon"):
     )
 
 
-def campaign_run() -> CampaignRun:
+def campaign_run(opportunities=None) -> CampaignRun:
     campaign_id = uuid.uuid4()
+    opportunities = opportunities or [prepared_opportunity("Glow Salon")]
     return CampaignRun(
         id=uuid.uuid4(),
         campaign_id=campaign_id,
         criteria_snapshot=criteria().model_dump(mode="json"),
         model_selection_snapshot=model_selection().model_dump(mode="json"),
         provider_summary={"open_places": 10},
-        discovered_candidate_count=10,
+        discovered_candidate_count=len(opportunities),
+        candidate_pool_snapshot=CampaignCandidatePoolSnapshot(
+            candidates=opportunities
+        ).model_dump(mode="json"),
     )
 
 
@@ -233,6 +258,7 @@ class TestCampaignSchemas:
             CampaignRunCreate(
                 provider_summary={"open_places": 2},
                 discovered_candidate_count=3,
+                candidate_pool_snapshot=CampaignCandidatePoolSnapshot(candidates=[]),
             )
 
     def test_selection_requires_candidate_eligible_for_deeper_research(self):
@@ -240,6 +266,12 @@ class TestCampaignSchemas:
             CampaignCandidateSelectionCreate(
                 candidate_input=CandidateShortlistInput(candidate=candidate()),
                 shortlist_entry=shortlist_entry(DiscoveryShortlistState.NEEDS_EVIDENCE),
+            )
+
+    def test_research_batch_remains_limited_to_three_candidates(self):
+        with pytest.raises(ValidationError):
+            CampaignRecommendedBatchCreate(
+                opportunities=[prepared_opportunity(f"Salon {index}") for index in range(4)]
             )
 
 
@@ -300,53 +332,157 @@ class TestCampaignSelectionHandoff:
         assert db.rolled_back is True
 
     def test_recommended_batch_creates_multiple_pending_requests_in_one_commit(self):
-        db = FakeSession(scalar_results=[None, None, None, None, None, None])
-        user = User(id=uuid.uuid4(), email="owner@example.com")
-        batch = CampaignRecommendedBatchCreate(
-            opportunities=[prepared_opportunity("Glow Salon"), prepared_opportunity("Lumen Salon")]
+        opportunities = [prepared_opportunity("Glow Salon"), prepared_opportunity("Lumen Salon")]
+        db = FakeSession(
+            scalar_results=[None, None, None, None, None, None],
+            scalars_all_results=[[]],
         )
+        user = User(id=uuid.uuid4(), email="owner@example.com")
+        batch = CampaignRecommendedBatchCreate(opportunities=opportunities)
 
-        selections = create_recommended_research_batch(db, campaign_run(), user, batch)
+        selections = create_recommended_research_batch(
+            db, campaign_run(opportunities), user, batch
+        )
 
         assert len(selections) == 2
         assert db.committed is True
         assert all(request.status is ResearchStatus.PENDING for _, request in selections)
 
     def test_recommended_batch_rejects_an_opportunity_outside_the_campaign_models(self):
-        db = FakeSession()
+        db = FakeSession(scalars_all_results=[[]])
         user = User(id=uuid.uuid4(), email="owner@example.com")
         opportunity = prepared_opportunity()
         opportunity.queue_entry.reasons[0].model_id = "web_conversion.mobile_performance"
         batch = CampaignRecommendedBatchCreate(opportunities=[opportunity])
 
         with pytest.raises(CampaignWorkflowError, match="does not match"):
-            create_recommended_research_batch(db, campaign_run(), user, batch)
+            create_recommended_research_batch(db, campaign_run([opportunity]), user, batch)
 
         assert db.added == []
 
 
-def test_recommended_batch_rejects_prospects_already_ruled_out():
-    run = campaign_run()
+def test_selected_candidate_never_reappears_in_remaining_pool():
+    opportunities = [prepared_opportunity("Glow Salon"), prepared_opportunity("Lumen Salon")]
+    run = campaign_run(opportunities)
     ruled_out_key = (
         f"{prepared_opportunity('Glow Salon').candidate_input.candidate.source_provider}:"
         f"{prepared_opportunity('Glow Salon').candidate_input.candidate.source_record_id}"
     )
-    not_a_fit_prospect = CampaignProspect(
-        campaign_id=run.campaign_id,
-        campaign_run_id=run.id,
-        source_identity_key=ruled_out_key,
-        candidate_index=0,
-        candidate_snapshot={},
-        shortlist_snapshot={},
-        evidence_snapshot=[],
-        workflow_state=CampaignProspectState.NOT_A_FIT,
-    )
-    db = FakeSession(scalars_all_results=[[not_a_fit_prospect]])
-    user = User(id=uuid.uuid4(), email="owner@example.com")
-    batch = CampaignRecommendedBatchCreate(
-        opportunities=[prepared_opportunity("Glow Salon")]
-    )
+    db = FakeSession(scalars_all_results=[[ruled_out_key]])
 
-    with pytest.raises(CampaignWorkflowError, match="ruled out"):
+    remaining = remaining_campaign_run_candidates(db, run)
+
+    assert [item.queue_entry.company_name for item in remaining] == ["Lumen Salon"]
+
+
+def test_recommended_batch_rejects_previously_selected_candidate():
+    opportunity = prepared_opportunity("Glow Salon")
+    run = campaign_run([opportunity])
+    source_key = (
+        f"{opportunity.candidate_input.candidate.source_provider}:"
+        f"{opportunity.candidate_input.candidate.source_record_id}"
+    )
+    db = FakeSession(scalars_all_results=[[source_key]])
+    user = User(id=uuid.uuid4(), email="owner@example.com")
+    batch = CampaignRecommendedBatchCreate(opportunities=[opportunity])
+
+    with pytest.raises(CampaignWorkflowError, match="remaining pool"):
         create_recommended_research_batch(db, run, user, batch)
     assert db.committed is False
+
+
+def test_sixty_one_candidate_pool_has_fifty_eight_remaining_after_first_batch():
+    opportunities = [prepared_opportunity(f"Salon {index:02}") for index in range(61)]
+    run = campaign_run(opportunities)
+    selected_keys = [
+        f"{item.candidate_input.candidate.source_provider}:"
+        f"{item.candidate_input.candidate.source_record_id}"
+        for item in opportunities[:3]
+    ]
+    db = FakeSession(scalars_all_results=[selected_keys, selected_keys])
+
+    first = campaign_research_queue_response(db, run)
+    refreshed = campaign_research_queue_response(db, run)
+
+    assert isinstance(first, CampaignResearchQueueResponse)
+    assert first.pool_count == 61
+    assert first.selected_count == 3
+    assert first.remaining_count == 58
+    assert refreshed.candidates == first.candidates
+
+
+def test_batch_summary_uses_authoritative_request_and_qualification_states():
+    run = campaign_run([prepared_opportunity(f"Salon {index}") for index in range(5)])
+    batch_id = uuid.uuid4()
+    selections = []
+    qualifications = []
+    outcomes = [
+        (ResearchStatus.COMPLETED, "likely"),
+        (ResearchStatus.COMPLETED, "not_eligible"),
+        (ResearchStatus.FAILED, None),
+    ]
+    for index, (status, qualification_state) in enumerate(outcomes):
+        request = ResearchRequest(
+            id=uuid.uuid4(),
+            company_id=uuid.uuid4(),
+            user_id=uuid.uuid4(),
+            status=status,
+        )
+        selection = CampaignCandidateSelection(
+            id=uuid.uuid4(),
+            campaign_run_id=run.id,
+            company_id=request.company_id,
+            source_identity_key=f"open_places:salon-{index}",
+            research_batch_id=batch_id,
+            candidate_snapshot={"company_name": f"Salon {index}"},
+            shortlist_snapshot={},
+            evidence_snapshot=[],
+        )
+        selection.research_request = request
+        selections.append(selection)
+        if qualification_state:
+            qualifications.append(
+                OpportunityQualification(
+                    research_request_id=request.id,
+                    opportunity_model_id="web_conversion.mobile_performance",
+                    state=qualification_state,
+                    reason="Deterministic result.",
+                    supporting_evidence_keys=[],
+                    evaluated_at=NOW,
+                )
+            )
+    db = FakeSession(
+        scalar_results=[selections[0]],
+        scalars_all_results=[selections, qualifications, []],
+        get_results={(CampaignRun, run.id): run},
+    )
+
+    summary = research_batch_summary_for_request(
+        db, selections[0].research_request.id, selections[0].research_request.user_id
+    )
+
+    assert summary is not None
+    assert (summary.qualified, summary.not_a_fit, summary.failed) == (1, 1, 1)
+    assert summary.needs_review == 0
+    assert summary.pending == 0
+    assert summary.remaining_count == 5
+
+
+def test_failed_candidate_selection_moves_to_retry_request():
+    selection_id = uuid.uuid4()
+    failed = ResearchRequest(
+        id=uuid.uuid4(),
+        company_id=uuid.uuid4(),
+        user_id=uuid.uuid4(),
+        campaign_candidate_selection_id=selection_id,
+        status=ResearchStatus.FAILED,
+        objective={"offering": "Website redesign"},
+        opportunity_model_selection=model_selection().model_dump(mode="json"),
+    )
+    db = FakeSession()
+
+    retried = clone_failed_research_request(db, failed)
+
+    assert failed.campaign_candidate_selection_id is None
+    assert retried.campaign_candidate_selection_id == selection_id
+    assert retried.status is ResearchStatus.PENDING

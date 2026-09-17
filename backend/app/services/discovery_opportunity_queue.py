@@ -27,6 +27,7 @@ def build_discovery_opportunity_queue(
     shortlist = shortlist_discovery_candidates(request)
     candidates: list[DiscoveryOpportunityQueueEntry] = []
     needs_verification_count = 0
+    not_surfaced_count = 0
 
     for candidate_index, (candidate_input, shortlist_entry) in enumerate(
         zip(request.candidates, shortlist.candidates, strict=True)
@@ -41,17 +42,49 @@ def build_discovery_opportunity_queue(
                 )
             )
             continue
+        verification_reason = research_verification_reason(
+            shortlist_entry.model_evaluations
+        )
+        if verification_reason:
+            candidates.append(
+                DiscoveryOpportunityQueueEntry(
+                    candidate_index=candidate_index,
+                    company_name=candidate_input.candidate.company_name,
+                    verification_reason=verification_reason,
+                )
+            )
+            needs_verification_count += 1
+            continue
         if shortlist_entry.state in {
             DiscoveryShortlistState.NEEDS_IDENTITY_REVIEW,
             DiscoveryShortlistState.NEEDS_EVIDENCE,
         }:
             needs_verification_count += 1
+            continue
+        not_surfaced_count += 1
 
     candidates.sort(key=opportunity_sort_key)
     return DiscoveryOpportunityQueueResponse(
         candidates=candidates,
         needs_verification_count=needs_verification_count,
-        not_surfaced_count=len(request.candidates) - len(candidates) - needs_verification_count,
+        not_surfaced_count=not_surfaced_count,
+    )
+
+
+def research_verification_reason(
+    evaluations: list[OpportunityModelShortlistEvaluation],
+) -> str | None:
+    research_actions = {
+        evaluation.next_evidence_action
+        for evaluation in evaluations
+        if evaluation.state is DiscoveryShortlistState.ELIGIBLE_FOR_DEEPER_RESEARCH
+        and evaluation.missing_signal_types
+    }
+    if not research_actions:
+        return None
+    return (
+        "This business matches the campaign, but its official website must be "
+        "verified before the selected performance or customer-path checks can run."
     )
 
 
@@ -217,5 +250,9 @@ def reason_from_signal(
 
 def opportunity_sort_key(
     entry: DiscoveryOpportunityQueueEntry,
-) -> tuple[str, int]:
-    return entry.company_name.casefold(), entry.candidate_index
+) -> tuple[int, str, int]:
+    return (
+        0 if entry.reasons else 1,
+        entry.company_name.casefold(),
+        entry.candidate_index,
+    )

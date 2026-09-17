@@ -68,6 +68,16 @@ ACTION_PRIORITY = {
     NextEvidenceAction.NO_ACTION: 100,
 }
 
+WEBSITE_RESEARCH_SIGNALS = {
+    EvidenceSignalType.WEBSITE_MOBILE_PERFORMANCE_MEASURED,
+    EvidenceSignalType.WEBSITE_BOOKING_PATH_MANUAL_ONLY,
+    EvidenceSignalType.WEBSITE_RESERVATION_PATH_MANUAL_ONLY,
+    EvidenceSignalType.WEBSITE_RESTAURANT_PRIMARY_PATH_NOT_OBSERVED,
+    EvidenceSignalType.WEBSITE_FITNESS_ENQUIRY_PATH_NOT_OBSERVED,
+    EvidenceSignalType.WEBSITE_RETAIL_PRODUCT_PATH_NOT_OBSERVED,
+    EvidenceSignalType.WEBSITE_CLINIC_PATIENT_PATH_INCOMPLETE,
+}
+
 
 def shortlist_discovery_candidates(
     request: DiscoveryShortlistRequest,
@@ -199,6 +209,18 @@ def evaluate_model(
             candidate_input,
             missing_signal_types,
         )
+        if set(missing_signal_types) & WEBSITE_RESEARCH_SIGNALS:
+            return OpportunityModelShortlistEvaluation(
+                model_id=model.id,
+                state=DiscoveryShortlistState.ELIGIBLE_FOR_DEEPER_RESEARCH,
+                observed_signal_types=observed_for_model,
+                missing_signal_types=missing_signal_types,
+                reason=(
+                    "The verified business identity matches the campaign, but the "
+                    "selected website check requires bounded specialist research."
+                ),
+                next_evidence_action=next_action,
+            )
         return OpportunityModelShortlistEvaluation(
             model_id=model.id,
             state=DiscoveryShortlistState.NEEDS_EVIDENCE,
@@ -279,6 +301,10 @@ def next_action_for_state(
         evaluation.next_evidence_action
         for evaluation in evaluations
         if evaluation.state is state
+        or (
+            state is DiscoveryShortlistState.ELIGIBLE_FOR_DEEPER_RESEARCH
+            and evaluation.next_evidence_action is not NextEvidenceAction.NO_ACTION
+        )
     ]
     return min(
         actions,

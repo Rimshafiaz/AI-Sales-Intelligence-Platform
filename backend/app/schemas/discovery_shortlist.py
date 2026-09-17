@@ -122,7 +122,14 @@ class DiscoveryOpportunityQueueEntry(BaseModel):
 
     candidate_index: int = Field(ge=0)
     company_name: str = Field(min_length=1, max_length=255)
-    reasons: list[DiscoveryOpportunityReason] = Field(min_length=1, max_length=3)
+    reasons: list[DiscoveryOpportunityReason] = Field(default_factory=list, max_length=3)
+    verification_reason: str | None = Field(default=None, min_length=1, max_length=500)
+
+    @model_validator(mode="after")
+    def require_observed_or_research_reason(self) -> Self:
+        if not self.reasons and not self.verification_reason:
+            raise ValueError("A queue entry needs observed evidence or a verification reason.")
+        return self
 
 
 class DiscoveryOpportunityQueueResponse(BaseModel):

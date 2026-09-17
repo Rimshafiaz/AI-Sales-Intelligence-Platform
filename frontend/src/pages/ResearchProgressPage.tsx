@@ -1,8 +1,9 @@
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import { Link, useLocation, useNavigate, useParams } from 'react-router-dom'
 import { Check, ExternalLink, Loader2, XCircle } from 'lucide-react'
 import { api } from '../lib/api'
 import type {
+  CampaignResearchBatchSummary,
   Company,
   ReportListResponse,
   ResearchEvidence,
@@ -10,6 +11,8 @@ import type {
   ResearchSocialObservation,
   ResearchSource,
 } from '../lib/types'
+
+const EMPTY_BATCH_REQUEST_IDS: string[] = []
 import { Button, Notice } from '../components/ui'
 
 type StageState = 'done' | 'active' | 'pending'
@@ -312,7 +315,9 @@ export default function ResearchProgressPage() {
   const navigate = useNavigate()
   const location = useLocation()
   const batchRequestIds =
-    (location.state as { batchRequestIds?: string[] } | null)?.batchRequestIds ?? []
+    (location.state as { batchRequestIds?: string[] } | null)?.batchRequestIds
+    ?? EMPTY_BATCH_REQUEST_IDS
+  const [batchSummary, setBatchSummary] = useState<CampaignResearchBatchSummary | null>(null)
 
   const [request, setRequest] = useState<ResearchRequest | null>(null)
   const [loadError, setLoadError] = useState<string | null>(null)
@@ -328,7 +333,33 @@ export default function ResearchProgressPage() {
   const [auditError, setAuditError] = useState<string | null>(null)
   const [socialAuditPhase, setSocialAuditPhase] = useState<'idle' | 'running'>('idle')
   const [socialAuditError, setSocialAuditError] = useState<string | null>(null)
-    const loadRequest = useCallback(async () => {
+
+  useEffect(() => {
+    if (!requestId) return
+    let cancelled = false
+    const load = () =>
+      api<CampaignResearchBatchSummary>(
+        `/campaigns/research-batches/by-request/${requestId}`,
+      )
+        .then((summary) => {
+          if (!cancelled) setBatchSummary(summary)
+        })
+        .catch(() => {
+          if (!cancelled) setBatchSummary(null)
+        })
+    load()
+    const timer = window.setInterval(load, 3000)
+    return () => {
+      cancelled = true
+      window.clearInterval(timer)
+    }
+  }, [requestId])
+
+  const durableBatchRequestIds = useMemo(
+    () => batchSummary?.members.map((member) => member.research_request_id) ?? batchRequestIds,
+    [batchSummary, batchRequestIds],
+  )
+  const loadRequest = useCallback(async () => {
     if (!requestId) return null
     try {
       const data = await api<ResearchRequest>(`/research-requests/${requestId}`)
@@ -474,7 +505,9 @@ export default function ResearchProgressPage() {
         if (found) {
           setGeneratePhase('idle')
           navigate(`/reports/${found.id}`, {
-            state: batchRequestIds.length > 0 ? { batchRequestIds } : undefined,
+            state: durableBatchRequestIds.length > 0
+              ? { batchRequestIds: durableBatchRequestIds }
+              : undefined,
           })
           return
         }
@@ -489,7 +522,7 @@ export default function ResearchProgressPage() {
       }
     }, 3000)
     return () => clearInterval(interval)
-  }, [generatePhase, request, navigate])
+  }, [generatePhase, request, navigate, durableBatchRequestIds])
 
   async function handleRetry() {
     if (!request) return
@@ -502,7 +535,7 @@ export default function ResearchProgressPage() {
       setSources(null)
       setAuditEvidence(null)
       setSocialObservations(null)
-      const updatedBatchRequestIds = batchRequestIds.map((id) =>
+      const updatedBatchRequestIds = durableBatchRequestIds.map((id) =>
         id === request.id ? fresh.id : id,
       )
       navigate(`/research/${fresh.id}`, {
@@ -662,7 +695,15 @@ export default function ResearchProgressPage() {
       </p>
       <h1 className="mt-1 page-title">{companyTitle}</h1>
 
-      <BatchStrip batchRequestIds={batchRequestIds} currentRequestId={request.id} />
+      <BatchStrip batchRequestIds={durableBatchRequestIds} currentRequestId={request.id} />
+
+      {batchSummary && (
+        <p className="mt-3 text-body-sm text-on-surface-variant">
+          {batchSummary.qualified} qualified · {batchSummary.not_a_fit} not a fit ·{' '}
+          {batchSummary.needs_review} needs review · {batchSummary.failed} failed ·{' '}
+          {batchSummary.pending} pending · {batchSummary.remaining_count} research candidates remaining
+        </p>
+      )}
 
       <section className="mt-6 rounded-card border border-line-soft bg-card p-5">
         <h2 className="label-caps text-ink-soft">Investigation progress</h2>
@@ -704,13 +745,13 @@ export default function ResearchProgressPage() {
             move on to the next prospect in your batch.
           </p>
           <div className="mt-4 flex flex-wrap items-center gap-3">
-            {batchRequestIds.filter((id) => id !== requestId).length > 0 && (
+            {durableBatchRequestIds.filter((id) => id !== requestId).length > 0 && (
               <Button
                 onClick={() =>
                   navigate(
-                    `/research/${batchRequestIds.find((id) => id !== requestId)}`,
+                    `/research/${durableBatchRequestIds.find((id) => id !== requestId)}`,
                     {
-                      state: { batchRequestIds },
+                      state: { batchRequestIds: durableBatchRequestIds },
                     },
                   )
                 }

@@ -10,7 +10,7 @@ import {
   type Finding,
   type ReportDetail,
 } from '../lib/report'
-import type { Company } from '../lib/types'
+import type { CampaignResearchBatchSummary, Company } from '../lib/types'
 import {
   Button,
   Notice,
@@ -71,6 +71,7 @@ export default function ReportReviewPage() {
   const [actionError, setActionError] = useState<string | null>(null)
   const [editMode, setEditMode] = useState(false)
   const [saving, setSaving] = useState(false)
+  const [batchSummary, setBatchSummary] = useState<CampaignResearchBatchSummary | null>(null)
 
   interface EditFormState {
     strategy: string
@@ -91,6 +92,16 @@ export default function ReportReviewPage() {
         setLoadError(e instanceof Error ? e.message : 'Could not load the report.'),
       )
   }, [reportId])
+
+  useEffect(() => {
+    const requestId = detail?.report.research_request_id
+    if (!requestId) return
+    api<CampaignResearchBatchSummary>(
+      `/campaigns/research-batches/by-request/${requestId}`,
+    )
+      .then(setBatchSummary)
+      .catch(() => setBatchSummary(null))
+  }, [detail?.report.research_request_id])
 
   useEffect(() => {
     if (!detail || company) return
@@ -176,9 +187,16 @@ export default function ReportReviewPage() {
     }
   }
 
-  const nextBatchRequestId = batchRequestIds.find(
-    (id) => detail?.report.research_request_id !== id,
-  )
+  const durableBatchRequestIds =
+    batchSummary?.members.map((member) => member.research_request_id) ?? batchRequestIds
+  const nextBatchRequestId = batchSummary
+    ? batchSummary.members.find(
+        (member) =>
+          detail?.report.research_request_id !== member.research_request_id
+          && member.outcome !== 'qualified'
+          && member.outcome !== 'not_a_fit',
+      )?.research_request_id
+    : durableBatchRequestIds.find((id) => detail?.report.research_request_id !== id)
 
   if (loadError) {
     return (
@@ -245,6 +263,33 @@ export default function ReportReviewPage() {
           <span className="font-mono">{report.id.slice(0, 8)}</span>
         </p>
         <ProspectEvidenceBriefView brief={brief} outreach={detail.outreach ?? null} />
+        {batchSummary && (
+          <section className="mt-6 rounded-card border border-line-soft bg-card p-4">
+            <p className="text-body-md font-medium text-on-surface">
+              {batchSummary.qualified} qualified · {batchSummary.not_a_fit} not a fit
+              {batchSummary.needs_review > 0 ? ` · ${batchSummary.needs_review} needs review` : ''}
+              {batchSummary.failed > 0 ? ` · ${batchSummary.failed} failed` : ''}
+              {batchSummary.pending > 0 ? ` · ${batchSummary.pending} pending` : ''}
+            </p>
+            <p className="mt-1 text-body-sm text-on-surface-variant">
+              {batchSummary.remaining_count} research candidates remaining
+            </p>
+            {batchSummary.pending === 0
+              && batchSummary.failed === 0
+              && batchSummary.remaining_count > 0 && (
+              <div className="mt-3 flex flex-wrap gap-2">
+                <Button
+                  onClick={() => navigate(`/discover?run=${batchSummary.campaign_run_id}`)}
+                >
+                  Research next candidates
+                </Button>
+                <Button variant="secondary" onClick={() => navigate('/discover')}>
+                  Edit campaign
+                </Button>
+              </div>
+            )}
+          </section>
+        )}
         {nextBatchRequestId && (
           <section className="mt-6 flex flex-wrap items-center justify-between gap-3 rounded-card border border-line-soft bg-card p-4">
             <p className="text-body-sm text-ink-soft">
@@ -255,7 +300,7 @@ export default function ReportReviewPage() {
               type="button"
               onClick={() =>
                 navigate(`/research/${nextBatchRequestId}`, {
-                  state: { batchRequestIds },
+                  state: { batchRequestIds: durableBatchRequestIds },
                 })
               }
               className="inline-flex items-center justify-center rounded-control bg-primary px-4 py-2 text-label-md font-medium text-on-primary transition-colors hover:bg-inverse-surface focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-secondary"

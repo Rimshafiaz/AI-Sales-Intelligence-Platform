@@ -83,8 +83,9 @@ export interface DiscoveryOpportunityReason {
 export interface PreparedDiscoveryOpportunity {
   queue_entry: {
     candidate_index: number
-    company_name: string
-    reasons: DiscoveryOpportunityReason[]
+      company_name: string
+      reasons: DiscoveryOpportunityReason[]
+      verification_reason: string | null
   }
   candidate_input: {
     candidate: DiscoveryCandidate
@@ -129,6 +130,35 @@ export interface CampaignRunResponse {
   created_at: string
 }
 
+export interface CampaignResearchQueueResponse {
+  campaign_id: string
+  campaign_run_id: string
+  criteria: Record<string, unknown> & { objective?: DiscoveryObjective }
+  model_selection: { model_ids: OpportunityModelId[]; confirmed_by_user: boolean }
+  pool_count: number
+  selected_count: number
+  remaining_count: number
+  candidates: PreparedDiscoveryOpportunity[]
+}
+
+export interface CampaignResearchBatchSummary {
+  research_batch_id: string
+  campaign_id: string
+  campaign_run_id: string
+  qualified: number
+  not_a_fit: number
+  needs_review: number
+  failed: number
+  pending: number
+  remaining_count: number
+  members: {
+    selection_id: string
+    research_request_id: string
+    company_name: string
+    outcome: 'qualified' | 'not_a_fit' | 'needs_review' | 'failed' | 'pending'
+  }[]
+}
+
 export interface OutreachWorkbenchGroup {
   campaign_id: string
   campaign_title: string
@@ -143,12 +173,14 @@ export interface OutreachWorkbenchGroup {
 }
 
 export interface CampaignRecommendedBatchResponse {
+  research_batch_id: string
   selections: {
     id: string
     campaign_run_id: string
     company_id: string
     research_request_id: string
     source_identity_key: string
+    research_batch_id: string
     created_at: string
   }[]
 }
