@@ -7,9 +7,14 @@ from app.integrations.search_provider import CollectedSource, TavilySearchProvid
 from app.integrations.website_metadata import WebsiteIdentityPage, WebsiteMetadataCollector
 from app.schemas.opportunity_models import EvidenceSource, IdentityState
 from app.services.identity_resolution import (
+    STRONG_NAME_SCORE,
     IdentityStatus,
+    contact_matches,
+    domain_matches_company_acronym,
     domain_matches_name,
     domain_stem,
+    identity_name_score,
+    location_supports,
     resolve_source_identity,
     significant_tokens,
 )
@@ -19,7 +24,9 @@ EXCLUDED_WEBSITE_PLATFORMS = {
     "crunchbase.com",
     "facebook.com",
     "github.com",
+    "instagram.com",
     "linkedin.com",
+    "tiktok.com",
     "wikipedia.org",
     "x.com",
     "youtube.com",
@@ -105,6 +112,15 @@ class CompanyWebsiteResolver:
             if (match := self._match_source(clean_name, clean_location, source)) is not None
             and (supplied_origin is None or match.website == supplied_origin)
         ]
+        acronym_match = self._corroborated_acronym_match(
+            clean_name,
+            clean_location,
+            phone_number,
+            search_sources,
+            supplied_origin,
+        )
+        if acronym_match is not None:
+            matches.append(acronym_match)
         unique_matches = {match.website: match for match in matches}
 
         # Directories and aggregators can corroborate identity, but only a
@@ -116,6 +132,7 @@ class CompanyWebsiteResolver:
             website: match
             for website, match in unique_matches.items()
             if domain_matches_name(domain_stem(website), name_tokens)
+            or domain_matches_company_acronym(domain_stem(website), clean_name)
         }
         candidates = representative_matches or unique_matches
 
@@ -226,6 +243,77 @@ class CompanyWebsiteResolver:
             ),
             reason="One search source-backed website matched the requested business identity.",
         )
+
+    @classmethod
+    def _corroborated_acronym_match(
+        cls,
+        company_name: str,
+        location: str | None,
+        phone_number: str | None,
+        sources: list[CollectedSource],
+        supplied_origin: str | None,
+    ) -> ResolutionMatch | None:
+        matches: dict[str, ResolutionMatch] = {}
+        for website_source in sources:
+            website = cls._origin(website_source.url)
+            if website is None or (supplied_origin is not None and website != supplied_origin):
+                continue
+            hostname = urlparse(website).hostname
+            if hostname is None or cls._is_excluded_website_platform(hostname):
+                continue
+            stem = domain_stem(website)
+            if not domain_matches_company_acronym(stem, company_name):
+                continue
+            website_text = " ".join(
+                part for part in (website_source.title, website_source.excerpt) if part
+            )
+            if location_supports(location, website_text) is False:
+                continue
+            corroborated = any(
+                cls._source_corroborates_acronym_domain(
+                    company_name,
+                    location,
+                    phone_number,
+                    stem,
+                    source,
+                )
+                for source in sources
+                if cls._origin(source.url) != website
+            )
+            if corroborated:
+                matches[website] = ResolutionMatch(
+                    website=website,
+                    location_supported=True,
+                    source=EvidenceSource(
+                        provider="tavily",
+                        source_url=website_source.url,
+                        retrieved_at=datetime.now(UTC),
+                    ),
+                    reason=(
+                        "The website domain matches the business acronym and an "
+                        "independent source links that domain to the full business name."
+                    ),
+                )
+        return next(iter(matches.values())) if len(matches) == 1 else None
+
+    @staticmethod
+    def _source_corroborates_acronym_domain(
+        company_name: str,
+        location: str | None,
+        phone_number: str | None,
+        stem: str,
+        source: CollectedSource,
+    ) -> bool:
+        source_text = " ".join(part for part in (source.title, source.excerpt) if part)
+        if identity_name_score(company_name, source.title or "") < STRONG_NAME_SCORE:
+            return False
+        if f"{stem}." not in source_text.casefold():
+            return False
+        if location and location_supports(location, source_text) is not True:
+            return False
+        if phone_number and contact_matches(phone_number, source_text) is not True:
+            return False
+        return bool(location or phone_number)
 
     def _website_identity_match(
         self,

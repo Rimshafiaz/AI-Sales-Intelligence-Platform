@@ -42,6 +42,69 @@ def source(url: str, title: str, excerpt: str | None = None) -> CollectedSource:
 
 
 class TestCompanyWebsiteResolver:
+    def test_accepts_acronym_domain_only_with_full_name_location_corroboration(self):
+        provider = FakeSearchProvider(
+            [
+                source(
+                    "https://aadic.pk/",
+                    "AADIC",
+                    "General dentistry and implantology services.",
+                ),
+                source(
+                    "https://www.instagram.com/aadic.pk",
+                    "Aesthetics & Dental Implantology Centre (@aadic.pk)",
+                    "Karachi clinic. Website: www.aadic.pk. Call 0300 2685875.",
+                ),
+            ]
+        )
+
+        resolved = CompanyWebsiteResolver(provider).resolve(
+            "Aesthetics & Dental Implantology Centre",
+            "Karachi",
+            phone_number="0300 2685875",
+        )
+
+        assert resolved.identity_state is IdentityState.VERIFIED
+        assert resolved.website == "https://aadic.pk"
+        assert "acronym" in resolved.reason
+
+    def test_does_not_accept_unrelated_acronym_domain_without_corroboration(self):
+        provider = FakeSearchProvider(
+            [
+                source("https://aadic.pk/", "AADIC", "Dental services."),
+                source(
+                    "https://facebook.com/aadic.pk",
+                    "Aesthetics & Dental Implantology Centre",
+                    "Karachi dental clinic.",
+                ),
+            ]
+        )
+
+        resolved = CompanyWebsiteResolver(provider).resolve(
+            "Aesthetics & Dental Implantology Centre",
+            "Karachi",
+        )
+
+        assert resolved.website is None
+
+    def test_acronym_domain_corroboration_rejects_conflicting_location_or_contact(self):
+        sources = [
+            source("https://aadic.pk/", "AADIC", "Dental services."),
+            source(
+                "https://www.instagram.com/aadic.pk",
+                "Aesthetics & Dental Implantology Centre (@aadic.pk)",
+                "Lahore clinic. Website: www.aadic.pk. Call 0300 9999999.",
+            ),
+        ]
+
+        resolved = CompanyWebsiteResolver(FakeSearchProvider(sources)).resolve(
+            "Aesthetics & Dental Implantology Centre",
+            "Karachi",
+            phone_number="0300 2685875",
+        )
+
+        assert resolved.website is None
+
     def test_confirms_business_identity_without_declaring_a_website(self):
         provider = FakeSearchProvider(
             [

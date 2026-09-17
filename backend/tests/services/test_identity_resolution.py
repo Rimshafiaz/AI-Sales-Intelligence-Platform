@@ -1,5 +1,7 @@
 from app.services.identity_resolution import (
     IdentityStatus,
+    company_name_acronym,
+    domain_matches_company_acronym,
     domain_conflicts_with_name,
     identity_name_score,
     normalize_company_name,
@@ -104,3 +106,10 @@ def test_normalization_handles_ampersands_and_punctuation():
         normalize_company_name("Al-Ghani Dental & Medical Centre, Ltd.")
         == "al ghani dental and medical center"
     )
+
+
+def test_company_acronym_preserves_and_for_aadic():
+    name = "Aesthetics & Dental Implantology Centre"
+
+    assert company_name_acronym(name) == "aadic"
+    assert domain_matches_company_acronym("aadic", name) is True

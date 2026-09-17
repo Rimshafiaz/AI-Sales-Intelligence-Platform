@@ -66,6 +66,17 @@ def significant_tokens(value: str) -> list[str]:
     ]
 
 
+def company_name_acronym(value: str) -> str:
+    tokens = normalize_company_name(value).split()
+    return "".join(token[0] for token in tokens if token)
+
+
+def domain_matches_company_acronym(stem: str, company_name: str) -> bool:
+    acronym = company_name_acronym(company_name)
+    normalized_stem = re.sub(r"[^a-z0-9]", "", stem.casefold())
+    return 3 <= len(acronym) <= 10 and normalized_stem == acronym
+
+
 def identity_name_score(
     candidate_name: str,
     source_name: str,
