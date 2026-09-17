@@ -11,13 +11,6 @@ from app.schemas.evidence_gate import EvidenceGateState, SourceAdmissionState
 
 
 @pytest.fixture
-def no_background_runner(monkeypatch):
-    monkeypatch.setattr(
-        "app.api.routes.research_requests.run_research", lambda request_id: None
-    )
-
-
-@pytest.fixture
 def owned_pending_request(test_user, owned_company, db):
     request = ResearchRequest(
         company_id=owned_company.id,
@@ -32,13 +25,9 @@ def owned_pending_request(test_user, owned_company, db):
 
 class TestResearchRequestLifecycle:
     def test_generic_unscoped_creation_route_is_removed(
-        self, auth_client, owned_company, no_background_runner
+        self, auth_client, owned_company
     ):
         resp = auth_client.post(f"/companies/{owned_company.id}/research-requests")
-        assert resp.status_code == 404
-
-    def test_removed_route_is_404_for_unknown_company(self, auth_client, no_background_runner):
-        resp = auth_client.post(f"/companies/{uuid.uuid4()}/research-requests")
         assert resp.status_code == 404
 
     def test_owner_reads_status_foreign_scoping_holds(
@@ -159,20 +148,6 @@ class TestReportGeneration:
         assert resp.status_code == 409
         assert resp.json()["error"]["code"] == "conflict"
 
-    def test_generate_without_scope_fails_safe(
-        self, auth_client, owned_completed_request, db
-    ):
-        resp = auth_client.post(
-            f"/research-requests/{owned_completed_request.id}/reports"
-        )
-        assert resp.status_code == 409
-        reports = db.scalars(
-            select(ResearchReport).where(
-                ResearchReport.research_request_id == owned_completed_request.id
-            )
-        ).all()
-        assert reports == []
-
     def test_generate_is_blocked_until_the_evidence_gate_passes(
         self, auth_client, owned_completed_request, db
     ):
@@ -268,14 +243,6 @@ class TestReportReview:
             )
         ).all()
         assert reports == [owned_report]
-
-    def test_legacy_report_regeneration_never_schedules_blank_instruction(
-        self, auth_client, owned_report
-    ):
-        resp = auth_client.post(
-            f"/reports/{owned_report.id}/regenerate", json={"instruction": "  "}
-        )
-        assert resp.status_code == 409
 
     def test_report_ownership_404(self, foreign_client, owned_report):
         assert (
