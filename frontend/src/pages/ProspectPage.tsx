@@ -2,12 +2,9 @@ import { useEffect, useState } from 'react'
 import { Link, useParams } from 'react-router-dom'
 import { Notice } from '../components/ui'
 import { api } from '../lib/api'
+import { displayLabel } from '../lib/labels'
 import type { CampaignProspect, CampaignResponse, EvidenceSignal } from '../lib/types'
 import { ProspectOutreach } from './ProspectsPage'
-
-function label(value: string): string {
-  return value.replaceAll('_', ' ')
-}
 
 export default function ProspectPage() {
   const { campaignId, prospectId } = useParams()
@@ -66,7 +63,7 @@ export default function ProspectPage() {
           </div>
           <div className="text-left sm:text-right">
             <p className="text-label-sm text-on-surface-variant">Current state</p>
-            <p className="mt-1 text-body-sm font-semibold capitalize text-on-surface">{label(prospect.workflow_state)}</p>
+            <p className="mt-1 text-body-sm font-semibold text-on-surface">{displayLabel(prospect.workflow_state)}</p>
           </div>
         </div>
       </header>
@@ -80,9 +77,9 @@ export default function ProspectPage() {
             <div className="divide-y divide-line-soft">
               {evidence.map((item, index) => (
                 <article key={`${item.signal_type}:${index}`} className="py-4">
-                  <p className="text-label-sm font-semibold capitalize text-on-surface">{label(item.signal_type)}</p>
+                  <p className="text-label-sm font-semibold text-on-surface">{displayLabel(item.signal_type)}</p>
                   <p className="mt-1 text-body-sm text-on-surface-variant">{item.supporting_value}</p>
-                  <p className="mt-2 text-label-sm text-on-surface-variant">Source: {item.source.source_url ? <a href={item.source.source_url} target="_blank" rel="noreferrer" className="font-semibold text-action hover:text-ink">{item.source.provider}</a> : item.source.provider}</p>
+                  <p className="mt-2 text-label-sm text-on-surface-variant">Source: {item.source.source_url ? <a href={item.source.source_url} target="_blank" rel="noreferrer" className="font-semibold text-action hover:text-ink">{displayLabel(item.source.provider)}</a> : displayLabel(item.source.provider)}</p>
                 </article>
               ))}
             </div>
@@ -91,7 +88,7 @@ export default function ProspectPage() {
 
         <aside>
           <h2 className="border-b border-line pb-3 text-headline-md font-semibold text-on-surface">Next action</h2>
-          <p className="py-4 text-body-md font-medium capitalize text-on-surface">{label(prospect.next_action)}</p>
+          <p className="py-4 text-body-md font-medium text-on-surface">{displayLabel(prospect.next_action)}</p>
           <ProspectOutreach campaignId={campaignId} prospect={prospect} />
         </aside>
       </section>

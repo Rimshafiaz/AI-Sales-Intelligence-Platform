@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react'
 import { Link, useLocation, useNavigate, useParams } from 'react-router-dom'
 import { Check, ExternalLink, Loader2, XCircle } from 'lucide-react'
 import { api } from '../lib/api'
+import { displayLabel } from '../lib/labels'
 import type {
   CampaignResearchBatchSummary,
   Company,
@@ -108,8 +109,8 @@ function BatchStrip({
     if (!member) return 'starting...'
     if (member.status === 'completed')
       return member.gate === 'ready_for_deeper_research'
-        ? 'evidence ready — review it'
-        : 'finished — needs review'
+        ? 'evidence ready, review it'
+        : 'finished, needs review'
     if (member.status === 'running') return 'collecting evidence...'
     return 'waiting...'
   }
@@ -136,7 +137,7 @@ function BatchStrip({
                 onClick={() => navigate(`/research/${id}`, { state: { batchRequestIds } })}
                 className="rounded-control border border-line px-3 py-1 text-[12px] text-ink-soft transition-colors hover:border-action hover:text-ink focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-action"
               >
-                {members[id]?.name ?? 'Prospect'} — {statusLabel(members[id])}
+                {members[id]?.name ?? 'Prospect'}: {statusLabel(members[id])}
               </button>
             </li>
           )
@@ -569,12 +570,14 @@ export default function ResearchProgressPage() {
                 {sources.map((source) => (
                   <li key={source.id} className="flex items-center gap-3 py-2.5">
                     <span className="label-caps w-24 shrink-0 text-ink-faint">
-                      {source.source_type}
+                      {displayLabel(source.source_type)}
                     </span>
                     <span className="min-w-0 flex-1 truncate font-narrative text-sm text-ink">
                       {source.title ?? domainOf(source.url)}
                     </span>
-                    <span className="label-caps text-ink-faint">{source.admission_state}</span>
+                    <span className="label-caps text-ink-faint">
+                      {displayLabel(source.admission_state)}
+                    </span>
                     <a
                       href={source.url}
                       target="_blank"

@@ -2,11 +2,8 @@ import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { Notice } from '../components/ui'
 import { api } from '../lib/api'
+import { displayLabel } from '../lib/labels'
 import type { OutreachAttempt, OutreachChannel, OutreachDraftOption, OutreachWorkbenchGroup } from '../lib/types'
-
-function label(value: string): string {
-  return value.replaceAll('_', ' ')
-}
 
 export default function OutreachPage() {
   const [groups, setGroups] = useState<OutreachWorkbenchGroup[]>([])
@@ -56,7 +53,7 @@ export default function OutreachPage() {
                 <h2 className="mt-1 text-headline-md font-semibold text-on-surface">
                   {String(item.prospect.candidate_snapshot.company_name ?? 'Unnamed business')}
                 </h2>
-                <p className="mt-2 text-label-sm capitalize text-on-surface-variant">{label(item.prospect.workflow_state)}</p>
+                <p className="mt-2 text-label-sm text-on-surface-variant">{displayLabel(item.prospect.workflow_state)}</p>
                 <Link to={`/campaigns/${campaign_id}/prospects/${item.prospect.id}`} className="mt-3 inline-flex text-label-md font-semibold text-action hover:text-ink">Open prospect</Link>
               </div>
               <WorkbenchProspect
@@ -144,14 +141,14 @@ function WorkbenchProspect({
           return (
             <div key={channel} className="flex flex-wrap items-center justify-between gap-3 py-3">
               <div>
-                <p className="text-label-md font-semibold capitalize text-on-surface">{label(channel)}</p>
+                <p className="text-label-md font-semibold text-on-surface">{displayLabel(channel)}</p>
                 <p className="mt-0.5 text-label-sm text-on-surface-variant">{attempt?.recipient ?? option?.recipient}</p>
               </div>
               {attempt ? (
                 <AttemptAction campaignId={campaignId} prospectId={prospectId} attempt={attempt} />
               ) : option ? (
                 <button type="button" disabled={workingChannel !== null} onClick={() => void createDraft(option)} className="rounded-control border border-secondary px-3 py-1.5 text-label-md font-medium text-secondary transition-colors hover:bg-secondary-container focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-secondary disabled:opacity-60">
-                  Create {label(channel)} draft
+                  Create {displayLabel(channel)} draft
                 </button>
               ) : null}
             </div>
@@ -170,5 +167,5 @@ function AttemptAction({ campaignId, prospectId, attempt }: { campaignId: string
   if (attempt.status === 'approved') {
     return <Link to={detailUrl} className="text-label-md font-semibold text-action hover:text-ink">Approved / Send</Link>
   }
-  return <span className="text-label-md font-medium capitalize text-on-surface-variant">{label(attempt.status)}</span>
+  return <span className="text-label-md font-medium text-on-surface-variant">{displayLabel(attempt.status)}</span>
 }

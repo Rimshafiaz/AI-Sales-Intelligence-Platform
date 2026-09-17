@@ -2,11 +2,8 @@ import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { Notice } from '../components/ui'
 import { api } from '../lib/api'
+import { displayLabel } from '../lib/labels'
 import type { DashboardAction, DashboardActivity, DashboardSummary } from '../lib/types'
-
-function label(value: string): string {
-  return value.replaceAll('_', ' ')
-}
 
 function relativeTime(iso: string): string {
   const seconds = Math.max(0, Math.floor((Date.now() - new Date(iso).getTime()) / 1000))
@@ -35,7 +32,7 @@ function ActionRow({ action }: { action: DashboardAction }) {
 function ActivityRow({ event }: { event: DashboardActivity }) {
   return (
     <div className="border-b border-line-soft py-3.5 last:border-b-0">
-      <p className="text-[13px] leading-5 text-ink"><span className="font-semibold capitalize">{label(event.event_type)}</span><span className="text-ink-faint"> · </span>{event.prospect_name}</p>
+      <p className="text-[13px] leading-5 text-ink"><span className="font-semibold">{displayLabel(event.event_type)}</span><span className="text-ink-faint"> · </span>{event.prospect_name}</p>
       <p className="mt-1 text-[12px] text-ink-faint">{event.campaign_title} · {relativeTime(event.occurred_at)}</p>
     </div>
   )
@@ -101,7 +98,7 @@ export default function DashboardPage() {
         <section className="mt-6 flex flex-col gap-3 border border-line bg-card px-5 py-4 sm:flex-row sm:items-center">
           <p className="shrink-0 text-[12px] font-semibold text-ink-soft">Next action</p>
           <div className="min-w-0 flex-1">
-            <p className="text-[14px] font-semibold capitalize text-ink">{label(summary.next_best_action.action_type)} for {summary.next_best_action.prospect_name}</p>
+            <p className="text-[14px] font-semibold text-ink">{displayLabel(summary.next_best_action.action_type)} for {summary.next_best_action.prospect_name}</p>
             <p className="mt-0.5 text-[13px] text-ink-soft">{summary.next_best_action.reason}</p>
           </div>
           <Link to={`/campaigns/${summary.next_best_action.campaign_id}/prospects/${summary.next_best_action.prospect_id}`} className="text-[13px] font-semibold text-action hover:text-ink">Continue</Link>

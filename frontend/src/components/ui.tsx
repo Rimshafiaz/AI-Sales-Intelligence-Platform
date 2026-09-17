@@ -1,4 +1,5 @@
 import { Check } from 'lucide-react'
+import { displayLabel } from '../lib/labels'
 import {
   useId,
   type ButtonHTMLAttributes,
@@ -124,7 +125,7 @@ export function RecommendationBadge({ recommendation }: { recommendation: string
       }
     >
       <span className="h-1.5 w-1.5 rounded-full bg-current" />
-      {label[recommendation] ?? recommendation}
+      {label[recommendation] ?? displayLabel(recommendation)}
     </span>
   )
 }

@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { CircleAlert, Loader2 } from 'lucide-react'
 import { Link, useSearchParams } from 'react-router-dom'
 import { api } from '../lib/api'
+import { displayLabel } from '../lib/labels'
 import type {
   CampaignProspect,
   CampaignResponse,
@@ -12,10 +13,6 @@ import type {
 interface CampaignProspects {
   campaign: CampaignResponse
   prospects: CampaignProspect[]
-}
-
-function label(value: string): string {
-  return value.replaceAll('_', ' ')
 }
 
 export default function ProspectsPage() {
@@ -90,8 +87,8 @@ export default function ProspectsPage() {
                     <p className="mt-1 text-body-sm text-on-surface-variant">{String(prospect.candidate_snapshot.formatted_address ?? 'Location not listed')}</p>
                   </div>
                   <div className="flex items-center gap-3 text-label-md">
-                    <span className="rounded-full bg-secondary-container px-2.5 py-1 text-on-secondary-container">{label(prospect.workflow_state)}</span>
-                    <span className="text-on-surface-variant">Next: {label(prospect.next_action)}</span>
+                    <span className="rounded-full bg-secondary-container px-2.5 py-1 text-on-secondary-container">{displayLabel(prospect.workflow_state)}</span>
+                    <span className="text-on-surface-variant">Next: {displayLabel(prospect.next_action)}</span>
                     <Link to={`/campaigns/${campaign.id}/prospects/${prospect.id}`} className="font-semibold text-secondary hover:text-on-surface">Open</Link>
                   </div>
                 </article>
@@ -142,7 +139,7 @@ export function ProspectOutreach({ campaignId, prospect, initialAttempts, initia
       {error && <p className="text-body-sm text-error">{error}</p>}
       {options.map((option) => (
         <button key={`${option.research_report_id}:${option.channel}:${option.recipient}`} type="button" disabled={working} onClick={() => createDraft(option)} className="rounded-control border border-secondary px-3 py-1.5 text-label-md font-medium text-secondary hover:bg-secondary-container disabled:opacity-60">
-          Create {option.channel} draft for {option.recipient}
+          Create {displayLabel(option.channel)} draft for {option.recipient}
         </button>
       ))}
       {attempts.map((attempt) => (
@@ -232,13 +229,13 @@ function OutreachAttemptCard({
   return (
     <div className="border-t border-line pt-4">
       <div className="flex flex-wrap items-center justify-between gap-2">
-        <p className="text-label-md font-medium text-on-surface">{label(attempt.channel)} / {attempt.recipient}</p>
-        <span className="rounded-full bg-surface-container-high px-2 py-0.5 text-label-sm text-on-surface-variant">{label(attempt.status)}</span>
+        <p className="text-label-md font-medium text-on-surface">{displayLabel(attempt.channel)} / {attempt.recipient}</p>
+        <span className="rounded-full bg-surface-container-high px-2 py-0.5 text-label-sm text-on-surface-variant">{displayLabel(attempt.status)}</span>
       </div>
       {attempt.channel === 'email' && (
         <input aria-label="Email subject" disabled={!editable || working} value={subject} onChange={(event) => setSubject(event.target.value)} className="mt-3 w-full rounded-control border border-line-soft bg-surface-container-lowest px-3 py-2 text-body-sm text-on-surface" />
       )}
-      <textarea aria-label={`${label(attempt.channel)} message`} disabled={!editable || working} value={body} onChange={(event) => setBody(event.target.value)} rows={6} className="mt-2 w-full rounded-control border border-line-soft bg-surface-container-lowest px-3 py-2 text-body-sm text-on-surface" />
+      <textarea aria-label={`${displayLabel(attempt.channel)} message`} disabled={!editable || working} value={body} onChange={(event) => setBody(event.target.value)} rows={6} className="mt-2 w-full rounded-control border border-line-soft bg-surface-container-lowest px-3 py-2 text-body-sm text-on-surface" />
       {editable && (
         <div className="mt-3 flex flex-wrap gap-2">
           <button type="button" disabled={working || !changed} onClick={() => void run('save')} className="rounded-control border border-secondary px-3 py-1.5 text-label-md font-medium text-secondary disabled:opacity-60">Save changes</button>
@@ -252,7 +249,7 @@ function OutreachAttemptCard({
       {attempt.status === 'approved' && attempt.send_method === 'manual' && !changed && (
         <div className="mt-3 flex flex-wrap gap-2">
           <button type="button" disabled={working} onClick={() => void navigator.clipboard.writeText(body)} className="rounded-control border border-secondary px-3 py-1.5 text-label-md font-medium text-secondary disabled:opacity-60">Copy message</button>
-          <a href={contactHref(attempt.channel, attempt.recipient)} target={attempt.channel === 'phone' ? undefined : '_blank'} rel="noreferrer" className="rounded-control border border-secondary px-3 py-1.5 text-label-md font-medium text-secondary">Open {label(attempt.channel)}</a>
+          <a href={contactHref(attempt.channel, attempt.recipient)} target={attempt.channel === 'phone' ? undefined : '_blank'} rel="noreferrer" className="rounded-control border border-secondary px-3 py-1.5 text-label-md font-medium text-secondary">Open {displayLabel(attempt.channel)}</a>
           <button type="button" disabled={working} onClick={() => void run('sent')} className="rounded-control bg-primary px-3 py-1.5 text-label-md font-medium text-on-primary disabled:opacity-60">Mark sent</button>
         </div>
       )}
@@ -266,7 +263,7 @@ function OutreachAttemptCard({
       {attempt.channel === 'email' && attempt.status === 'sent' && <button type="button" disabled={working} onClick={() => void run('check-reply')} className="mt-3 rounded-control border border-secondary px-3 py-1.5 text-label-md font-medium text-secondary disabled:opacity-60">Check for reply</button>}
       {attempt.channel === 'email' && attempt.status === 'replied' && <p className="mt-3 text-body-sm text-on-surface">A reply was detected in the SalesLens Gmail thread.</p>}
       {replyCheckMessage && <p className="mt-2 text-label-sm text-on-surface-variant">{replyCheckMessage}</p>}
-      {attempt.outcome && <p className="mt-2 text-label-sm text-on-surface-variant">Outcome: {label(attempt.outcome)}</p>}
+      {attempt.outcome && <p className="mt-2 text-label-sm text-on-surface-variant">Outcome: {displayLabel(attempt.outcome)}</p>}
       {attempt.failure_reason && <p className="mt-2 text-label-sm text-error">{attempt.failure_reason}</p>}
     </div>
   )

@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { Link, useLocation, useNavigate, useParams } from 'react-router-dom'
 import { Check, Copy, Loader2 } from 'lucide-react'
 import { api } from '../lib/api'
+import { displayLabel } from '../lib/labels'
 import {
   buildCitationIndex,
   domainOf,
@@ -610,7 +611,7 @@ export default function ReportReviewPage() {
               <li key={signal.finding.statement} className="py-3">
                 <div className="flex flex-wrap items-center gap-2">
                   <span className="rounded-control border border-line bg-slate-wash px-1.5 py-0.5 font-ui text-[10px] font-medium uppercase text-ink-soft">
-                    {signal.signal_type}
+                    {displayLabel(signal.signal_type)}
                   </span>
                   {signal.occurred_at && (
                     <span className="font-mono text-[11px] text-ink-faint">
@@ -657,7 +658,7 @@ export default function ReportReviewPage() {
             {data.pain_points.map((painPoint) => (
               <div key={painPoint.hypothesis.statement} className="rounded-control border border-line-soft bg-card p-3">
                 <span className="label-caps text-ink-soft">
-                  {painPoint.confidence} confidence
+                  {displayLabel(painPoint.confidence)} confidence
                 </span>
                 <div className="mt-1.5">
                   <FindingText finding={painPoint.hypothesis} citationIndex={citationIndex} />
@@ -768,7 +769,7 @@ export default function ReportReviewPage() {
                   {source.title ?? domainOf(source.url)}
                 </a>
                 <span className="label-caps hidden text-ink-faint sm:block">
-                  {source.source_type}
+                  {displayLabel(source.source_type)}
                 </span>
                 <a
                   href={source.url}

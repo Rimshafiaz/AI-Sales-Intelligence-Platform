@@ -2,6 +2,7 @@ import { useEffect, useState, type FormEvent } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { Check, ExternalLink, Loader2, Search } from 'lucide-react'
 import { api } from '../lib/api'
+import { displayLabel } from '../lib/labels'
 import type { Company, KnownProspectResolution } from '../lib/types'
 import { Button, Notice, TextField } from '../components/ui'
 import {
@@ -266,7 +267,7 @@ export default function ResearchPage() {
           )}
           {resolution.source?.source_url && (
             <p className="mt-3 font-mono text-[11px] text-ink-faint">
-              Source: {resolution.source.provider}
+              Source: {displayLabel(resolution.source.provider)}
             </p>
           )}
           {isVerified ? (
