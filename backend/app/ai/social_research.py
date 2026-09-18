@@ -61,8 +61,9 @@ def validate_social_research_output(
     trace: SocialResearchToolTrace,
 ) -> SocialResearchOutput:
     validated = SocialResearchOutput.model_validate(output)
-    if validated.presence_status != _presence_status(final_state, trace):
-        raise SocialResearchError("Social research output changed the trusted presence status.")
+    validated = validated.model_copy(
+        update={"presence_status": _presence_status(final_state, trace)}
+    )
     evidence_keys = {item.key for item in final_state.evidence}
     if any(not set(item.evidence_keys) <= evidence_keys for item in validated.findings):
         raise SocialResearchError("Social research output cited unavailable evidence.")

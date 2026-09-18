@@ -155,6 +155,21 @@ class TestOpportunityModelEvaluation:
 
         assert decision.state is OpportunityQualificationState.NOT_ELIGIBLE
 
+    def test_five_day_social_activity_is_not_a_dormancy_opportunity(self):
+        decision = _evaluate_model(
+            get_opportunity_model("social_presence.dormant_official_presence"),
+            IndustryOverlayId.RESTAURANTS_CAFES,
+            [
+                evidence(EvidenceSignalType.BUSINESS_IDENTITY_CONFIRMED),
+                evidence(EvidenceSignalType.OFFICIAL_SOCIAL_PROFILE_CONFIRMED),
+                evidence(EvidenceSignalType.BUSINESS_ACTIVITY_CONFIRMED),
+                evidence(EvidenceSignalType.SOCIAL_HISTORIC_ACTIVITY_CONFIRMED),
+                evidence(EvidenceSignalType.SOCIAL_DORMANCY_MEASURED, 5),
+            ],
+        )
+
+        assert decision.state is OpportunityQualificationState.NOT_ELIGIBLE
+
     @pytest.mark.parametrize(
         "missing_signal",
         [

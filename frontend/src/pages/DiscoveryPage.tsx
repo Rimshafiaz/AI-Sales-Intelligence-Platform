@@ -179,6 +179,12 @@ export default function DiscoveryPage() {
           company_size: form.company_size.trim() || undefined,
         },
       })
+      const parsedLocation = response.objective.target_geographies[0]?.trim()
+      if (parsedLocation) {
+        setForm((current) =>
+          current.region.trim() ? current : { ...current, region: parsedLocation },
+        )
+      }
       setObjective(response.objective)
       setGate({ supported: response.supported, message: response.message })
       setStep('confirm')
@@ -191,6 +197,10 @@ export default function DiscoveryPage() {
 
   async function handleConfirmedRun() {
     if (searching || !objective) return
+    if (!form.region.trim() && !objective.target_geographies[0]?.trim()) {
+      setSearchError('Add a location to continue.')
+      return
+    }
     if (selectedModels.length === 0) {
       setSearchError(modelScope.error ?? 'No supported research scope was selected.')
       return
@@ -353,7 +363,7 @@ export default function DiscoveryPage() {
               </div>
             </fieldset>
             <div className="grid grid-cols-1 gap-5 sm:grid-cols-2">
-              <div className="space-y-2"><label htmlFor="discovery-region" className="block text-[13px] font-medium text-ink">Where <span className="font-normal text-ink-faint">(optional)</span></label><input id="discovery-region" placeholder="For example, Lahore" value={form.region} onChange={(event) => update('region', event.target.value)} className={inputClass} /></div>
+              <div className="space-y-2"><label htmlFor="discovery-region" className="block text-[13px] font-medium text-ink">Where<span className="text-error"> *</span></label><input id="discovery-region" placeholder="For example, Lahore" value={form.region} onChange={(event) => update('region', event.target.value)} className={inputClass} /></div>
               <div className="space-y-2"><label htmlFor="discovery-size" className="block text-[13px] font-medium text-ink">Company size <span className="font-normal text-ink-faint">(optional)</span></label><input id="discovery-size" placeholder="For example, 10–50" value={form.company_size} onChange={(event) => update('company_size', event.target.value)} className={inputClass} /></div>
             </div>
             {searchError && <ErrorNotice message={searchError} />}
@@ -366,7 +376,7 @@ export default function DiscoveryPage() {
             <dl className="mt-6 space-y-5 text-[13px]">
               <div><dt className="text-ink-soft">Objective</dt><dd className="mt-1 font-medium text-ink">{activeChip ? GOAL_TYPE_LABELS[activeChip] : 'Not set'}</dd></div>
               <div><dt className="text-ink-soft">Target businesses</dt><dd className="mt-1 line-clamp-3 font-medium text-ink">{form.goal.trim() || 'Not set'}</dd></div>
-              <div><dt className="text-ink-soft">Location</dt><dd className="mt-1 font-medium text-ink">{form.region.trim() || 'Any location'}</dd></div>
+              <div><dt className="text-ink-soft">Location</dt><dd className="mt-1 font-medium text-ink">{form.region.trim() || 'Required'}</dd></div>
               <div><dt className="text-ink-soft">Company size</dt><dd className="mt-1 font-medium text-ink">{form.company_size.trim() || 'Any size'}</dd></div>
             </dl>
           </aside>

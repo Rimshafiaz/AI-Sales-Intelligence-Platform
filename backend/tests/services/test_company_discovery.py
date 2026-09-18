@@ -2,7 +2,13 @@ from unittest.mock import patch
 
 import pytest
 
-from app.schemas.company_discovery import DiscoveryObjective, ParseDiscoveryRequest
+from pydantic import ValidationError
+
+from app.schemas.company_discovery import (
+    CompanyDiscoveryRequest,
+    DiscoveryObjective,
+    ParseDiscoveryRequest,
+)
 from app.services.company_discovery import (
     check_supported_objective,
     parse_discovery_objective,
@@ -65,3 +71,57 @@ def test_mixed_goal_requires_one_primary_vertical_before_discovery():
     assert "Dental & selected clinics" in message
     assert "Beauty & wellness" in message
     assert "Generic clinics are not supported yet" in message
+
+
+def test_geography_parsed_from_goal_is_accepted_without_manual_region():
+    with patch(
+        "app.services.company_discovery.run_goal_parser_task",
+        return_value=objective(),
+    ):
+        parsed = parse_discovery_objective(
+            ParseDiscoveryRequest(
+                goal="Find restaurants in Lahore that may need social media management"
+            )
+        )
+
+    assert parsed.target_geographies == ["Lahore"]
+    assert check_supported_objective(parsed) == (True, None)
+
+
+def test_manual_region_supplies_missing_parsed_geography():
+    parsed_without_location = objective().model_copy(
+        update={"target_geographies": []}
+    )
+    with patch(
+        "app.services.company_discovery.run_goal_parser_task",
+        return_value=parsed_without_location,
+    ):
+        parsed = parse_discovery_objective(
+            ParseDiscoveryRequest(
+                goal="Find restaurants that may need social media management",
+                region="United Kingdom",
+            )
+        )
+
+    assert parsed.target_geographies == ["United Kingdom"]
+    assert check_supported_objective(parsed) == (True, None)
+
+
+def test_missing_geography_is_blocked_before_discovery():
+    supported, message = check_supported_objective(
+        objective().model_copy(update={"target_geographies": []})
+    )
+
+    assert supported is False
+    assert message == "Add a location to continue."
+
+
+@pytest.mark.parametrize("location", [None, "", "   "])
+def test_discovery_request_rejects_missing_or_blank_geography(location):
+    with pytest.raises(ValidationError, match="location"):
+        CompanyDiscoveryRequest(
+            offering="Social media management",
+            desired_outcome="Find prospects",
+            business_category="Restaurants & cafes",
+            location=location,
+        )

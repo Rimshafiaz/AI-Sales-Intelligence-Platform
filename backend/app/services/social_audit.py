@@ -372,6 +372,9 @@ def verify_social_profiles_and_measure_activity(
             state=SocialVerificationState.NO_OFFICIAL_PROFILE_VERIFIED,
             reason=f"Observed {len(observed)} public profile(s); 0 matched the verified business identity.",
         ))
+    # This application disables SQLAlchemy autoflush. Make evidence written above
+    # visible to the deterministic reread without ending the transaction.
+    db.flush()
     signals = {
         EvidenceSignalType(item.signal_type)
         for item in list_research_evidence_for_user(db, research_request.id, expected_user_id)

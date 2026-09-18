@@ -1,5 +1,5 @@
 import uuid
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 
 import pytest
 
@@ -9,11 +9,12 @@ from app.models.research_evidence import ResearchEvidence
 from app.models.research_request import ResearchRequest, ResearchStatus
 from app.models.research_social_observation import ResearchSocialObservation
 from app.schemas.evidence_gate import EvidenceGateState
-from app.schemas.opportunity_models import EvidenceSource
+from app.schemas.opportunity_models import EvidenceSignalType, EvidenceSource
 from app.schemas.social_audit import (
     SocialAuditState,
     SocialCandidateDiscoveryResult,
     SocialCandidateDiscoveryState,
+    SocialCandidateEnrichmentResult,
     SocialEnrichmentResultState,
     SocialProfileCandidate,
     SocialVerificationState,
@@ -41,6 +42,7 @@ class FakeSession:
         self.scalar_results = list(scalar_results)
         self.added = []
         self.committed = False
+        self.flushed = False
 
     def scalar(self, statement):
         return self.scalar_results.pop(0)
@@ -54,6 +56,9 @@ class FakeSession:
 
     def commit(self):
         self.committed = True
+
+    def flush(self):
+        self.flushed = True
 
     def refresh(self, value):
         return value
@@ -246,6 +251,44 @@ class TestSocialAudit:
 
 
 class TestSocialCapabilities:
+    def test_autoflush_disabled_verification_rereads_new_activity_evidence(self):
+        class AutoflushDisabledSession(FakeSession):
+            def scalars(self, statement):
+                entity = statement.column_descriptions[0].get("entity")
+                if entity is ResearchEvidence and not self.flushed:
+                    return iter([])
+                return super().scalars(statement)
+
+        research_request = request()
+        recent = observation()
+        recent.latest_public_post_at = datetime.now(UTC) - timedelta(days=5)
+        recent.recent_public_post_dates = [
+            recent.latest_public_post_at,
+            recent.latest_public_post_at - timedelta(days=3),
+        ]
+        db = AutoflushDisabledSession([None, None, None])
+
+        result = verify_social_profiles_and_measure_activity(
+            db,
+            research_request,
+            company(research_request),
+            None,
+            research_request.user_id,
+            SocialCandidateEnrichmentResult(
+                state=SocialEnrichmentResultState.OBSERVATIONS_AVAILABLE,
+                observations=[recent],
+                reason="Fresh observation.",
+            ),
+        )
+
+        assert db.flushed is True
+        assert result.state is SocialVerificationState.EVIDENCE_FOUND
+        assert set(result.evidence_signals) == {
+            EvidenceSignalType.OFFICIAL_SOCIAL_PROFILE_CONFIRMED,
+            EvidenceSignalType.SOCIAL_HISTORIC_ACTIVITY_CONFIRMED,
+            EvidenceSignalType.SOCIAL_DORMANCY_MEASURED,
+        }
+
     def test_non_social_scope_is_not_permitted(self):
         research_request = request()
         research_request.opportunity_model_selection = {

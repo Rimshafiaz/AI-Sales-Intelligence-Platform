@@ -42,7 +42,7 @@ def check_supported_objective(
     if not objective.target_geographies:
         return (
             False,
-            "Add the city or region to search, for example: Lahore or Toronto.",
+            "Add a location to continue.",
         )
     sectors, has_generic_clinic = resolve_discovery_scope(
         goal or " ".join(objective.target_sectors)
@@ -78,10 +78,13 @@ def parse_discovery_objective(
     request: ParseDiscoveryRequest,
 ) -> DiscoveryObjective:
     objective = run_goal_parser_task(create_goal_parser_task(request))
+    updates: dict[str, object] = {}
+    if request.region and not objective.target_geographies:
+        updates["target_geographies"] = [request.region]
     sectors, has_generic_clinic = resolve_discovery_scope(request.goal)
     if len(sectors) == 1 and not has_generic_clinic:
-        return objective.model_copy(update={"target_sectors": sectors})
-    return objective
+        updates["target_sectors"] = sectors
+    return objective.model_copy(update=updates) if updates else objective
 
 
 def discover_companies(

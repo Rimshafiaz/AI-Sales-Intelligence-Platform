@@ -266,6 +266,40 @@ class TestSocialResearchAgent:
 
         assert result.findings == []
 
+    def test_agent_presence_status_cannot_override_canonical_status(self):
+        final = state(
+            [
+                evidence(
+                    EvidenceSignalType.OFFICIAL_SOCIAL_PROFILE_CONFIRMED,
+                    "evidence:official",
+                ),
+                evidence(
+                    EvidenceSignalType.BUSINESS_ACTIVITY_CONFIRMED,
+                    "evidence:activity",
+                ),
+            ]
+        )
+
+        result = social_research.validate_social_research_output(
+            SocialResearchOutput(presence_status="unresolved"),
+            final,
+            social_research.SocialResearchToolTrace(),
+        )
+
+        assert result.presence_status == "verified"
+
+    def test_incomplete_canonical_state_remains_unresolved(self):
+        result = social_research.validate_social_research_output(
+            SocialResearchOutput(
+                presence_status="verified",
+                evidence_gaps=["Business activity evidence is missing."],
+            ),
+            state(),
+            social_research.SocialResearchToolTrace(),
+        )
+
+        assert result.presence_status == "unresolved"
+
     @pytest.mark.parametrize(
         ("verification_state", "gap"),
         [
