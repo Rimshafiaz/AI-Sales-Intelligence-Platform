@@ -87,14 +87,9 @@ def _discover_social_profiles(
     try:
         search_provider = create_tavily_search_provider(settings.tavily_api_key)
         discovered: dict[str, str] = {}
-        for platform_hint in ("Instagram", "Facebook", "TikTok"):
-            try:
-                results = search_provider.search(
-                    f"{query} {platform_hint}",
-                    max_results=6,
-                )
-            except Exception:
-                continue
+
+        def retain(results: list[object]) -> int:
+            retained = 0
             for result in results:
                 candidate = social_profile_target(result.url)
                 if candidate is None:
@@ -105,7 +100,29 @@ def _discover_social_profiles(
                     candidate.handle, target.company_name
                 ):
                     continue
-                discovered.setdefault(candidate.profile_url, candidate.handle)
+                if candidate.profile_url not in discovered:
+                    discovered[candidate.profile_url] = candidate.handle
+                    retained += 1
+            return retained
+
+        for platform_hint in ("Instagram", "Facebook", "TikTok"):
+            try:
+                results = search_provider.search(
+                    f"{query} {platform_hint}",
+                    max_results=6,
+                )
+            except Exception:
+                continue
+            retained = retain(results)
+            if platform_hint == "Instagram" and retained == 0:
+                try:
+                    fallback = search_provider.search(
+                        f'site:instagram.com "{target.company_name}" "{location}"',
+                        max_results=6,
+                    )
+                except Exception:
+                    fallback = []
+                retain(fallback)
         return list(discovered.keys())[:3]
     except Exception:
         return []

@@ -78,6 +78,12 @@ WEBSITE_RESEARCH_SIGNALS = {
     EvidenceSignalType.WEBSITE_CLINIC_PATIENT_PATH_INCOMPLETE,
 }
 
+SOCIAL_RESEARCH_SIGNALS = {
+    EvidenceSignalType.OFFICIAL_SOCIAL_PROFILE_CONFIRMED,
+    EvidenceSignalType.SOCIAL_HISTORIC_ACTIVITY_CONFIRMED,
+    EvidenceSignalType.SOCIAL_DORMANCY_MEASURED,
+}
+
 
 def shortlist_discovery_candidates(
     request: DiscoveryShortlistRequest,
@@ -209,7 +215,11 @@ def evaluate_model(
             candidate_input,
             missing_signal_types,
         )
-        if set(missing_signal_types) & WEBSITE_RESEARCH_SIGNALS:
+        missing_signals = set(missing_signal_types)
+        if (
+            missing_signals & WEBSITE_RESEARCH_SIGNALS
+            or missing_signals <= SOCIAL_RESEARCH_SIGNALS
+        ):
             return OpportunityModelShortlistEvaluation(
                 model_id=model.id,
                 state=DiscoveryShortlistState.ELIGIBLE_FOR_DEEPER_RESEARCH,
@@ -217,7 +227,7 @@ def evaluate_model(
                 missing_signal_types=missing_signal_types,
                 reason=(
                     "The verified business identity matches the campaign, but the "
-                    "selected website check requires bounded specialist research."
+                    "selected check requires bounded specialist research."
                 ),
                 next_evidence_action=next_action,
             )

@@ -3,8 +3,10 @@ from datetime import UTC, datetime
 
 import pytest
 from crewai.tools import tool
+from pydantic import ValidationError
 
 from app.ai import social_research
+from app.ai.agents import social_research_agent
 from app.ai.tasks.social_research_task import create_social_research_task
 from app.models.company import Company
 from app.models.research_request import ResearchRequest
@@ -134,6 +136,55 @@ def invoke(task, name):
 
 
 class TestSocialResearchAgent:
+    def test_agent_uses_full_default_output_budget(self, monkeypatch):
+        captured = []
+        monkeypatch.setattr(
+            social_research_agent,
+            "Agent",
+            lambda **kwargs: type("FakeAgent", (), kwargs)(),
+        )
+        monkeypatch.setattr(
+            social_research_agent,
+            "get_llm",
+            lambda **kwargs: captured.append(kwargs) or object(),
+        )
+
+        agent = social_research_agent.create_social_research_agent(
+            fake_tools([], social_research.SocialResearchToolTrace())
+        )
+
+        assert agent.tools
+        assert captured == [{}]
+
+    def test_truncated_structured_output_becomes_domain_error(self, monkeypatch):
+        class BrokenCrew:
+            def __init__(self, **_kwargs):
+                pass
+
+            def kickoff(self):
+                SocialResearchOutput.model_validate_json(
+                    '{"presence_status":"verified","findings":['
+                )
+
+        monkeypatch.setattr(social_research, "Crew", BrokenCrew)
+        task = create_social_research_task(
+            SocialResearchHandoff(
+                seller_goal="Find grounded social opportunities.",
+                offering="Social media management",
+                company_name="Glow Salon",
+                starting_state=state(),
+            ),
+            fake_tools([], social_research.SocialResearchToolTrace()),
+        )
+
+        with pytest.raises(
+            social_research.SocialResearchError,
+            match="did not return valid structured output",
+        ) as caught:
+            social_research._run_task(task)
+
+        assert isinstance(caught.value.__cause__, ValidationError)
+
     @pytest.mark.parametrize(
         "actions",
         [

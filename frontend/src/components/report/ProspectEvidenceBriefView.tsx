@@ -1,7 +1,7 @@
 import { useState, type ReactNode } from 'react'
 import { Link } from 'react-router-dom'
 import { Check, ChevronDown, Copy } from 'lucide-react'
-import type { ProspectEvidenceBriefData } from '../../lib/report'
+import { sourceTitle, type ProspectEvidenceBriefData } from '../../lib/report'
 import { displayLabel } from '../../lib/labels'
 
 function Section({ title, children }: { title: string; children: ReactNode }) {
@@ -91,6 +91,6 @@ export function ProspectEvidenceBriefView({ brief, outreach }: { brief: Prospect
     {unresolved.length > 0 && <Section title="What remains unresolved"><ul className="list-disc space-y-1 pl-5 text-sm text-ink-soft">{unresolved.map((item) => <li key={item}>{item}</li>)}</ul></Section>}
     {(approach?.caveats.length ?? 0) > 0 && <Section title="Caveats"><ul className="list-disc space-y-1 pl-5 text-sm text-ink-soft">{approach?.caveats.map((item) => <li key={item}>{item}</li>)}</ul></Section>}
 
-    <details className="group mt-8 rounded-card border border-line-soft bg-card p-4"><summary className="flex cursor-pointer list-none items-center justify-between gap-3 font-ui text-sm font-semibold text-ink"><span>Evidence &amp; sources ({brief.evidence.length + brief.sources.length})</span><span className="inline-flex items-center gap-1 text-xs font-medium text-action">View details<ChevronDown size={14} className="transition-transform group-open:rotate-180" /></span></summary><div className="mt-4 space-y-3 border-t border-line-soft pt-4">{brief.evidence.map((item) => <div key={item.key} className="text-sm text-ink-soft"><p className="text-ink">{item.supporting_value}</p><p className="mt-0.5 text-xs text-ink-faint">{displayLabel(item.source.provider)}</p></div>)}{brief.sources.map((source) => <a key={source.key} href={source.source_url} target="_blank" rel="noreferrer" className="block break-all text-sm text-action hover:text-ink">{source.title ?? source.source_url}</a>)}</div></details>
+    <details className="group mt-8 rounded-card border border-line-soft bg-card p-4"><summary className="flex cursor-pointer list-none items-center justify-between gap-3 font-ui text-sm font-semibold text-ink"><span>Evidence &amp; sources ({brief.evidence.length + brief.sources.length})</span><span className="inline-flex items-center gap-1 text-xs font-medium text-action">View details<ChevronDown size={14} className="transition-transform group-open:rotate-180" /></span></summary><div className="mt-4 space-y-3 border-t border-line-soft pt-4">{brief.evidence.map((item) => <div key={item.key} className="text-sm text-ink-soft"><p className="text-ink">{item.supporting_value}</p><p className="mt-0.5 text-xs text-ink-faint">{displayLabel(item.source.provider)}</p></div>)}{brief.sources.map((source) => <a key={source.key} href={source.source_url} target="_blank" rel="noreferrer" className="block break-all text-sm text-action hover:text-ink">{sourceTitle(source.title, source.source_url)}</a>)}</div></details>
   </>
 }

@@ -1,5 +1,7 @@
 from datetime import UTC, datetime
 
+import pytest
+
 from app.schemas.campaign import CampaignRecommendedBatchCreate
 from app.schemas.company_discovery import CompanyDiscoveryRequest, DiscoveredCompanyCandidate
 from app.schemas.discovery_shortlist import (
@@ -9,7 +11,10 @@ from app.schemas.discovery_shortlist import (
     DiscoveryShortlistState,
 )
 from app.schemas.opportunity_models import EvidenceSignalType, OpportunityModelSelection
-from app.services.discovery_queue_preparation import prepare_discovery_opportunity_queue
+from app.services.discovery_queue_preparation import (
+    prepare_discovery_opportunity_queue,
+    seed_discovery_evidence,
+)
 from app.services.discovery_opportunity_queue import opportunity_sort_key
 
 
@@ -63,6 +68,17 @@ def research_dependent_request(candidates: list[DiscoveredCompanyCandidate]):
             "web_conversion.mobile_performance",
             "web_conversion.clinic_patient_path",
         ),
+        confirmed_by_user=True,
+    )
+    return value
+
+
+def social_research_request(candidates: list[DiscoveredCompanyCandidate]):
+    value = request(candidates)
+    value.criteria.business_category = "Restaurants & cafes"
+    value.criteria.offering = "Social media management and content creation"
+    value.model_selection = OpportunityModelSelection(
+        model_ids=("social_presence.dormant_official_presence",),
         confirmed_by_user=True,
     )
     return value
@@ -123,6 +139,37 @@ class TestDiscoveryQueuePreparation:
             opportunity
         ]
 
+    def test_social_model_surfaces_identity_sufficient_candidate_for_research(self):
+        response = prepare_discovery_opportunity_queue(
+            social_research_request([candidate(business_status="operational")])
+        )
+
+        opportunity = response.candidates[0]
+        assert opportunity.queue_entry.reasons == []
+        assert "social profile" in opportunity.queue_entry.verification_reason
+        assert opportunity.shortlist_entry.state is (
+            DiscoveryShortlistState.ELIGIBLE_FOR_DEEPER_RESEARCH
+        )
+        assert response.needs_verification_count == 1
+
+    def test_social_model_does_not_surface_identity_unresolved_candidate(self):
+        response = prepare_discovery_opportunity_queue(
+            social_research_request(
+                [candidate(source_types=["social_search"], address=None)]
+            )
+        )
+
+        assert response.candidates == []
+        assert response.needs_verification_count == 1
+
+    def test_social_model_surfaces_current_traceable_local_listing(self):
+        response = prepare_discovery_opportunity_queue(
+            social_research_request([candidate()])
+        )
+
+        assert len(response.candidates) == 1
+        assert response.needs_verification_count == 1
+
     def test_seeds_a_traceable_local_identity_and_surfaces_no_listed_website(self):
         response = prepare_discovery_opportunity_queue(request([candidate()]))
 
@@ -145,20 +192,40 @@ class TestDiscoveryQueuePreparation:
         assert response.candidates == []
         assert response.needs_verification_count == 2
 
-    def test_seeds_activity_only_from_an_explicit_operating_status(self):
-        active = prepare_discovery_opportunity_queue(
-            request([candidate(business_status="operational")])
-        )
-        unknown = prepare_discovery_opportunity_queue(request([candidate()]))
+    def test_current_traceable_local_listing_confirms_business_activity(self):
+        signals = seed_discovery_evidence(candidate())
 
-        assert EvidenceSignalType.BUSINESS_ACTIVITY_CONFIRMED in {
-            signal.signal_type
-            for signal in active.candidates[0].candidate_input.evidence_signals
-        }
+        activity = next(
+            signal
+            for signal in signals
+            if signal.signal_type is EvidenceSignalType.BUSINESS_ACTIVITY_CONFIRMED
+        )
+        assert activity.supporting_value == (
+            "Current local-business listing was retrieved and no closed/inactive "
+            "status was reported."
+        )
+        assert activity.source.provider == "open_places"
+        assert activity.captured_at == NOW
+
+    @pytest.mark.parametrize("status", ["closed", "inactive", "permanently closed"])
+    def test_explicit_closed_or_inactive_status_does_not_confirm_activity(self, status):
+        signals = seed_discovery_evidence(candidate(business_status=status))
+
         assert EvidenceSignalType.BUSINESS_ACTIVITY_CONFIRMED not in {
-            signal.signal_type
-            for signal in unknown.candidates[0].candidate_input.evidence_signals
+            signal.signal_type for signal in signals
         }
+
+    def test_identity_unresolved_source_does_not_confirm_activity(self):
+        signals = seed_discovery_evidence(
+            candidate(source_types=["social_search"], address=None)
+        )
+
+        assert signals == []
+
+    def test_untraceable_local_source_does_not_confirm_activity(self):
+        untraceable = candidate().model_copy(update={"source_record_id": None})
+
+        assert seed_discovery_evidence(untraceable) == []
 
     def test_candidate_actionable_for_one_model_can_enter_a_research_batch(self):
         preparation_request = request([candidate(business_status="operational")])
@@ -177,8 +244,8 @@ class TestDiscoveryQueuePreparation:
         assert opportunity.shortlist_entry.state is (
             DiscoveryShortlistState.ELIGIBLE_FOR_DEEPER_RESEARCH
         )
-        assert {evaluation.state for evaluation in opportunity.shortlist_entry.model_evaluations} == {
-            DiscoveryShortlistState.ELIGIBLE_FOR_DEEPER_RESEARCH,
-            DiscoveryShortlistState.NEEDS_EVIDENCE,
-        }
+        assert {
+            evaluation.state
+            for evaluation in opportunity.shortlist_entry.model_evaluations
+        } == {DiscoveryShortlistState.ELIGIBLE_FOR_DEEPER_RESEARCH}
         assert batch.opportunities == [opportunity]

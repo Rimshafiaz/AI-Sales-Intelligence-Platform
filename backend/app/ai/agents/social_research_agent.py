@@ -10,7 +10,9 @@ def create_social_research_agent(
 ) -> Agent:
     return Agent(
         config=get_agent_config("social_research_agent"),
-        llm=get_llm(max_tokens=2_000),
+        # CrewAI performs a final structured-output conversion after the tool
+        # loop. Keep the full project default available for that JSON response.
+        llm=get_llm(),
         allow_delegation=False,
         tools=list(tools),
     )

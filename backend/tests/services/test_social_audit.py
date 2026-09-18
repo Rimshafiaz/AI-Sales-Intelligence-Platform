@@ -282,16 +282,21 @@ class TestSocialCapabilities:
 
     def test_bounded_autodiscovery_normalizes_and_filters_candidates(self, monkeypatch):
         class Search:
-            def search(self, *_args, **_kwargs):
+            def __init__(self):
+                self.queries = []
+
+            def search(self, query, **_kwargs):
+                self.queries.append(query)
                 return [
                     type("Result", (), {"url": "https://instagram.com/glow_salon/"})(),
                     type("Result", (), {"url": "https://example.com/not-social"})(),
                     type("Result", (), {"url": "https://facebook.com/unrelated"})(),
                 ]
 
+        search = Search()
         monkeypatch.setattr(
             "app.integrations.search_provider.create_tavily_search_provider",
-            lambda *_: Search(),
+            lambda *_: search,
         )
 
         research_request = request()
@@ -307,6 +312,7 @@ class TestSocialCapabilities:
         assert [(item.platform.value, item.handle) for item in result.candidates] == [
             ("instagram", "glow_salon")
         ]
+        assert not any(query.startswith("site:instagram.com") for query in search.queries)
         reloaded = SocialCheckStates.model_validate(
             research_request.social_check_states
         )
@@ -324,6 +330,48 @@ class TestSocialCapabilities:
             research_request.user_id,
         )
         assert retried.candidates == result.candidates
+
+    def test_instagram_fallback_runs_once_merges_deduplicates_and_keeps_cap(self, monkeypatch):
+        class Search:
+            def __init__(self):
+                self.queries = []
+
+            def search(self, query, **_kwargs):
+                self.queries.append(query)
+                if query.startswith("site:instagram.com"):
+                    return [
+                        type("Result", (), {"url": "https://instagram.com/glow_salon/"})(),
+                        type("Result", (), {"url": "https://instagram.com/glow_salon/"})(),
+                        type("Result", (), {"url": "https://instagram.com/glow_salon_lahore/"})(),
+                        type("Result", (), {"url": "https://instagram.com/glow_salon_official/"})(),
+                        type("Result", (), {"url": "https://instagram.com/glow_salon_extra/"})(),
+                    ]
+                return []
+
+        search = Search()
+        monkeypatch.setattr(
+            "app.integrations.search_provider.create_tavily_search_provider",
+            lambda *_: search,
+        )
+
+        research_request = request()
+        result = discover_social_profile_candidates(
+            FakeSession([]),
+            research_request,
+            company(research_request),
+            None,
+            research_request.user_id,
+        )
+
+        fallback_queries = [
+            query for query in search.queries if query.startswith("site:instagram.com")
+        ]
+        assert fallback_queries == ['site:instagram.com "Glow Salon" "Lahore"']
+        assert [item.handle for item in result.candidates] == [
+            "glow_salon",
+            "glow_salon_lahore",
+            "glow_salon_official",
+        ]
 
     def test_completed_no_candidate_discovery_survives_retry(self, monkeypatch):
         class EmptySearch:

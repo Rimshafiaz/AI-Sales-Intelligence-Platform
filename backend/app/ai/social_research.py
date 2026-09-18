@@ -135,7 +135,16 @@ def _run_task(task: Task) -> SocialResearchOutput:
         process=Process.sequential,
         verbose=False,
     )
-    crew.kickoff()
-    if task.output is None or task.output.pydantic is None:
-        raise SocialResearchError("Social Research Agent did not return valid structured output.")
-    return SocialResearchOutput.model_validate(task.output.pydantic)
+    try:
+        crew.kickoff()
+        if task.output is None or task.output.pydantic is None:
+            raise SocialResearchError(
+                "Social Research Agent did not return valid structured output."
+            )
+        return SocialResearchOutput.model_validate(task.output.pydantic)
+    except SocialResearchError:
+        raise
+    except Exception as error:
+        raise SocialResearchError(
+            "Social Research Agent did not return valid structured output."
+        ) from error

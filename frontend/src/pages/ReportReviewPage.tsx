@@ -7,6 +7,7 @@ import {
   buildCitationIndex,
   domainOf,
   isProspectEvidenceBrief,
+  sourceTitle,
   type LegacyReportData,
   type Finding,
   type ReportDetail,
@@ -766,7 +767,7 @@ export default function ReportReviewPage() {
                   rel="noreferrer"
                   className="min-w-0 flex-1 truncate font-narrative text-sm text-ink hover:text-action"
                 >
-                  {source.title ?? domainOf(source.url)}
+                  {sourceTitle(source.title, source.url)}
                 </a>
                 <span className="label-caps hidden text-ink-faint sm:block">
                   {displayLabel(source.source_type)}

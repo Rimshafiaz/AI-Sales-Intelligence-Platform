@@ -3,6 +3,7 @@ import { Link, useLocation, useNavigate, useParams } from 'react-router-dom'
 import { Check, ExternalLink, Loader2, XCircle } from 'lucide-react'
 import { api } from '../lib/api'
 import { displayLabel } from '../lib/labels'
+import { domainOf, sourceTitle } from '../lib/report'
 import type {
   CampaignResearchBatchSummary,
   Company,
@@ -18,14 +19,6 @@ type StageState = 'done' | 'active' | 'pending'
 
 function formatTime(iso: string | null): string {
   return iso ? new Date(iso).toLocaleTimeString() : ''
-}
-
-function domainOf(url: string): string {
-  try {
-    return new URL(url).hostname.replace(/^www\./, '')
-  } catch {
-    return url
-  }
 }
 
 function StageRow({
@@ -573,7 +566,7 @@ export default function ResearchProgressPage() {
                       {displayLabel(source.source_type)}
                     </span>
                     <span className="min-w-0 flex-1 truncate font-narrative text-sm text-ink">
-                      {source.title ?? domainOf(source.url)}
+                      {sourceTitle(source.title, source.url)}
                     </span>
                     <span className="label-caps text-ink-faint">
                       {displayLabel(source.admission_state)}

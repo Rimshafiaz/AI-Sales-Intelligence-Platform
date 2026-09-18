@@ -14,7 +14,10 @@ from app.schemas.opportunity_models import (
     EvidenceType,
     OpportunityModelId,
 )
-from app.services.discovery_shortlist import shortlist_discovery_candidates
+from app.services.discovery_shortlist import (
+    SOCIAL_RESEARCH_SIGNALS,
+    shortlist_discovery_candidates,
+)
 
 
 MOBILE_PERFORMANCE_RESEARCH_THRESHOLD = 50
@@ -82,6 +85,16 @@ def research_verification_reason(
     }
     if not research_actions:
         return None
+    missing_signals = {
+        signal
+        for evaluation in evaluations
+        for signal in evaluation.missing_signal_types
+    }
+    if missing_signals & SOCIAL_RESEARCH_SIGNALS:
+        return (
+            "This business matches the campaign, but its official social profile "
+            "and activity must be verified by bounded specialist research."
+        )
     return (
         "This business matches the campaign, but its official website must be "
         "verified before the selected performance or customer-path checks can run."

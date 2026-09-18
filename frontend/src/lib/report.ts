@@ -233,3 +233,10 @@ export function domainOf(url: string): string {
     return url
   }
 }
+
+export function sourceTitle(title: string | null | undefined, url: string): string {
+  const cleanTitle = title?.trim()
+  return cleanTitle && !/^index of(?:\s+\/.*)?$/i.test(cleanTitle)
+    ? cleanTitle
+    : domainOf(url)
+}

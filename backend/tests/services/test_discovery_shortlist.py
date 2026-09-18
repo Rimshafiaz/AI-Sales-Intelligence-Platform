@@ -215,7 +215,7 @@ class TestDiscoveryShortlist:
             NextEvidenceAction.COLLECT_SOCIAL_PROFILE_OBSERVATIONS
         )
 
-    def test_social_observation_requires_identity_link_before_social_model_can_progress(self):
+    def test_identity_sufficient_social_candidate_can_enter_specialist_research(self):
         observation = SocialProfileObservation(
             profile_url="https://www.instagram.com/glowboutique",
             platform=SocialPlatform.INSTAGRAM,
@@ -238,6 +238,7 @@ class TestDiscoveryShortlist:
                     ),
                     evidence_signals=[
                         signal(EvidenceSignalType.BUSINESS_IDENTITY_CONFIRMED),
+                        signal(EvidenceSignalType.BUSINESS_ACTIVITY_CONFIRMED),
                     ],
                     social_observations=[observation],
                 ),
@@ -246,9 +247,44 @@ class TestDiscoveryShortlist:
         )
 
         evaluation = response.candidates[0].model_evaluations[0]
-        assert evaluation.state is DiscoveryShortlistState.NEEDS_EVIDENCE
+        assert evaluation.state is DiscoveryShortlistState.ELIGIBLE_FOR_DEEPER_RESEARCH
         assert evaluation.next_evidence_action is NextEvidenceAction.VERIFY_OFFICIAL_SOCIAL_PROFILE
         assert EvidenceSignalType.OFFICIAL_SOCIAL_PROFILE_CONFIRMED in evaluation.missing_signal_types
+
+    def test_social_candidate_missing_business_activity_does_not_enter_specialist_research(self):
+        response = shortlist_discovery_candidates(
+            request(
+                CandidateShortlistInput(
+                    candidate=candidate(),
+                    evidence_signals=[
+                        signal(EvidenceSignalType.BUSINESS_IDENTITY_CONFIRMED),
+                    ],
+                ),
+                "social_presence.dormant_official_presence",
+            )
+        )
+
+        evaluation = response.candidates[0].model_evaluations[0]
+        assert evaluation.state is DiscoveryShortlistState.NEEDS_EVIDENCE
+        assert EvidenceSignalType.BUSINESS_ACTIVITY_CONFIRMED in (
+            evaluation.missing_signal_types
+        )
+
+    def test_social_candidate_without_confirmed_identity_stays_hidden(self):
+        response = shortlist_discovery_candidates(
+            request(
+                CandidateShortlistInput(
+                    candidate=candidate(
+                        source_provider="serper",
+                        source_record_id="serper:glow",
+                        source_types=["social_search"],
+                    ),
+                ),
+                "social_presence.dormant_official_presence",
+            )
+        )
+
+        assert response.candidates[0].state is DiscoveryShortlistState.NEEDS_IDENTITY_REVIEW
 
     def test_candidate_without_traceable_source_is_excluded(self):
         response = shortlist_discovery_candidates(

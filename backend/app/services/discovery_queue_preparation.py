@@ -17,6 +17,16 @@ from app.services.discovery_opportunity_queue import build_discovery_opportunity
 from app.services.discovery_shortlist import shortlist_discovery_candidates
 
 
+CLOSED_BUSINESS_STATUSES = {
+    "closed",
+    "closed_permanently",
+    "closed_temporarily",
+    "inactive",
+    "permanently_closed",
+    "temporarily_closed",
+}
+
+
 def prepare_discovery_opportunity_queue(
     request: DiscoveryOpportunityPreparationRequest,
 ) -> DiscoveryOpportunityPreparationResponse:
@@ -82,17 +92,20 @@ def seed_discovery_evidence(
             captured_at=candidate.source_retrieved_at,
         )
     ]
-    if candidate.business_status and candidate.business_status.casefold() in {
-        "operational",
-        "open",
-    }:
+    status = (
+        (candidate.business_status or "")
+        .casefold()
+        .replace("-", "_")
+        .replace(" ", "_")
+    )
+    if status not in CLOSED_BUSINESS_STATUSES:
         signals.append(
             EvidenceSignal(
                 signal_type=EvidenceSignalType.BUSINESS_ACTIVITY_CONFIRMED,
                 evidence_type=EvidenceType.OBSERVED,
                 supporting_value=(
-                    f"{candidate.source_provider} listed the business status as "
-                    f"{candidate.business_status}."
+                    "Current local-business listing was retrieved and no "
+                    "closed/inactive status was reported."
                 ),
                 source=source,
                 captured_at=candidate.source_retrieved_at,
